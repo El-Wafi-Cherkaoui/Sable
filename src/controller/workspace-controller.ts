@@ -1,5 +1,5 @@
 import type { ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
-import type { ManagedProcessState } from "../process/process-manager.js";
+import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
 import {
   createRuntimeState,
   getSelectedService,
@@ -15,6 +15,7 @@ export type WorkspaceProcessManager = {
   start(service: ServiceConfig): MaybePromise<ManagedProcessState>;
   stop(serviceId: string): Promise<ManagedProcessState>;
   restart(service: ServiceConfig): Promise<ManagedProcessState>;
+  getLogs(serviceId: string): ServiceLogEntry[];
   stopAll(): Promise<void>;
 };
 
@@ -124,6 +125,24 @@ export class WorkspaceController {
     this.state = selectPreviousService(this.state);
 
     return this.state;
+  }
+
+  getServiceLogs(serviceId: string): ServiceLogEntry[] {
+    if (this.findService(serviceId) === undefined) {
+      return [];
+    }
+
+    return this.processManager.getLogs(serviceId);
+  }
+
+  getSelectedServiceLogs(): ServiceLogEntry[] {
+    const selectedService = getSelectedService(this.state);
+
+    if (selectedService === undefined) {
+      return [];
+    }
+
+    return this.getServiceLogs(selectedService.service.id);
   }
 
   async shutdown(): Promise<void> {

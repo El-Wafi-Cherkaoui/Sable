@@ -189,6 +189,30 @@ describe("WorkspaceController", () => {
     expect(controller.getState().selectedServiceIndex).toBe(0);
   });
 
+  it("reads logs for a service and the selected service", () => {
+    const processManager = createFakeProcessManager({
+      getLogs: vi.fn((serviceId: string) => [
+        {
+          stream: "stdout" as const,
+          line: `${serviceId} log`,
+          timestamp: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      ]),
+    });
+    const controller = new WorkspaceController({
+      workspace: createWorkspace(),
+      processManager,
+    });
+
+    expect(controller.getServiceLogs("svc_frontend").map((entry) => entry.line)).toEqual([
+      "svc_frontend log",
+    ]);
+    expect(controller.getSelectedServiceLogs().map((entry) => entry.line)).toEqual([
+      "svc_backend log",
+    ]);
+    expect(controller.getServiceLogs("missing")).toEqual([]);
+  });
+
   it("shuts down all managed services", async () => {
     const processManager = createFakeProcessManager();
     const controller = new WorkspaceController({
@@ -231,6 +255,7 @@ function createFakeProcessManager(
 
       return { status: "running", pid: this.restartedServiceIds.length };
     },
+    getLogs: vi.fn(() => []),
     stopAll: vi.fn(async () => undefined),
   };
 

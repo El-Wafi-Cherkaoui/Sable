@@ -20,6 +20,7 @@ describe("runInteractiveDashboard", () => {
       startSelectedService: vi.fn(async () => ({ status: "running" as const })),
       stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
       restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      getSelectedServiceLogs: vi.fn(() => []),
     };
     const keyInput = createKeyInput([
       { sequence: "j" },
@@ -56,6 +57,7 @@ describe("runInteractiveDashboard", () => {
       startSelectedService: vi.fn(async () => ({ status: "running" as const })),
       stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
       restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      getSelectedServiceLogs: vi.fn(() => []),
     };
     const write = vi.fn();
 
@@ -80,6 +82,7 @@ describe("runInteractiveDashboard", () => {
       startSelectedService: vi.fn(async () => ({ status: "running" as const })),
       stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
       restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      getSelectedServiceLogs: vi.fn(() => []),
     };
     const write = vi.fn();
 
@@ -100,6 +103,101 @@ describe("runInteractiveDashboard", () => {
     expect(controller.restartSelectedService).toHaveBeenCalledOnce();
     expect(write).toHaveBeenCalledTimes(4);
   });
+
+  it("opens logs, scrolls, returns to dashboard, and quits", async () => {
+    const state = createState();
+    const controller = {
+      getState: vi.fn(() => state),
+      selectNextService: vi.fn(() => state),
+      selectPreviousService: vi.fn(() => state),
+      startSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+      restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      getSelectedServiceLogs: vi.fn(() => [
+        { stream: "stdout" as const, line: "one", timestamp: new Date() },
+        { stream: "stdout" as const, line: "two", timestamp: new Date() },
+        { stream: "stderr" as const, line: "three", timestamp: new Date() },
+      ]),
+    };
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([
+        { name: "return" },
+        { sequence: "k" },
+        { sequence: "g" },
+        { sequence: "G" },
+        { name: "escape" },
+        { sequence: "q" },
+      ]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderLogs: ({ scrollOffset }) => `logs:${scrollOffset}`,
+      logVisibleLineCount: 2,
+    });
+
+    expect(write).toHaveBeenNthCalledWith(1, "dashboard\n");
+    expect(write).toHaveBeenNthCalledWith(2, "logs:1\n");
+    expect(write).toHaveBeenNthCalledWith(3, "logs:0\n");
+    expect(write).toHaveBeenNthCalledWith(4, "logs:0\n");
+    expect(write).toHaveBeenNthCalledWith(5, "logs:1\n");
+    expect(write).toHaveBeenNthCalledWith(6, "dashboard\n");
+  });
+
+  it("auto-refreshes logs while following the bottom", async () => {
+    const state = createState();
+    let logs = [
+      { stream: "stdout" as const, line: "one", timestamp: new Date() },
+      { stream: "stdout" as const, line: "two", timestamp: new Date() },
+    ];
+    const controller = createController(state, () => logs);
+    const keyInput = createControlledKeyInput([{ name: "return" }]);
+    const write = vi.fn();
+    const runPromise = runInteractiveDashboard({
+      controller,
+      keyInput,
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderLogs: ({ scrollOffset }) => `logs:${scrollOffset}`,
+      logVisibleLineCount: 2,
+      logsRefreshIntervalMs: 1,
+    });
+
+    await waitForWrite(write, "logs:0\n");
+    logs = [...logs, { stream: "stderr", line: "three", timestamp: new Date() }];
+    await waitForWrite(write, "logs:1\n");
+    keyInput.resolveNext({ sequence: "q" });
+    await runPromise;
+  });
+
+  it("keeps the current scroll position on refresh after scrolling up", async () => {
+    const state = createState();
+    let logs = [
+      { stream: "stdout" as const, line: "one", timestamp: new Date() },
+      { stream: "stdout" as const, line: "two", timestamp: new Date() },
+      { stream: "stdout" as const, line: "three", timestamp: new Date() },
+      { stream: "stdout" as const, line: "four", timestamp: new Date() },
+    ];
+    const controller = createController(state, () => logs);
+    const keyInput = createControlledKeyInput([{ name: "return" }, { sequence: "k" }]);
+    const write = vi.fn();
+    const runPromise = runInteractiveDashboard({
+      controller,
+      keyInput,
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderLogs: ({ scrollOffset }) => `logs:${scrollOffset}`,
+      logVisibleLineCount: 2,
+      logsRefreshIntervalMs: 1,
+    });
+
+    await waitForWrite(write, "logs:1\n");
+    logs = [...logs, { stream: "stderr", line: "five", timestamp: new Date() }];
+    await waitForRepeatedWrite(write, "logs:1\n", 2);
+    keyInput.resolveNext({ sequence: "q" });
+    await runPromise;
+  });
 });
 
 function createKeyInput(keys: Array<{ sequence?: string; name?: string }>): KeyInput {
@@ -115,6 +213,82 @@ function createKeyInput(keys: Array<{ sequence?: string; name?: string }>): KeyI
     },
     close() {},
   };
+}
+
+function createControlledKeyInput(initialKeys: Array<{ sequence?: string; name?: string }>) {
+  let resolver: ((key: { sequence?: string; name?: string }) => void) | undefined;
+
+  return {
+    async readKey() {
+      const key = initialKeys.shift();
+
+      if (key !== undefined) {
+        return key;
+      }
+
+      return new Promise<{ sequence?: string; name?: string }>((resolve) => {
+        resolver = resolve;
+      });
+    },
+    resolveNext(key: { sequence?: string; name?: string }) {
+      if (resolver === undefined) {
+        throw new Error("No pending key read.");
+      }
+
+      resolver(key);
+      resolver = undefined;
+    },
+    close() {},
+  };
+}
+
+function createController(
+  state: RuntimeWorkspaceState,
+  getLogs: () => Array<{ stream: "stdout" | "stderr"; line: string; timestamp: Date }>,
+) {
+  return {
+    getState: vi.fn(() => state),
+    selectNextService: vi.fn(() => state),
+    selectPreviousService: vi.fn(() => state),
+    startSelectedService: vi.fn(async () => ({ status: "running" as const })),
+    stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+    restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
+    getSelectedServiceLogs: vi.fn(getLogs),
+  };
+}
+
+async function waitForWrite(
+  write: ReturnType<typeof vi.fn>,
+  expectedContents: string,
+): Promise<void> {
+  await waitUntil(() =>
+    write.mock.calls.some(([contents]) => contents === expectedContents),
+  );
+}
+
+async function waitForRepeatedWrite(
+  write: ReturnType<typeof vi.fn>,
+  expectedContents: string,
+  count: number,
+): Promise<void> {
+  await waitUntil(
+    () =>
+      write.mock.calls.filter(([contents]) => contents === expectedContents).length >= count,
+  );
+}
+
+async function waitUntil(predicate: () => boolean): Promise<void> {
+  const deadline = Date.now() + 1_000;
+
+  while (Date.now() < deadline) {
+    if (predicate()) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  expect(predicate()).toBe(true);
 }
 
 function createState(): RuntimeWorkspaceState {
