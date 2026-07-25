@@ -1,0 +1,100 @@
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { ZodError } from "zod";
+import { validateAppConfig } from "./config-schema.js";
+import { resolveConfigPaths, type ConfigPaths } from "./config-path.js";
+import type { AppConfig } from "./config-types.js";
+
+export const defaultConfig: AppConfig = {
+  version: 1,
+  workspaces: [],
+};
+
+export class ConfigParseError extends Error {
+  constructor(filePath: string, cause: unknown) {
+    super(`Could not parse config JSON at ${filePath}.`, { cause });
+    this.name = "ConfigParseError";
+  }
+}
+
+export class ConfigValidationError extends Error {
+  constructor(filePath: string, cause: ZodError) {
+    super(`Invalid config at ${filePath}.`, { cause });
+    this.name = "ConfigValidationError";
+  }
+}
+
+export type ConfigStoreOptions = {
+  directory?: string;
+};
+
+export class ConfigStore {
+  readonly paths: ConfigPaths;
+
+  constructor(options: ConfigStoreOptions = {}) {
+    this.paths = resolveConfigPaths(options);
+  }
+
+  async load(): Promise<AppConfig> {
+    let rawConfig: string;
+
+    try {
+      rawConfig = await fs.readFile(this.paths.file, "utf8");
+    } catch (error) {
+      if (isNodeError(error) && error.code === "ENOENT") {
+        return { ...defaultConfig, workspaces: [] };
+      }
+
+      throw error;
+    }
+
+    let parsedConfig: unknown;
+
+    try {
+      parsedConfig = JSON.parse(rawConfig);
+    } catch (error) {
+      throw new ConfigParseError(this.paths.file, error);
+    }
+
+    try {
+      return validateAppConfig(parsedConfig);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        throw new ConfigValidationError(this.paths.file, error);
+      }
+
+      throw error;
+    }
+  }
+
+  async save(config: AppConfig): Promise<void> {
+    const validatedConfig = validateAppConfig(config);
+
+    await fs.mkdir(this.paths.directory, { recursive: true });
+
+    const tempFile = path.join(
+      this.paths.directory,
+      `${path.basename(this.paths.file)}.${process.pid}.${Date.now()}.tmp`,
+    );
+    const contents = `${JSON.stringify(validatedConfig, null, 2)}\n`;
+
+    const fileHandle = await fs.open(tempFile, "w");
+
+    try {
+      await fileHandle.writeFile(contents, "utf8");
+      await fileHandle.sync();
+    } finally {
+      await fileHandle.close();
+    }
+
+    await fs.rename(tempFile, this.paths.file);
+  }
+}
+
+type NodeError = Error & {
+  code?: string;
+};
+
+function isNodeError(error: unknown): error is NodeError {
+  return error instanceof Error;
+}
