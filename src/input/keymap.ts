@@ -34,6 +34,7 @@ export type WorkspacePickerAction =
   | "selectPrevious"
   | "run"
   | "view"
+  | "addService"
   | "openHelp"
   | "quit"
   | "none";
@@ -53,6 +54,10 @@ export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction
 
   if (keypress.sequence === "v") {
     return "view";
+  }
+
+  if (keypress.sequence === "a") {
+    return "addService";
   }
 
   if (keypress.sequence === "?") {

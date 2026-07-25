@@ -39,7 +39,7 @@ describe("renderWorkspacePicker", () => {
         "> ecommerce  2 services",
         "  portfolio  1 service",
         "",
-        "j/k move  Enter run  v view  ? help  q quit",
+        "j/k move  Enter run  v view  a add service  ? help  q quit",
       ].join("\n"),
     );
   });
@@ -90,6 +90,9 @@ describe("renderWorkspacePicker", () => {
   it("renders help", () => {
     expect(renderWorkspacePickerHelp()).toContain("Enter       run selected workspace");
     expect(renderWorkspacePickerHelp()).toContain("v           view selected workspace");
+    expect(renderWorkspacePickerHelp()).toContain(
+      "a           add service to selected workspace",
+    );
   });
 });
 
@@ -147,6 +150,16 @@ describe("runWorkspacePicker", () => {
     expect(write).toHaveBeenNthCalledWith(1, "picker\n");
     expect(write).toHaveBeenNthCalledWith(2, "details:ecommerce\n");
     expect(write).toHaveBeenNthCalledWith(3, "picker\n");
+  });
+
+  it("returns the selected workspace on add service", async () => {
+    await expect(
+      runWorkspacePicker({
+        workspaces,
+        keyInput: createKeyInput([{ sequence: "a" }]),
+        screen: { clear: vi.fn(), write: vi.fn() },
+      }),
+    ).resolves.toEqual({ type: "addService", workspace: workspaces[0] });
   });
 
   it("exits on Ctrl+C", async () => {

@@ -9,6 +9,7 @@ export type WorkspacePickerState = {
 
 export type WorkspacePickerResult =
   | { type: "run"; workspace: WorkspaceConfig }
+  | { type: "addService"; workspace: WorkspaceConfig }
   | { type: "exit" };
 
 export type WorkspacePickerScreen = {
@@ -98,6 +99,15 @@ export async function runWorkspacePicker(
 
         break;
       }
+      case "addService": {
+        const workspace = getSelectedWorkspace(state);
+
+        if (workspace !== undefined) {
+          return { type: "addService", workspace };
+        }
+
+        break;
+      }
       case "openHelp":
         mode = "help";
         renderFrame(screen, renderHelp());
@@ -180,7 +190,7 @@ export function renderWorkspacePicker(state: WorkspacePickerState): string {
     );
   }
 
-  lines.push("", "j/k move  Enter run  v view  ? help  q quit");
+  lines.push("", "j/k move  Enter run  v view  a add service  ? help  q quit");
 
   return lines.join("\n");
 }
@@ -196,6 +206,7 @@ export function renderWorkspacePickerHelp(): string {
     "Workspace",
     "Enter       run selected workspace",
     "v           view selected workspace",
+    "a           add service to selected workspace",
     "",
     "Global",
     "?           help",

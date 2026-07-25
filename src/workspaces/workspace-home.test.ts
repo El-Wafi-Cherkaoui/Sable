@@ -49,6 +49,27 @@ describe("runWorkspaceHome", () => {
     expect(runPicker).toHaveBeenCalledOnce();
   });
 
+  it("adds a service from the picker and reloads workspaces", async () => {
+    const keyInput = createKeyInput();
+    const addService = vi.fn(async () => undefined);
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "addService", workspace })
+      .mockResolvedValueOnce({ type: "exit" });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput,
+      runPicker,
+      addService,
+      runSession: vi.fn(),
+    });
+
+    expect(addService).toHaveBeenCalledWith(workspace);
+    expect(runPicker).toHaveBeenCalledTimes(2);
+    expect(keyInput.close).toHaveBeenCalledOnce();
+  });
+
   it("aborts picker wait on SIGINT and removes signal listeners", async () => {
     const signalSource = createSignalSource();
     const runPicker = vi.fn(
@@ -85,6 +106,9 @@ function createStore(appConfig: AppConfig) {
   return {
     async load() {
       return appConfig;
+    },
+    async save() {
+      return undefined;
     },
   };
 }

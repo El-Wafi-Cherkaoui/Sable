@@ -10,16 +10,23 @@ import {
   type RunWorkspaceController,
   type RunWorkspaceSessionOptions,
 } from "./run-workspace.js";
+import {
+  runAddServiceToWorkspaceCommand,
+  type AddServicePrompts,
+} from "./add-service.js";
 
-export type WorkspaceHomeConfigReader = {
+export type WorkspaceHomeConfigStore = {
   load(): Promise<AppConfig>;
+  save(config: AppConfig): Promise<void>;
 };
 
 export type RunWorkspaceHomeOptions = {
-  store: WorkspaceHomeConfigReader;
+  store: WorkspaceHomeConfigStore;
   keyInput?: KeyInput;
   runPicker?: (options: RunWorkspacePickerOptions) => Promise<WorkspacePickerResult>;
   runSession?: (options: RunWorkspaceSessionOptions) => Promise<{ type: "back" } | { type: "exit" }>;
+  addService?: (workspace: WorkspaceConfig) => Promise<void>;
+  prompts?: AddServicePrompts;
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   signalSource?: WorkspaceHomeSignalSource;
 };
@@ -32,7 +39,7 @@ export type WorkspaceHomeSignalSource = {
 export async function runWorkspaceHome(
   options: RunWorkspaceHomeOptions,
 ): Promise<void> {
-  const keyInput = options.keyInput ?? new TerminalKeyInput();
+  let keyInput = options.keyInput ?? new TerminalKeyInput();
   const runPicker = options.runPicker ?? runWorkspacePicker;
   const runSession = options.runSession ?? runWorkspaceSession;
   const shutdownAbortController = new AbortController();
@@ -55,6 +62,18 @@ export async function runWorkspaceHome(
         return;
       }
 
+      if (pickerResult.type === "addService") {
+        await runPromptFlow(options, keyInput, async () => {
+          await addServiceToWorkspace(options, pickerResult.workspace);
+        });
+
+        if (options.keyInput === undefined) {
+          keyInput = new TerminalKeyInput();
+        }
+
+        continue;
+      }
+
       const sessionResult = await runSession({
         workspace: pickerResult.workspace,
         createController: options.createController,
@@ -72,4 +91,35 @@ export async function runWorkspaceHome(
     signalSource.off("SIGTERM", abortShutdown);
     keyInput.close();
   }
+}
+
+async function runPromptFlow(
+  options: RunWorkspaceHomeOptions,
+  keyInput: KeyInput,
+  action: () => Promise<void>,
+): Promise<void> {
+  if (options.keyInput === undefined) {
+    keyInput.close();
+  }
+
+  await action();
+}
+
+async function addServiceToWorkspace(
+  options: RunWorkspaceHomeOptions,
+  workspace: WorkspaceConfig,
+): Promise<void> {
+  if (options.addService !== undefined) {
+    await options.addService(workspace);
+    return;
+  }
+
+  if (options.prompts === undefined) {
+    throw new Error("Add service prompts are required.");
+  }
+
+  await runAddServiceToWorkspaceCommand(workspace.id, {
+    store: options.store,
+    prompts: options.prompts,
+  });
 }

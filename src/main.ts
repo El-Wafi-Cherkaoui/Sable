@@ -30,6 +30,7 @@ program
   .action(async () => {
     await runWorkspaceHome({
       store: new ConfigStore(),
+      prompts: { confirm, input },
     });
   });
 
