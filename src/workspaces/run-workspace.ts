@@ -1,7 +1,11 @@
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import { WorkspaceController } from "../controller/workspace-controller.js";
+import { TerminalKeyInput, type KeyInput } from "../input/terminal-key-input.js";
 import { ProcessManager } from "../process/process-manager.js";
-import { renderStaticDashboard } from "../tui/static-dashboard.js";
+import {
+  runInteractiveDashboard,
+  type RunInteractiveDashboardOptions,
+} from "../tui/interactive-dashboard.js";
 import { requireWorkspaceByName } from "./find-workspace.js";
 
 export type WorkspaceConfigReader = {
@@ -15,22 +19,22 @@ export type RunWorkspaceOutput = {
 export type RunWorkspaceController = {
   startAutoStartServices(): Promise<void>;
   getState(): ReturnType<WorkspaceController["getState"]>;
+  selectNextService(): ReturnType<WorkspaceController["selectNextService"]>;
+  selectPreviousService(): ReturnType<WorkspaceController["selectPreviousService"]>;
   shutdown(): Promise<void>;
 };
 
 export type RunWorkspaceCommandOptions = {
   store: WorkspaceConfigReader;
-  output?: RunWorkspaceOutput;
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
-  render?: typeof renderStaticDashboard;
+  keyInput?: KeyInput;
+  runDashboard?: (options: RunInteractiveDashboardOptions) => Promise<void>;
 };
 
 export async function runWorkspaceCommand(
   rawWorkspaceName: string,
   options: RunWorkspaceCommandOptions,
 ): Promise<void> {
-  const output = options.output ?? console;
-  const render = options.render ?? renderStaticDashboard;
   const config = await options.store.load();
   const workspace = requireWorkspaceByName(config, rawWorkspaceName);
   const controller =
@@ -39,11 +43,14 @@ export async function runWorkspaceCommand(
       workspace,
       processManager: new ProcessManager(),
     });
+  const keyInput = options.keyInput ?? new TerminalKeyInput();
+  const runDashboard = options.runDashboard ?? runInteractiveDashboard;
 
   try {
     await controller.startAutoStartServices();
-    output.log(render(controller.getState()));
+    await runDashboard({ controller, keyInput });
   } finally {
+    keyInput.close();
     await controller.shutdown();
   }
 }
