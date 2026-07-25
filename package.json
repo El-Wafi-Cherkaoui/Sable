@@ -1,0 +1,23 @@
+{
+  "name": "sable",
+  "version": "0.0.0",
+  "description": "A keyboard-first terminal workspace manager for developers.",
+  "type": "module",
+  "bin": {
+    "sable": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --enable-source-maps dist/main.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0"
+  }
+}
