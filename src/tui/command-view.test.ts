@@ -4,7 +4,7 @@ import { parseCommand, renderCommandView } from "./command-view.js";
 describe("renderCommandView", () => {
   it("renders the command prompt", () => {
     expect(renderCommandView({ input: "quit" })).toBe(
-      ["Command", "", ":quit", "", "Enter run  Esc cancel"].join("\n"),
+      ["Command", "", ":quit", "", "Commands: :help  :quit", "Enter run  Esc cancel"].join("\n"),
     );
   });
 

@@ -5,6 +5,7 @@ export function renderStaticDashboard(state: RuntimeWorkspaceState): string {
 
   if (state.services.length === 0) {
     lines.push("No services configured.");
+    lines.push("", dashboardFooter);
     return lines.join("\n");
   }
 
@@ -19,5 +20,10 @@ export function renderStaticDashboard(state: RuntimeWorkspaceState): string {
     );
   }
 
+  lines.push("", dashboardFooter);
+
   return lines.join("\n");
 }
+
+const dashboardFooter =
+  "j/k move  S start  s stop  r restart  Enter logs  ? help  : command  q quit";

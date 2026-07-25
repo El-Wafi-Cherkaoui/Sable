@@ -25,6 +25,7 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
   );
   const lines = [
     `${options.state.workspace.name} / ${serviceName} logs`,
+    formatLogRange(normalizedScrollOffset, visibleLogs.length, options.logs.length),
     "",
   ];
 
@@ -36,7 +37,7 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
     lines.push(...visibleLogs.map(formatLogEntry));
   }
 
-  lines.push("", "Esc back  j/down scroll down  k/up scroll up  g top  G bottom  q quit");
+  lines.push("", "j/k scroll  g top  G bottom  Esc back  ? help  : command  q quit");
 
   return lines.join("\n");
 }
@@ -55,4 +56,16 @@ export function maxScrollOffset(logLineCount: number, visibleLineCount: number):
 
 function formatLogEntry(entry: ServiceLogEntry): string {
   return `${entry.stream.padEnd(6)} ${entry.line}`;
+}
+
+function formatLogRange(
+  scrollOffset: number,
+  visibleLogCount: number,
+  totalLogCount: number,
+): string {
+  if (totalLogCount === 0) {
+    return "0 lines";
+  }
+
+  return `lines ${scrollOffset + 1}-${scrollOffset + visibleLogCount} of ${totalLogCount}`;
 }

@@ -13,6 +13,7 @@ export function renderHelpView(context: HelpContext): string {
       "r           restart selected service",
       "Enter       show selected service logs",
       "?           show help",
+      ":           command mode",
       "q           quit",
     );
   } else {
@@ -24,11 +25,12 @@ export function renderHelpView(context: HelpContext): string {
       "G           jump to bottom",
       "Esc         return to dashboard",
       "?           show help",
+      ":           command mode",
       "q           quit",
     );
   }
 
-  lines.push("", "Esc back  q quit");
+  lines.push("", "Esc back  : command  q quit");
 
   return lines.join("\n");
 }

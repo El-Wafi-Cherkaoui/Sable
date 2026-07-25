@@ -11,6 +11,8 @@ describe("renderStaticDashboard", () => {
         "> backend   running",
         "  frontend  stopped",
         "  worker    failed",
+        "",
+        "j/k move  S start  s stop  r restart  Enter logs  ? help  : command  q quit",
       ].join("\n"),
     );
   });
@@ -23,7 +25,15 @@ describe("renderStaticDashboard", () => {
         serviceIndexById: {},
         selectedServiceIndex: undefined,
       }),
-    ).toBe(["empty", "", "No services configured."].join("\n"));
+    ).toBe(
+      [
+        "empty",
+        "",
+        "No services configured.",
+        "",
+        "j/k move  S start  s stop  r restart  Enter logs  ? help  : command  q quit",
+      ].join("\n"),
+    );
   });
 });
 

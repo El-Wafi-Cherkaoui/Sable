@@ -15,7 +15,7 @@ export function renderCommandView(options: RenderCommandViewOptions): string {
     lines.push("", options.error);
   }
 
-  lines.push("", "Enter run  Esc cancel");
+  lines.push("", "Commands: :help  :quit", "Enter run  Esc cancel");
 
   return lines.join("\n");
 }

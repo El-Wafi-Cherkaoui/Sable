@@ -18,11 +18,12 @@ describe("renderLogsView", () => {
     ).toBe(
       [
         "ecommerce / backend logs",
+        "lines 1-2 of 2",
         "",
         "stdout server ready",
         "stderr warning",
         "",
-        "Esc back  j/down scroll down  k/up scroll up  g top  G bottom  q quit",
+        "j/k scroll  g top  G bottom  Esc back  ? help  : command  q quit",
       ].join("\n"),
     );
   });
@@ -47,6 +48,14 @@ describe("renderLogsView", () => {
         visibleLineCount: 2,
       }),
     ).toContain(["stdout two", "stdout three"].join("\n"));
+    expect(
+      renderLogsView({
+        state: createState(),
+        logs: [createLog("stdout", "one"), createLog("stdout", "two"), createLog("stdout", "three")],
+        scrollOffset: 1,
+        visibleLineCount: 2,
+      }),
+    ).toContain("lines 2-3 of 3");
   });
 
   it("renders an empty state", () => {
@@ -58,6 +67,14 @@ describe("renderLogsView", () => {
         visibleLineCount: 10,
       }),
     ).toContain("No logs captured yet.");
+    expect(
+      renderLogsView({
+        state: createState(),
+        logs: [],
+        scrollOffset: 0,
+        visibleLineCount: 10,
+      }),
+    ).toContain("0 lines");
   });
 });
 

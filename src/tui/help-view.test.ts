@@ -8,7 +8,8 @@ describe("renderHelpView", () => {
     expect(rendered).toContain("Dashboard");
     expect(rendered).toContain("S           start selected service");
     expect(rendered).toContain("Enter       show selected service logs");
-    expect(rendered).toContain("Esc back  q quit");
+    expect(rendered).toContain(":           command mode");
+    expect(rendered).toContain("Esc back  : command  q quit");
   });
 
   it("renders logs help", () => {
@@ -18,5 +19,6 @@ describe("renderHelpView", () => {
     expect(rendered).toContain("g           jump to top");
     expect(rendered).toContain("G           jump to bottom");
     expect(rendered).toContain("Esc         return to dashboard");
+    expect(rendered).toContain(":           command mode");
   });
 });
