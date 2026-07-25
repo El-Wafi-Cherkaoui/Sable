@@ -13,6 +13,8 @@ import {
   WorkspaceNotFoundError,
 } from "./workspaces/delete-workspace.js";
 import { runListWorkspacesCommand } from "./workspaces/list-workspaces.js";
+import { WorkspaceLookupError } from "./workspaces/find-workspace.js";
+import { runWorkspaceCommand } from "./workspaces/run-workspace.js";
 
 const program = new Command();
 
@@ -50,8 +52,20 @@ program
   .command("run")
   .argument("<workspace-name>", "workspace name")
   .description("run a saved workspace")
-  .action(() => {
-    printNotImplemented("run");
+  .action(async (workspaceName: string) => {
+    try {
+      await runWorkspaceCommand(workspaceName, {
+        store: new ConfigStore(),
+      });
+    } catch (error) {
+      if (error instanceof WorkspaceLookupError) {
+        console.error(error.message);
+        process.exitCode = 1;
+        return;
+      }
+
+      throw error;
+    }
   });
 
 program
