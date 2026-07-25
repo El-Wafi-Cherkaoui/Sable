@@ -1,5 +1,6 @@
 import { mapDashboardKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
+import type { ManagedProcessState } from "../process/process-manager.js";
 import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
 
@@ -7,6 +8,9 @@ export type InteractiveDashboardController = {
   getState(): RuntimeWorkspaceState;
   selectNextService(): RuntimeWorkspaceState;
   selectPreviousService(): RuntimeWorkspaceState;
+  startSelectedService(): Promise<ManagedProcessState>;
+  stopSelectedService(): Promise<ManagedProcessState>;
+  restartSelectedService(): Promise<ManagedProcessState>;
 };
 
 export type InteractiveDashboardScreen = {
@@ -40,6 +44,18 @@ export async function runInteractiveDashboard(
         break;
       case "selectPrevious":
         options.controller.selectPreviousService();
+        renderFrame(screen, render(options.controller.getState()));
+        break;
+      case "start":
+        await options.controller.startSelectedService();
+        renderFrame(screen, render(options.controller.getState()));
+        break;
+      case "stop":
+        await options.controller.stopSelectedService();
+        renderFrame(screen, render(options.controller.getState()));
+        break;
+      case "restart":
+        await options.controller.restartSelectedService();
         renderFrame(screen, render(options.controller.getState()));
         break;
       case "quit":

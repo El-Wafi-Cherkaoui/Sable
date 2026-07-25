@@ -2,6 +2,7 @@ import type { ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { ManagedProcessState } from "../process/process-manager.js";
 import {
   createRuntimeState,
+  getSelectedService,
   selectNextService,
   selectPreviousService,
   updateServiceProcessState,
@@ -81,6 +82,36 @@ export class WorkspaceController {
     );
 
     return processState;
+  }
+
+  async startSelectedService(): Promise<ManagedProcessState> {
+    const selectedService = getSelectedService(this.state);
+
+    if (selectedService === undefined) {
+      return { status: "stopped" };
+    }
+
+    return this.startService(selectedService.service.id);
+  }
+
+  async stopSelectedService(): Promise<ManagedProcessState> {
+    const selectedService = getSelectedService(this.state);
+
+    if (selectedService === undefined) {
+      return { status: "stopped" };
+    }
+
+    return this.stopService(selectedService.service.id);
+  }
+
+  async restartSelectedService(): Promise<ManagedProcessState> {
+    const selectedService = getSelectedService(this.state);
+
+    if (selectedService === undefined) {
+      return { status: "stopped" };
+    }
+
+    return this.restartService(selectedService.service.id);
   }
 
   selectNextService(): RuntimeWorkspaceState {

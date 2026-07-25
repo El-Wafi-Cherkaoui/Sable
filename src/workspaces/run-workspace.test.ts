@@ -71,6 +71,9 @@ function createFakeController(workspaceConfig: WorkspaceConfig) {
     getState: vi.fn(() => createRuntimeState(workspaceConfig)),
     selectNextService: vi.fn(() => createRuntimeState(workspaceConfig)),
     selectPreviousService: vi.fn(() => createRuntimeState(workspaceConfig)),
+    startSelectedService: vi.fn(async () => ({ status: "running" as const })),
+    stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+    restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
     shutdown: vi.fn(async () => undefined),
   };
 }

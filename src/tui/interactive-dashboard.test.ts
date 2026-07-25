@@ -17,6 +17,9 @@ describe("runInteractiveDashboard", () => {
         state = { ...state, selectedServiceIndex: 0 };
         return state;
       }),
+      startSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+      restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
     };
     const keyInput = createKeyInput([
       { sequence: "j" },
@@ -50,6 +53,9 @@ describe("runInteractiveDashboard", () => {
       getState: vi.fn(() => state),
       selectNextService: vi.fn(() => state),
       selectPreviousService: vi.fn(() => state),
+      startSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+      restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
     };
     const write = vi.fn();
 
@@ -63,6 +69,36 @@ describe("runInteractiveDashboard", () => {
     expect(controller.selectNextService).not.toHaveBeenCalled();
     expect(controller.selectPreviousService).not.toHaveBeenCalled();
     expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs selected service actions and re-renders after each action", async () => {
+    const state = createState();
+    const controller = {
+      getState: vi.fn(() => state),
+      selectNextService: vi.fn(() => state),
+      selectPreviousService: vi.fn(() => state),
+      startSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+      restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
+    };
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([
+        { sequence: "S" },
+        { sequence: "s" },
+        { sequence: "r" },
+        { sequence: "q" },
+      ]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+    });
+
+    expect(controller.startSelectedService).toHaveBeenCalledOnce();
+    expect(controller.stopSelectedService).toHaveBeenCalledOnce();
+    expect(controller.restartSelectedService).toHaveBeenCalledOnce();
+    expect(write).toHaveBeenCalledTimes(4);
   });
 });
 

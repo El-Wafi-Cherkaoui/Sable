@@ -3,7 +3,14 @@ export type Keypress = {
   name?: string;
 };
 
-export type DashboardAction = "selectNext" | "selectPrevious" | "quit" | "none";
+export type DashboardAction =
+  | "selectNext"
+  | "selectPrevious"
+  | "start"
+  | "stop"
+  | "restart"
+  | "quit"
+  | "none";
 
 export function mapDashboardKey(keypress: Keypress): DashboardAction {
   if (keypress.name === "down" || keypress.sequence === "j") {
@@ -16,6 +23,18 @@ export function mapDashboardKey(keypress: Keypress): DashboardAction {
 
   if (keypress.name === "escape" || keypress.sequence === "q") {
     return "quit";
+  }
+
+  if (keypress.sequence === "S") {
+    return "start";
+  }
+
+  if (keypress.sequence === "s") {
+    return "stop";
+  }
+
+  if (keypress.sequence === "r") {
+    return "restart";
   }
 
   return "none";

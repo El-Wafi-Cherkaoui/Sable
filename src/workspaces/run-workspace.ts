@@ -1,7 +1,7 @@
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import { WorkspaceController } from "../controller/workspace-controller.js";
 import { TerminalKeyInput, type KeyInput } from "../input/terminal-key-input.js";
-import { ProcessManager } from "../process/process-manager.js";
+import { ProcessManager, type ManagedProcessState } from "../process/process-manager.js";
 import {
   runInteractiveDashboard,
   type RunInteractiveDashboardOptions,
@@ -21,6 +21,9 @@ export type RunWorkspaceController = {
   getState(): ReturnType<WorkspaceController["getState"]>;
   selectNextService(): ReturnType<WorkspaceController["selectNextService"]>;
   selectPreviousService(): ReturnType<WorkspaceController["selectPreviousService"]>;
+  startSelectedService(): Promise<ManagedProcessState>;
+  stopSelectedService(): Promise<ManagedProcessState>;
+  restartSelectedService(): Promise<ManagedProcessState>;
   shutdown(): Promise<void>;
 };
 

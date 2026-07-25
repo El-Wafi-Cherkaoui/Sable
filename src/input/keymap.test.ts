@@ -17,6 +17,12 @@ describe("mapDashboardKey", () => {
     expect(mapDashboardKey({ sequence: "q" })).toBe("quit");
   });
 
+  it("maps service action keys", () => {
+    expect(mapDashboardKey({ sequence: "S" })).toBe("start");
+    expect(mapDashboardKey({ sequence: "s" })).toBe("stop");
+    expect(mapDashboardKey({ sequence: "r" })).toBe("restart");
+  });
+
   it("ignores unknown keys", () => {
     expect(mapDashboardKey({ sequence: "x" })).toBe("none");
   });

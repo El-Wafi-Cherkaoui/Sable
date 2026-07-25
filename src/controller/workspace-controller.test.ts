@@ -112,6 +112,49 @@ describe("WorkspaceController", () => {
     expect(serviceStatus(controller, "svc_worker")).toBe("running");
   });
 
+  it("starts, stops, and restarts the selected service", async () => {
+    const processManager = createFakeProcessManager();
+    const controller = new WorkspaceController({
+      workspace: createWorkspace(),
+      processManager,
+    });
+
+    controller.selectPreviousService();
+
+    await controller.startSelectedService();
+    expect(processManager.startedServiceIds).toEqual(["svc_worker"]);
+    expect(serviceStatus(controller, "svc_worker")).toBe("running");
+
+    await controller.stopSelectedService();
+    expect(processManager.stoppedServiceIds).toEqual(["svc_worker"]);
+    expect(serviceStatus(controller, "svc_worker")).toBe("stopped");
+
+    await controller.restartSelectedService();
+    expect(processManager.restartedServiceIds).toEqual(["svc_worker"]);
+    expect(serviceStatus(controller, "svc_worker")).toBe("running");
+  });
+
+  it("ignores selected service actions when a workspace has no services", async () => {
+    const processManager = createFakeProcessManager();
+    const controller = new WorkspaceController({
+      workspace: { id: "ws_empty", name: "empty", services: [] },
+      processManager,
+    });
+
+    await expect(controller.startSelectedService()).resolves.toEqual({
+      status: "stopped",
+    });
+    await expect(controller.stopSelectedService()).resolves.toEqual({
+      status: "stopped",
+    });
+    await expect(controller.restartSelectedService()).resolves.toEqual({
+      status: "stopped",
+    });
+    expect(processManager.startedServiceIds).toEqual([]);
+    expect(processManager.stoppedServiceIds).toEqual([]);
+    expect(processManager.restartedServiceIds).toEqual([]);
+  });
+
   it("ignores unknown service ids safely", async () => {
     const processManager = createFakeProcessManager();
     const controller = new WorkspaceController({
