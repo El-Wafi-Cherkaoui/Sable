@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { AppConfig } from "../config/config-types.js";
 import {
@@ -41,11 +42,17 @@ function createPrompts(values: Array<boolean | string>): CreateWorkspacePrompts 
 
       return value;
     },
-    async input() {
+    async input(options) {
       const value = nextValue();
 
       if (typeof value !== "string") {
         throw new TypeError("Expected a string prompt value.");
+      }
+
+      const validationResult = options.validate?.(value);
+
+      if (validationResult !== undefined && validationResult !== true) {
+        throw new Error(validationResult);
       }
 
       return value;
@@ -77,9 +84,10 @@ describe("runCreateWorkspaceCommand", () => {
 
     await runCreateWorkspaceCommand("ecommerce", {
       store,
-      prompts: createPrompts([false]),
+      prompts: createPrompts([projectDirectory, false]),
       output: { log, error: vi.fn() },
       generateId: createIdGenerator(["ws_abc12345"]),
+      projectDirectoryExists: () => true,
     });
 
     expect(store.savedConfig).toEqual({
@@ -108,9 +116,10 @@ describe("runCreateWorkspaceCommand", () => {
 
     await runCreateWorkspaceCommand("web", {
       store,
-      prompts: createPrompts([false]),
+      prompts: createPrompts([projectDirectory, false]),
       output: { log: vi.fn(), error: vi.fn() },
       generateId: createIdGenerator(["ws_new1234"]),
+      projectDirectoryExists: () => true,
     });
 
     expect(store.savedConfig?.workspaces).toEqual([
@@ -129,6 +138,7 @@ describe("runCreateWorkspaceCommand", () => {
     await runCreateWorkspaceCommand("ecommerce", {
       store,
       prompts: createPrompts([
+        projectDirectory,
         true,
         " backend ",
         " npm run dev ",
@@ -138,6 +148,7 @@ describe("runCreateWorkspaceCommand", () => {
       ]),
       output: { log: vi.fn(), error: vi.fn() },
       generateId: createIdGenerator(["svc_abcd1234", "ws_efgh5678"]),
+      projectDirectoryExists: () => true,
     });
 
     expect(store.savedConfig?.workspaces[0]).toEqual({
@@ -148,7 +159,7 @@ describe("runCreateWorkspaceCommand", () => {
           id: "svc_abcd1234",
           name: "backend",
           command: "npm run dev",
-          cwd: "./backend",
+          cwd: path.resolve(projectDirectory, "backend"),
           autoStart: true,
           env: {},
         },
@@ -161,9 +172,10 @@ describe("runCreateWorkspaceCommand", () => {
 
     await runCreateWorkspaceCommand(" ecommerce ", {
       store,
-      prompts: createPrompts([false]),
+      prompts: createPrompts([projectDirectory, false]),
       output: { log: vi.fn(), error: vi.fn() },
       generateId: createIdGenerator(["ws_abc12345"]),
+      projectDirectoryExists: () => true,
     });
 
     expect(store.savedConfig?.workspaces[0]?.name).toBe("ecommerce");
@@ -208,11 +220,62 @@ describe("runCreateWorkspaceCommand", () => {
 
     await runCreateWorkspaceCommand("ecommerce", {
       store,
-      prompts: createPrompts([true, "backend", "npm run dev", ".", false, false]),
+      prompts: createPrompts([
+        projectDirectory,
+        true,
+        "backend",
+        "npm run dev",
+        ".",
+        false,
+        false,
+      ]),
       output: { log: vi.fn(), error: vi.fn() },
+      projectDirectoryExists: () => true,
     });
 
     expect(store.savedConfig?.workspaces[0]?.id).toMatch(/^ws_/);
     expect(store.savedConfig?.workspaces[0]?.services[0]?.id).toMatch(/^svc_/);
   });
+
+  it("preserves absolute service working directories", async () => {
+    const store = createStore(emptyConfig);
+    const serviceDirectory = path.resolve(projectDirectory, "api");
+
+    await runCreateWorkspaceCommand("ecommerce", {
+      store,
+      prompts: createPrompts([
+        projectDirectory,
+        true,
+        "api",
+        "npm run dev",
+        serviceDirectory,
+        false,
+        false,
+      ]),
+      output: { log: vi.fn(), error: vi.fn() },
+      generateId: createIdGenerator(["svc_api1234", "ws_shop1234"]),
+      projectDirectoryExists: () => true,
+    });
+
+    expect(store.savedConfig?.workspaces[0]?.services[0]?.cwd).toBe(serviceDirectory);
+  });
+
+  it("rejects project directories that do not exist or are not directories", async () => {
+    const store = createStore(emptyConfig);
+    const projectDirectoryExists = vi.fn(() => false);
+
+    await expect(
+      runCreateWorkspaceCommand("ecommerce", {
+        store,
+        prompts: createPrompts([projectDirectory]),
+        output: { log: vi.fn(), error: vi.fn() },
+        generateId: createIdGenerator([]),
+        projectDirectoryExists,
+      }),
+    ).rejects.toThrow("Project directory must exist and be a directory.");
+    expect(projectDirectoryExists).toHaveBeenCalledWith(projectDirectory);
+    expect(store.savedConfig).toBeUndefined();
+  });
 });
+
+const projectDirectory = path.resolve("C:\\projects\\shop");

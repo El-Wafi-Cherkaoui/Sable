@@ -1,3 +1,5 @@
+import { existsSync, statSync } from "node:fs";
+import path from "node:path";
 import { generateShortId } from "../shared/id.js";
 import type { AppConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
 
@@ -20,11 +22,14 @@ export type CreateWorkspaceOutput = {
   error(message: string): void;
 };
 
+export type ProjectDirectoryExists = (directoryPath: string) => boolean;
+
 export type CreateWorkspaceCommandOptions = {
   store: WorkspaceConfigStore;
   prompts: CreateWorkspacePrompts;
   output?: CreateWorkspaceOutput;
   generateId?: typeof generateShortId;
+  projectDirectoryExists?: ProjectDirectoryExists;
 };
 
 export class DuplicateWorkspaceNameError extends Error {
@@ -47,7 +52,15 @@ export async function runCreateWorkspaceCommand(
     throw new DuplicateWorkspaceNameError(workspaceName);
   }
 
-  const services = await promptForInitialServices(options.prompts, idGenerator);
+  const projectDirectory = await promptForProjectDirectory(
+    options.prompts,
+    options.projectDirectoryExists ?? defaultProjectDirectoryExists,
+  );
+  const services = await promptForInitialServices(
+    options.prompts,
+    idGenerator,
+    projectDirectory,
+  );
   const nextConfig: AppConfig = {
     ...config,
     workspaces: [
@@ -75,6 +88,7 @@ export function hasWorkspaceNamed(config: AppConfig, rawName: string): boolean {
 async function promptForInitialServices(
   prompts: CreateWorkspacePrompts,
   generateId: typeof generateShortId,
+  projectDirectory: string,
 ): Promise<ServiceConfig[]> {
   const shouldAddServices = await prompts.confirm({
     message: "Add initial services?",
@@ -89,7 +103,7 @@ async function promptForInitialServices(
   let addAnotherService = true;
 
   while (addAnotherService) {
-    services.push(await promptForService(prompts, generateId));
+    services.push(await promptForService(prompts, generateId, projectDirectory));
     addAnotherService = await prompts.confirm({
       message: "Add another service?",
       default: false,
@@ -102,6 +116,7 @@ async function promptForInitialServices(
 async function promptForService(
   prompts: CreateWorkspacePrompts,
   generateId: typeof generateShortId,
+  projectDirectory: string,
 ): Promise<ServiceConfig> {
   const name = await prompts.input({
     message: "Service name",
@@ -113,7 +128,7 @@ async function promptForService(
   });
   const cwd = await prompts.input({
     message: "Working directory",
-    default: process.cwd(),
+    default: projectDirectory,
     validate: requiredValue("Service working directory is required."),
   });
   const autoStart = await prompts.confirm({
@@ -125,10 +140,44 @@ async function promptForService(
     id: generateId("svc"),
     name: name.trim(),
     command: command.trim(),
-    cwd: cwd.trim(),
+    cwd: resolveServiceWorkingDirectory(cwd.trim(), projectDirectory),
     autoStart,
     env: {},
   };
+}
+
+async function promptForProjectDirectory(
+  prompts: CreateWorkspacePrompts,
+  projectDirectoryExists: ProjectDirectoryExists,
+): Promise<string> {
+  const projectDirectory = await prompts.input({
+    message: "Project directory",
+    default: process.cwd(),
+    validate(value) {
+      const trimmedValue = value.trim();
+
+      if (trimmedValue.length === 0) {
+        return "Project directory is required.";
+      }
+
+      if (!projectDirectoryExists(trimmedValue)) {
+        return "Project directory must exist and be a directory.";
+      }
+
+      return true;
+    },
+  });
+
+  return path.resolve(projectDirectory.trim());
+}
+
+function resolveServiceWorkingDirectory(
+  rawWorkingDirectory: string,
+  projectDirectory: string,
+): string {
+  return path.isAbsolute(rawWorkingDirectory)
+    ? rawWorkingDirectory
+    : path.resolve(projectDirectory, rawWorkingDirectory);
 }
 
 function requiredValue(message: string): (value: string) => boolean | string {
@@ -137,4 +186,12 @@ function requiredValue(message: string): (value: string) => boolean | string {
 
 function normalizeName(name: string): string {
   return name.trim().toLowerCase();
+}
+
+function defaultProjectDirectoryExists(directoryPath: string): boolean {
+  try {
+    return existsSync(directoryPath) && statSync(directoryPath).isDirectory();
+  } catch {
+    return false;
+  }
 }
