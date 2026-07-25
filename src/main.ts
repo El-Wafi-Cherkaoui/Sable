@@ -8,6 +8,11 @@ import {
   DuplicateWorkspaceNameError,
   runCreateWorkspaceCommand,
 } from "./workspaces/create-workspace.js";
+import {
+  runDeleteWorkspaceCommand,
+  WorkspaceNotFoundError,
+} from "./workspaces/delete-workspace.js";
+import { runListWorkspacesCommand } from "./workspaces/list-workspaces.js";
 
 const program = new Command();
 
@@ -52,16 +57,31 @@ program
 program
   .command("list")
   .description("list saved workspaces")
-  .action(() => {
-    printNotImplemented("list");
+  .action(async () => {
+    await runListWorkspacesCommand({
+      store: new ConfigStore(),
+    });
   });
 
 program
   .command("delete")
   .argument("<workspace-name>", "workspace name")
   .description("delete a saved workspace")
-  .action(() => {
-    printNotImplemented("delete");
+  .action(async (workspaceName: string) => {
+    try {
+      await runDeleteWorkspaceCommand(workspaceName, {
+        store: new ConfigStore(),
+        prompts: { confirm },
+      });
+    } catch (error) {
+      if (error instanceof WorkspaceNotFoundError) {
+        console.error(error.message);
+        process.exitCode = 1;
+        return;
+      }
+
+      throw error;
+    }
   });
 
 await program.parseAsync();
