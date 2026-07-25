@@ -24,6 +24,17 @@ describe("TerminalKeyInput", () => {
     expect(input.setRawMode).toHaveBeenNthCalledWith(1, true);
     expect(input.setRawMode).toHaveBeenNthCalledWith(2, true);
   });
+
+  it("closes idempotently", () => {
+    const input = createInput({ isTTY: true, isRaw: false });
+
+    const keyInput = new TerminalKeyInput(input);
+    keyInput.close();
+    keyInput.close();
+
+    expect(input.setRawMode).toHaveBeenCalledTimes(2);
+    expect(input.pause).toHaveBeenCalledOnce();
+  });
 });
 
 function createInput(options: { isTTY: boolean; isRaw: boolean }): NodeJS.ReadStream {

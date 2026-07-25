@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import { createRuntimeState } from "../runtime/runtime-state.js";
@@ -20,9 +21,42 @@ describe("runWorkspaceCommand", () => {
 
     expect(createController).toHaveBeenCalledWith(workspace);
     expect(controller.startAutoStartServices).toHaveBeenCalledBefore(runDashboard);
-    expect(runDashboard).toHaveBeenCalledWith({ controller, keyInput });
+    expect(runDashboard).toHaveBeenCalledWith({
+      controller,
+      keyInput,
+      abortSignal: expect.any(AbortSignal),
+    });
     expect(keyInput.close).toHaveBeenCalledOnce();
     expect(controller.shutdown).toHaveBeenCalledOnce();
+  });
+
+  it("aborts the dashboard on SIGINT and still cleans up", async () => {
+    const controller = createFakeController(workspace);
+    const keyInput = createKeyInput();
+    const signalSource = createSignalSource();
+    const runDashboard = vi.fn(
+      async ({ abortSignal }: { abortSignal?: AbortSignal }) =>
+        new Promise<void>((resolve) => {
+          abortSignal?.addEventListener("abort", () => resolve(), { once: true });
+        }),
+    );
+
+    const runPromise = runWorkspaceCommand("ecommerce", {
+      store: createStore(config),
+      createController: () => controller,
+      keyInput,
+      runDashboard,
+      signalSource,
+    });
+
+    await waitUntil(() => runDashboard.mock.calls.length === 1);
+    signalSource.emit("SIGINT");
+    await runPromise;
+
+    expect(keyInput.close).toHaveBeenCalledOnce();
+    expect(controller.shutdown).toHaveBeenCalledOnce();
+    expect(signalSource.listenerCount("SIGINT")).toBe(0);
+    expect(signalSource.listenerCount("SIGTERM")).toBe(0);
   });
 
   it("closes input and shuts down even when dashboard fails", async () => {
@@ -84,6 +118,39 @@ function createKeyInput() {
     readKey: vi.fn(async () => ({ sequence: "q" })),
     close: vi.fn(),
   };
+}
+
+function createSignalSource() {
+  const emitter = new EventEmitter();
+
+  return {
+    once(signal: NodeJS.Signals, listener: () => void) {
+      emitter.once(signal, listener);
+    },
+    off(signal: NodeJS.Signals, listener: () => void) {
+      emitter.off(signal, listener);
+    },
+    emit(signal: NodeJS.Signals) {
+      emitter.emit(signal);
+    },
+    listenerCount(signal: NodeJS.Signals) {
+      return emitter.listenerCount(signal);
+    },
+  };
+}
+
+async function waitUntil(predicate: () => boolean): Promise<void> {
+  const deadline = Date.now() + 1_000;
+
+  while (Date.now() < deadline) {
+    if (predicate()) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  expect(predicate()).toBe(true);
 }
 
 function createControllerForWorkspace(

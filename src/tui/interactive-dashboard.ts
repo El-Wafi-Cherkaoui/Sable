@@ -25,6 +25,7 @@ export type InteractiveDashboardScreen = {
 export type RunInteractiveDashboardOptions = {
   controller: InteractiveDashboardController;
   keyInput: KeyInput;
+  abortSignal?: AbortSignal;
   screen?: InteractiveDashboardScreen;
   render?: typeof renderStaticDashboard;
   renderLogs?: typeof renderLogsView;
@@ -37,7 +38,10 @@ export type RunInteractiveDashboardOptions = {
 type ViewMode = "dashboard" | "logs" | "help" | "command";
 type HelpReturnMode = "dashboard" | "logs";
 type CommandReturnMode = ViewMode;
-type LoopEvent = { type: "key"; keypress: Awaited<ReturnType<KeyInput["readKey"]>> } | { type: "refresh" };
+type LoopEvent =
+  | { type: "key"; keypress: Awaited<ReturnType<KeyInput["readKey"]>> }
+  | { type: "refresh" }
+  | { type: "abort" };
 
 export async function runInteractiveDashboard(
   options: RunInteractiveDashboardOptions,
@@ -67,7 +71,17 @@ export async function runInteractiveDashboard(
     const event =
       currentMode === "logs"
         ? await readKeyOrRefresh(logsRefreshIntervalMs)
-        : { type: "key" as const, keypress: await readKeyEvent() };
+        : await readKeyOrAbort();
+
+    if (event.type === "abort") {
+      shouldQuit = true;
+      continue;
+    }
+
+    if (event.type === "key" && isCtrlC(event.keypress)) {
+      shouldQuit = true;
+      continue;
+    }
 
     if (currentMode === "command") {
       if (event.type === "refresh") {
@@ -350,6 +364,7 @@ export async function runInteractiveDashboard(
     const event = await Promise.race([
       pendingKeyRead.then((keypress) => ({ type: "key" as const, keypress })),
       wait(refreshIntervalMs).then(() => ({ type: "refresh" as const })),
+      waitForAbort(options.abortSignal).then(() => ({ type: "abort" as const })),
     ]);
 
     if (event.type === "key") {
@@ -358,6 +373,31 @@ export async function runInteractiveDashboard(
 
     return event;
   }
+
+  async function readKeyOrAbort(): Promise<LoopEvent> {
+    return Promise.race([
+      readKeyEvent().then((keypress) => ({ type: "key" as const, keypress })),
+      waitForAbort(options.abortSignal).then(() => ({ type: "abort" as const })),
+    ]);
+  }
+}
+
+function isCtrlC(keypress: Awaited<ReturnType<KeyInput["readKey"]>>): boolean {
+  return keypress.ctrl === true && keypress.name === "c";
+}
+
+function waitForAbort(signal: AbortSignal | undefined): Promise<void> {
+  if (signal === undefined) {
+    return new Promise(() => undefined);
+  }
+
+  if (signal.aborted) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    signal.addEventListener("abort", () => resolve(), { once: true });
+  });
 }
 
 function isPrintableCommandCharacter(sequence: string): boolean {

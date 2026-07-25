@@ -37,6 +37,12 @@ export type RunWorkspaceCommandOptions = {
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   keyInput?: KeyInput;
   runDashboard?: (options: RunInteractiveDashboardOptions) => Promise<void>;
+  signalSource?: RunWorkspaceSignalSource;
+};
+
+export type RunWorkspaceSignalSource = {
+  once(signal: NodeJS.Signals, listener: () => void): void;
+  off(signal: NodeJS.Signals, listener: () => void): void;
 };
 
 export async function runWorkspaceCommand(
@@ -53,11 +59,23 @@ export async function runWorkspaceCommand(
     });
   const keyInput = options.keyInput ?? new TerminalKeyInput();
   const runDashboard = options.runDashboard ?? runInteractiveDashboard;
+  const shutdownAbortController = new AbortController();
+  const signalSource = options.signalSource ?? process;
+  const abortShutdown = () => shutdownAbortController.abort();
+
+  signalSource.once("SIGINT", abortShutdown);
+  signalSource.once("SIGTERM", abortShutdown);
 
   try {
     await controller.startAutoStartServices();
-    await runDashboard({ controller, keyInput });
+    await runDashboard({
+      controller,
+      keyInput,
+      abortSignal: shutdownAbortController.signal,
+    });
   } finally {
+    signalSource.off("SIGINT", abortShutdown);
+    signalSource.off("SIGTERM", abortShutdown);
     keyInput.close();
     await controller.shutdown();
   }

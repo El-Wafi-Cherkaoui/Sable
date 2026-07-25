@@ -9,6 +9,7 @@ export type KeyInput = {
 export class TerminalKeyInput implements KeyInput {
   private readonly input: NodeJS.ReadStream;
   private readonly wasRaw: boolean;
+  private closed = false;
 
   constructor(input: NodeJS.ReadStream = process.stdin) {
     this.input = input;
@@ -31,6 +32,12 @@ export class TerminalKeyInput implements KeyInput {
   }
 
   close(): void {
+    if (this.closed) {
+      return;
+    }
+
+    this.closed = true;
+
     if (this.input.isTTY) {
       this.input.setRawMode(this.wasRaw);
     }

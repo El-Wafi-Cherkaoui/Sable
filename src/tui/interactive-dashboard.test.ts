@@ -48,6 +48,42 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenNthCalledWith(3, "selected:0\n");
   });
 
+  it("quits on Ctrl+C keypress", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ name: "c", ctrl: true }]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+    });
+
+    expect(write).toHaveBeenCalledOnce();
+  });
+
+  it("quits when aborted while waiting for input", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const keyInput = createControlledKeyInput([]);
+    const abortController = new AbortController();
+    const write = vi.fn();
+    const runPromise = runInteractiveDashboard({
+      controller,
+      keyInput,
+      abortSignal: abortController.signal,
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+    });
+
+    await waitForWrite(write, "dashboard\n");
+    abortController.abort();
+    await runPromise;
+
+    expect(write).toHaveBeenCalledOnce();
+  });
+
   it("ignores unknown keys without re-rendering", async () => {
     const state = createState();
     const controller = {
@@ -389,7 +425,9 @@ describe("runInteractiveDashboard", () => {
   });
 });
 
-function createKeyInput(keys: Array<{ sequence?: string; name?: string }>): KeyInput {
+function createKeyInput(
+  keys: Array<{ sequence?: string; name?: string; ctrl?: boolean }>,
+): KeyInput {
   return {
     async readKey() {
       const key = keys.shift();
@@ -404,8 +442,12 @@ function createKeyInput(keys: Array<{ sequence?: string; name?: string }>): KeyI
   };
 }
 
-function createControlledKeyInput(initialKeys: Array<{ sequence?: string; name?: string }>) {
-  let resolver: ((key: { sequence?: string; name?: string }) => void) | undefined;
+function createControlledKeyInput(
+  initialKeys: Array<{ sequence?: string; name?: string; ctrl?: boolean }>,
+) {
+  let resolver:
+    | ((key: { sequence?: string; name?: string; ctrl?: boolean }) => void)
+    | undefined;
 
   return {
     async readKey() {
@@ -415,11 +457,11 @@ function createControlledKeyInput(initialKeys: Array<{ sequence?: string; name?:
         return key;
       }
 
-      return new Promise<{ sequence?: string; name?: string }>((resolve) => {
+      return new Promise<{ sequence?: string; name?: string; ctrl?: boolean }>((resolve) => {
         resolver = resolve;
       });
     },
-    resolveNext(key: { sequence?: string; name?: string }) {
+    resolveNext(key: { sequence?: string; name?: string; ctrl?: boolean }) {
       if (resolver === undefined) {
         throw new Error("No pending key read.");
       }

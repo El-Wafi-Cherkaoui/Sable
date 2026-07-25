@@ -1,6 +1,7 @@
 export type Keypress = {
   sequence?: string;
   name?: string;
+  ctrl?: boolean;
 };
 
 export type DashboardAction =
