@@ -34,5 +34,7 @@ export class TerminalKeyInput implements KeyInput {
     if (this.input.isTTY) {
       this.input.setRawMode(this.wasRaw);
     }
+
+    this.input.pause();
   }
 }
