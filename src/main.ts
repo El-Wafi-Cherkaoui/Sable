@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { confirm, input } from "@inquirer/prompts";
+import { ConfigStore } from "./config/config-store.js";
 import { product } from "./shared/product.js";
+import {
+  DuplicateWorkspaceNameError,
+  runCreateWorkspaceCommand,
+} from "./workspaces/create-workspace.js";
 
 const program = new Command();
 
@@ -18,8 +24,21 @@ program
   .command("create")
   .argument("<workspace-name>", "workspace name")
   .description("create a workspace interactively")
-  .action(() => {
-    printNotImplemented("create");
+  .action(async (workspaceName: string) => {
+    try {
+      await runCreateWorkspaceCommand(workspaceName, {
+        store: new ConfigStore(),
+        prompts: { confirm, input },
+      });
+    } catch (error) {
+      if (error instanceof DuplicateWorkspaceNameError) {
+        console.error(error.message);
+        process.exitCode = 1;
+        return;
+      }
+
+      throw error;
+    }
   });
 
 program
@@ -45,4 +64,4 @@ program
     printNotImplemented("delete");
   });
 
-program.parse();
+await program.parseAsync();
