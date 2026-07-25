@@ -7,6 +7,7 @@ export type DashboardAction =
   | "selectNext"
   | "selectPrevious"
   | "openLogs"
+  | "openHelp"
   | "start"
   | "stop"
   | "restart"
@@ -18,9 +19,12 @@ export type LogsAction =
   | "scrollUp"
   | "scrollTop"
   | "scrollBottom"
+  | "openHelp"
   | "back"
   | "quit"
   | "none";
+
+export type HelpAction = "back" | "quit" | "none";
 
 export function mapDashboardKey(keypress: Keypress): DashboardAction {
   if (keypress.name === "down" || keypress.sequence === "j") {
@@ -33,6 +37,10 @@ export function mapDashboardKey(keypress: Keypress): DashboardAction {
 
   if (keypress.name === "escape" || keypress.sequence === "q") {
     return "quit";
+  }
+
+  if (keypress.sequence === "?") {
+    return "openHelp";
   }
 
   if (keypress.name === "return" || keypress.sequence === "\r") {
@@ -71,6 +79,22 @@ export function mapLogsKey(keypress: Keypress): LogsAction {
     return "scrollBottom";
   }
 
+  if (keypress.name === "escape") {
+    return "back";
+  }
+
+  if (keypress.sequence === "?") {
+    return "openHelp";
+  }
+
+  if (keypress.sequence === "q") {
+    return "quit";
+  }
+
+  return "none";
+}
+
+export function mapHelpKey(keypress: Keypress): HelpAction {
   if (keypress.name === "escape") {
     return "back";
   }

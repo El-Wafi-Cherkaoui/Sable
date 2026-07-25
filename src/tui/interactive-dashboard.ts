@@ -1,7 +1,8 @@
-import { mapDashboardKey, mapLogsKey } from "../input/keymap.js";
+import { mapDashboardKey, mapHelpKey, mapLogsKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
 import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import { renderHelpView, type HelpContext } from "./help-view.js";
 import { clampScrollOffset, maxScrollOffset, renderLogsView } from "./logs-view.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
 
@@ -26,11 +27,13 @@ export type RunInteractiveDashboardOptions = {
   screen?: InteractiveDashboardScreen;
   render?: typeof renderStaticDashboard;
   renderLogs?: typeof renderLogsView;
+  renderHelp?: typeof renderHelpView;
   logVisibleLineCount?: number;
   logsRefreshIntervalMs?: number;
 };
 
-type ViewMode = "dashboard" | "logs";
+type ViewMode = "dashboard" | "logs" | "help";
+type HelpReturnMode = "dashboard" | "logs";
 type LoopEvent = { type: "key"; keypress: Awaited<ReturnType<KeyInput["readKey"]>> } | { type: "refresh" };
 
 export async function runInteractiveDashboard(
@@ -39,10 +42,12 @@ export async function runInteractiveDashboard(
   const screen = options.screen ?? terminalScreen;
   const render = options.render ?? renderStaticDashboard;
   const renderLogs = options.renderLogs ?? renderLogsView;
+  const renderHelp = options.renderHelp ?? renderHelpView;
   const logVisibleLineCount = options.logVisibleLineCount ?? 20;
   const logsRefreshIntervalMs = options.logsRefreshIntervalMs ?? 250;
   let shouldQuit = false;
   let mode: ViewMode = "dashboard";
+  let helpReturnMode: HelpReturnMode = "dashboard";
   let logScrollOffset = 0;
   let followLogTail = true;
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
@@ -54,6 +59,32 @@ export async function runInteractiveDashboard(
       mode === "logs"
         ? await readKeyOrRefresh(logsRefreshIntervalMs)
         : { type: "key" as const, keypress: await readKeyEvent() };
+
+    if (mode === "help") {
+      if (event.type === "refresh") {
+        continue;
+      }
+
+      const action = mapHelpKey(event.keypress);
+
+      switch (action) {
+        case "back":
+          mode = helpReturnMode;
+          if (mode === "logs") {
+            renderLogsFrame();
+          } else {
+            renderFrame(screen, render(options.controller.getState()));
+          }
+          break;
+        case "quit":
+          shouldQuit = true;
+          break;
+        case "none":
+          break;
+      }
+
+      continue;
+    }
 
     if (mode === "logs") {
       if (event.type === "refresh") {
@@ -98,6 +129,11 @@ export async function runInteractiveDashboard(
           logScrollOffset = maxScrollOffset(logs.length, logVisibleLineCount);
           followLogTail = true;
           renderLogsFrame();
+          break;
+        case "openHelp":
+          helpReturnMode = "logs";
+          mode = "help";
+          renderHelpFrame("logs");
           break;
         case "back":
           mode = "dashboard";
@@ -149,6 +185,11 @@ export async function runInteractiveDashboard(
         );
         renderLogsFrame();
         break;
+      case "openHelp":
+        helpReturnMode = "dashboard";
+        mode = "help";
+        renderHelpFrame("dashboard");
+        break;
       case "quit":
         shouldQuit = true;
         break;
@@ -174,6 +215,10 @@ export async function runInteractiveDashboard(
         visibleLineCount: logVisibleLineCount,
       }),
     );
+  }
+
+  function renderHelpFrame(context: HelpContext): void {
+    renderFrame(screen, renderHelp(context));
   }
 
   async function readKeyEvent(): Promise<Awaited<ReturnType<KeyInput["readKey"]>>> {

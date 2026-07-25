@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapDashboardKey, mapLogsKey } from "./keymap.js";
+import { mapDashboardKey, mapHelpKey, mapLogsKey } from "./keymap.js";
 
 describe("mapDashboardKey", () => {
   it("maps down and j to select next", () => {
@@ -28,6 +28,10 @@ describe("mapDashboardKey", () => {
     expect(mapDashboardKey({ sequence: "\r" })).toBe("openLogs");
   });
 
+  it("maps question mark to open help", () => {
+    expect(mapDashboardKey({ sequence: "?" })).toBe("openHelp");
+  });
+
   it("ignores unknown keys", () => {
     expect(mapDashboardKey({ sequence: "x" })).toBe("none");
   });
@@ -41,14 +45,26 @@ describe("mapLogsKey", () => {
     expect(mapLogsKey({ sequence: "k" })).toBe("scrollUp");
   });
 
-  it("maps jump, back, and quit keys", () => {
+  it("maps jump, help, back, and quit keys", () => {
     expect(mapLogsKey({ sequence: "g" })).toBe("scrollTop");
     expect(mapLogsKey({ sequence: "G" })).toBe("scrollBottom");
+    expect(mapLogsKey({ sequence: "?" })).toBe("openHelp");
     expect(mapLogsKey({ name: "escape" })).toBe("back");
     expect(mapLogsKey({ sequence: "q" })).toBe("quit");
   });
 
   it("ignores unknown log keys", () => {
     expect(mapLogsKey({ sequence: "x" })).toBe("none");
+  });
+});
+
+describe("mapHelpKey", () => {
+  it("maps escape back and q quit", () => {
+    expect(mapHelpKey({ name: "escape" })).toBe("back");
+    expect(mapHelpKey({ sequence: "q" })).toBe("quit");
+  });
+
+  it("ignores unknown help keys", () => {
+    expect(mapHelpKey({ sequence: "x" })).toBe("none");
   });
 });

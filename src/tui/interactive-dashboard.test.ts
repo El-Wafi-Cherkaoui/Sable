@@ -104,6 +104,45 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenCalledTimes(4);
   });
 
+  it("opens help from dashboard and returns to dashboard", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([
+        { sequence: "?" },
+        { name: "escape" },
+        { sequence: "q" },
+      ]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderHelp: (context) => `help:${context}`,
+    });
+
+    expect(write).toHaveBeenNthCalledWith(1, "dashboard\n");
+    expect(write).toHaveBeenNthCalledWith(2, "help:dashboard\n");
+    expect(write).toHaveBeenNthCalledWith(3, "dashboard\n");
+  });
+
+  it("quits from dashboard help", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "?" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderHelp: (context) => `help:${context}`,
+    });
+
+    expect(write).toHaveBeenCalledTimes(2);
+    expect(write).toHaveBeenNthCalledWith(2, "help:dashboard\n");
+  });
+
   it("opens logs, scrolls, returns to dashboard, and quits", async () => {
     const state = createState();
     const controller = {
@@ -143,6 +182,34 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenNthCalledWith(4, "logs:0\n");
     expect(write).toHaveBeenNthCalledWith(5, "logs:1\n");
     expect(write).toHaveBeenNthCalledWith(6, "dashboard\n");
+  });
+
+  it("opens help from logs and returns to logs", async () => {
+    const state = createState();
+    const controller = createController(state, () => [
+      { stream: "stdout", line: "one", timestamp: new Date() },
+    ]);
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([
+        { name: "return" },
+        { sequence: "?" },
+        { name: "escape" },
+        { sequence: "q" },
+      ]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderLogs: ({ scrollOffset }) => `logs:${scrollOffset}`,
+      renderHelp: (context) => `help:${context}`,
+      logVisibleLineCount: 2,
+    });
+
+    expect(write).toHaveBeenNthCalledWith(1, "dashboard\n");
+    expect(write).toHaveBeenNthCalledWith(2, "logs:0\n");
+    expect(write).toHaveBeenNthCalledWith(3, "help:logs\n");
+    expect(write).toHaveBeenNthCalledWith(4, "logs:0\n");
   });
 
   it("auto-refreshes logs while following the bottom", async () => {
@@ -244,7 +311,11 @@ function createControlledKeyInput(initialKeys: Array<{ sequence?: string; name?:
 
 function createController(
   state: RuntimeWorkspaceState,
-  getLogs: () => Array<{ stream: "stdout" | "stderr"; line: string; timestamp: Date }>,
+  getLogs: () => Array<{
+    stream: "stdout" | "stderr" | "system";
+    line: string;
+    timestamp: Date;
+  }>,
 ) {
   return {
     getState: vi.fn(() => state),
