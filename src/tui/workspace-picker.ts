@@ -23,9 +23,10 @@ export type RunWorkspacePickerOptions = {
   screen?: WorkspacePickerScreen;
   render?: typeof renderWorkspacePicker;
   renderHelp?: typeof renderWorkspacePickerHelp;
+  renderDetails?: typeof renderWorkspaceDetails;
 };
 
-type PickerMode = "picker" | "help";
+type PickerMode = "picker" | "help" | "details";
 type PickerEvent =
   | { type: "key"; keypress: Awaited<ReturnType<KeyInput["readKey"]>> }
   | { type: "abort" };
@@ -36,6 +37,7 @@ export async function runWorkspacePicker(
   const screen = options.screen ?? terminalScreen;
   const render = options.render ?? renderWorkspacePicker;
   const renderHelp = options.renderHelp ?? renderWorkspacePickerHelp;
+  const renderDetails = options.renderDetails ?? renderWorkspaceDetails;
   let state = createWorkspacePickerState(options.workspaces);
   let mode: PickerMode = "picker";
 
@@ -49,6 +51,15 @@ export async function runWorkspacePicker(
     }
 
     if (mode === "help") {
+      if (event.keypress.name === "escape" || event.keypress.sequence === "q") {
+        mode = "picker";
+        renderFrame(screen, render(state));
+      }
+
+      continue;
+    }
+
+    if (mode === "details") {
       if (event.keypress.name === "escape" || event.keypress.sequence === "q") {
         mode = "picker";
         renderFrame(screen, render(state));
@@ -73,6 +84,16 @@ export async function runWorkspacePicker(
 
         if (workspace !== undefined) {
           return { type: "run", workspace };
+        }
+
+        break;
+      }
+      case "view": {
+        const workspace = getSelectedWorkspace(state);
+
+        if (workspace !== undefined) {
+          mode = "details";
+          renderFrame(screen, renderDetails(workspace));
         }
 
         break;
@@ -159,7 +180,7 @@ export function renderWorkspacePicker(state: WorkspacePickerState): string {
     );
   }
 
-  lines.push("", "j/k move  Enter run  ? help  q quit");
+  lines.push("", "j/k move  Enter run  v view  ? help  q quit");
 
   return lines.join("\n");
 }
@@ -174,6 +195,7 @@ export function renderWorkspacePickerHelp(): string {
     "",
     "Workspace",
     "Enter       run selected workspace",
+    "v           view selected workspace",
     "",
     "Global",
     "?           help",
@@ -182,6 +204,35 @@ export function renderWorkspacePickerHelp(): string {
     "",
     "Esc back",
   ].join("\n");
+}
+
+export function renderWorkspaceDetails(workspace: WorkspaceConfig): string {
+  const lines = [workspace.name, "", "services"];
+
+  if (workspace.services.length === 0) {
+    lines.push("", "No services configured.", "", "Esc back  q back");
+    return lines.join("\n");
+  }
+
+  for (const service of workspace.services) {
+    lines.push(
+      "",
+      service.name,
+      `  command     ${service.command}`,
+      `  cwd         ${service.cwd}`,
+      `  autoStart   ${service.autoStart ? "yes" : "no"}`,
+    );
+
+    const envKeys = Object.keys(service.env);
+
+    if (envKeys.length > 0) {
+      lines.push(`  env         ${envKeys.length} ${envKeys.length === 1 ? "variable" : "variables"}`);
+    }
+  }
+
+  lines.push("", "Esc back  q back");
+
+  return lines.join("\n");
 }
 
 function formatServiceCount(count: number): string {

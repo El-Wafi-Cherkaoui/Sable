@@ -5,6 +5,7 @@ import {
   createWorkspacePickerState,
   getSelectedWorkspace,
   renderWorkspacePicker,
+  renderWorkspaceDetails,
   renderWorkspacePickerHelp,
   runWorkspacePicker,
   selectNextWorkspace,
@@ -38,7 +39,44 @@ describe("renderWorkspacePicker", () => {
         "> ecommerce  2 services",
         "  portfolio  1 service",
         "",
-        "j/k move  Enter run  ? help  q quit",
+        "j/k move  Enter run  v view  ? help  q quit",
+      ].join("\n"),
+    );
+  });
+
+  it("renders selected workspace details", () => {
+    expect(renderWorkspaceDetails(workspaces[0])).toBe(
+      [
+        "ecommerce",
+        "",
+        "services",
+        "",
+        "api",
+        "  command     npm run dev",
+        `  cwd         ${process.cwd()}`,
+        "  autoStart   yes",
+        "",
+        "web",
+        "  command     npm run web",
+        `  cwd         ${process.cwd()}`,
+        "  autoStart   no",
+        "  env         1 variable",
+        "",
+        "Esc back  q back",
+      ].join("\n"),
+    );
+  });
+
+  it("renders empty workspace details", () => {
+    expect(renderWorkspaceDetails({ id: "ws_empty", name: "empty", services: [] })).toBe(
+      [
+        "empty",
+        "",
+        "services",
+        "",
+        "No services configured.",
+        "",
+        "Esc back  q back",
       ].join("\n"),
     );
   });
@@ -51,6 +89,7 @@ describe("renderWorkspacePicker", () => {
 
   it("renders help", () => {
     expect(renderWorkspacePickerHelp()).toContain("Enter       run selected workspace");
+    expect(renderWorkspacePickerHelp()).toContain("v           view selected workspace");
   });
 });
 
@@ -86,6 +125,27 @@ describe("runWorkspacePicker", () => {
     expect(result).toEqual({ type: "exit" });
     expect(write).toHaveBeenNthCalledWith(1, "picker\n");
     expect(write).toHaveBeenNthCalledWith(2, "help\n");
+    expect(write).toHaveBeenNthCalledWith(3, "picker\n");
+  });
+
+  it("opens workspace details and returns to the picker", async () => {
+    const write = vi.fn();
+
+    const result = await runWorkspacePicker({
+      workspaces,
+      keyInput: createKeyInput([
+        { sequence: "v" },
+        { name: "escape" },
+        { sequence: "q" },
+      ]),
+      screen: { clear: vi.fn(), write },
+      render: () => "picker",
+      renderDetails: (workspace) => `details:${workspace.name}`,
+    });
+
+    expect(result).toEqual({ type: "exit" });
+    expect(write).toHaveBeenNthCalledWith(1, "picker\n");
+    expect(write).toHaveBeenNthCalledWith(2, "details:ecommerce\n");
     expect(write).toHaveBeenNthCalledWith(3, "picker\n");
   });
 
@@ -131,10 +191,10 @@ const workspaces: WorkspaceConfig[] = [
       {
         id: "svc_web",
         name: "web",
-        command: "npm run dev",
+        command: "npm run web",
         cwd: process.cwd(),
-        autoStart: true,
-        env: {},
+        autoStart: false,
+        env: { PORT: "3000" },
       },
     ],
   },

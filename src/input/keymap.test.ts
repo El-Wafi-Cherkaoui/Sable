@@ -14,9 +14,10 @@ describe("mapWorkspacePickerKey", () => {
     expect(mapWorkspacePickerKey({ sequence: "k" })).toBe("selectPrevious");
   });
 
-  it("maps run, help, and quit keys", () => {
+  it("maps run, view, help, and quit keys", () => {
     expect(mapWorkspacePickerKey({ name: "return" })).toBe("run");
     expect(mapWorkspacePickerKey({ sequence: "\r" })).toBe("run");
+    expect(mapWorkspacePickerKey({ sequence: "v" })).toBe("view");
     expect(mapWorkspacePickerKey({ sequence: "?" })).toBe("openHelp");
     expect(mapWorkspacePickerKey({ sequence: "q" })).toBe("quit");
   });
