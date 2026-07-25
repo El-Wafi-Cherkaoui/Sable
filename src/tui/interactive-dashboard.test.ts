@@ -143,6 +143,99 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenNthCalledWith(2, "help:dashboard\n");
   });
 
+  it("cancels command mode back to dashboard", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([
+        { sequence: ":" },
+        { sequence: "h" },
+        { name: "escape" },
+        { sequence: "q" },
+      ]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderCommand: ({ input }) => `command:${input}`,
+    });
+
+    expect(write).toHaveBeenNthCalledWith(1, "dashboard\n");
+    expect(write).toHaveBeenNthCalledWith(2, "command:\n");
+    expect(write).toHaveBeenNthCalledWith(3, "command:h\n");
+    expect(write).toHaveBeenNthCalledWith(4, "dashboard\n");
+  });
+
+  it("runs quit from command mode", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([
+        { sequence: ":" },
+        { sequence: "q" },
+        { name: "return" },
+      ]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderCommand: ({ input }) => `command:${input}`,
+    });
+
+    expect(write).toHaveBeenNthCalledWith(3, "command:q\n");
+  });
+
+  it("runs help from dashboard command mode", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([
+        { sequence: ":" },
+        { sequence: "h" },
+        { name: "return" },
+        { sequence: "q" },
+      ]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderCommand: ({ input }) => `command:${input}`,
+      renderHelp: (context) => `help:${context}`,
+    });
+
+    expect(write).toHaveBeenNthCalledWith(4, "help:dashboard\n");
+  });
+
+  it("edits command input with backspace and shows unknown command errors", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([
+        { sequence: ":" },
+        { sequence: "x" },
+        { sequence: "y" },
+        { name: "backspace" },
+        { name: "return" },
+        { name: "escape" },
+        { sequence: "q" },
+      ]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderCommand: ({ input, error }) => `command:${input}:${error ?? ""}`,
+    });
+
+    expect(write).toHaveBeenNthCalledWith(4, "command:xy:\n");
+    expect(write).toHaveBeenNthCalledWith(5, "command:x:\n");
+    expect(write).toHaveBeenNthCalledWith(6, "command:x:Unknown command: x\n");
+    expect(write).toHaveBeenNthCalledWith(7, "dashboard\n");
+  });
+
   it("opens logs, scrolls, returns to dashboard, and quits", async () => {
     const state = createState();
     const controller = {
@@ -210,6 +303,35 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenNthCalledWith(2, "logs:0\n");
     expect(write).toHaveBeenNthCalledWith(3, "help:logs\n");
     expect(write).toHaveBeenNthCalledWith(4, "logs:0\n");
+  });
+
+  it("runs help from logs command mode", async () => {
+    const state = createState();
+    const controller = createController(state, () => [
+      { stream: "stdout", line: "one", timestamp: new Date() },
+    ]);
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([
+        { name: "return" },
+        { sequence: ":" },
+        { sequence: "h" },
+        { name: "return" },
+        { sequence: "q" },
+      ]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderLogs: ({ scrollOffset }) => `logs:${scrollOffset}`,
+      renderCommand: ({ input }) => `command:${input}`,
+      renderHelp: (context) => `help:${context}`,
+      logVisibleLineCount: 2,
+    });
+
+    expect(write).toHaveBeenNthCalledWith(2, "logs:0\n");
+    expect(write).toHaveBeenNthCalledWith(3, "command:\n");
+    expect(write).toHaveBeenNthCalledWith(5, "help:logs\n");
   });
 
   it("auto-refreshes logs while following the bottom", async () => {

@@ -2,6 +2,7 @@ import { mapDashboardKey, mapHelpKey, mapLogsKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
 import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import { parseCommand, renderCommandView } from "./command-view.js";
 import { renderHelpView, type HelpContext } from "./help-view.js";
 import { clampScrollOffset, maxScrollOffset, renderLogsView } from "./logs-view.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
@@ -28,12 +29,14 @@ export type RunInteractiveDashboardOptions = {
   render?: typeof renderStaticDashboard;
   renderLogs?: typeof renderLogsView;
   renderHelp?: typeof renderHelpView;
+  renderCommand?: typeof renderCommandView;
   logVisibleLineCount?: number;
   logsRefreshIntervalMs?: number;
 };
 
-type ViewMode = "dashboard" | "logs" | "help";
+type ViewMode = "dashboard" | "logs" | "help" | "command";
 type HelpReturnMode = "dashboard" | "logs";
+type CommandReturnMode = ViewMode;
 type LoopEvent = { type: "key"; keypress: Awaited<ReturnType<KeyInput["readKey"]>> } | { type: "refresh" };
 
 export async function runInteractiveDashboard(
@@ -43,11 +46,16 @@ export async function runInteractiveDashboard(
   const render = options.render ?? renderStaticDashboard;
   const renderLogs = options.renderLogs ?? renderLogsView;
   const renderHelp = options.renderHelp ?? renderHelpView;
+  const renderCommand = options.renderCommand ?? renderCommandView;
   const logVisibleLineCount = options.logVisibleLineCount ?? 20;
   const logsRefreshIntervalMs = options.logsRefreshIntervalMs ?? 250;
   let shouldQuit = false;
-  let mode: ViewMode = "dashboard";
+  let mode = "dashboard" as ViewMode;
   let helpReturnMode: HelpReturnMode = "dashboard";
+  let commandReturnMode: CommandReturnMode = "dashboard";
+  let commandHelpContext: HelpContext = "dashboard";
+  let commandInput = "";
+  let commandError: string | undefined;
   let logScrollOffset = 0;
   let followLogTail = true;
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
@@ -55,12 +63,50 @@ export async function runInteractiveDashboard(
   renderFrame(screen, render(options.controller.getState()));
 
   while (!shouldQuit) {
+    const currentMode: ViewMode = mode;
     const event =
-      mode === "logs"
+      currentMode === "logs"
         ? await readKeyOrRefresh(logsRefreshIntervalMs)
         : { type: "key" as const, keypress: await readKeyEvent() };
 
-    if (mode === "help") {
+    if (currentMode === "command") {
+      if (event.type === "refresh") {
+        continue;
+      }
+
+      const commandAction = handleCommandKey(event.keypress);
+
+      switch (commandAction) {
+        case "cancel":
+          mode = commandReturnMode;
+          renderCurrentMode();
+          break;
+        case "submit": {
+          const result = parseCommand(commandInput);
+
+          if (result.type === "quit") {
+            shouldQuit = true;
+          } else if (result.type === "help") {
+            helpReturnMode = commandHelpContext;
+            mode = "help";
+            renderHelpFrame(commandHelpContext);
+          } else {
+            commandError = result.message;
+            renderCommandFrame();
+          }
+          break;
+        }
+        case "edit":
+          renderCommandFrame();
+          break;
+        case "none":
+          break;
+      }
+
+      continue;
+    }
+
+    if (currentMode === "help") {
       if (event.type === "refresh") {
         continue;
       }
@@ -70,11 +116,10 @@ export async function runInteractiveDashboard(
       switch (action) {
         case "back":
           mode = helpReturnMode;
-          if (mode === "logs") {
-            renderLogsFrame();
-          } else {
-            renderFrame(screen, render(options.controller.getState()));
-          }
+          renderCurrentMode();
+          break;
+        case "openCommand":
+          openCommandMode("help", helpReturnMode);
           break;
         case "quit":
           shouldQuit = true;
@@ -86,7 +131,7 @@ export async function runInteractiveDashboard(
       continue;
     }
 
-    if (mode === "logs") {
+    if (currentMode === "logs") {
       if (event.type === "refresh") {
         const logs = options.controller.getSelectedServiceLogs();
 
@@ -134,6 +179,9 @@ export async function runInteractiveDashboard(
           helpReturnMode = "logs";
           mode = "help";
           renderHelpFrame("logs");
+          break;
+        case "openCommand":
+          openCommandMode("logs", "logs");
           break;
         case "back":
           mode = "dashboard";
@@ -190,6 +238,9 @@ export async function runInteractiveDashboard(
         mode = "help";
         renderHelpFrame("dashboard");
         break;
+      case "openCommand":
+        openCommandMode("dashboard", "dashboard");
+        break;
       case "quit":
         shouldQuit = true;
         break;
@@ -221,6 +272,69 @@ export async function runInteractiveDashboard(
     renderFrame(screen, renderHelp(context));
   }
 
+  function renderCommandFrame(): void {
+    renderFrame(screen, renderCommand({ input: commandInput, error: commandError }));
+  }
+
+  function renderCurrentMode(): void {
+    if (mode === "logs") {
+      renderLogsFrame();
+      return;
+    }
+
+    if (mode === "help") {
+      renderHelpFrame(helpReturnMode);
+      return;
+    }
+
+    if (mode === "command") {
+      renderCommandFrame();
+      return;
+    }
+
+    renderFrame(screen, render(options.controller.getState()));
+  }
+
+  function openCommandMode(
+    returnMode: CommandReturnMode,
+    helpContext: HelpContext,
+  ): void {
+    commandReturnMode = returnMode;
+    commandHelpContext = helpContext;
+    commandInput = "";
+    commandError = undefined;
+    mode = "command";
+    renderCommandFrame();
+  }
+
+  function handleCommandKey(
+    keypress: Awaited<ReturnType<KeyInput["readKey"]>>,
+  ): "submit" | "cancel" | "edit" | "none" {
+    if (keypress.name === "escape") {
+      return "cancel";
+    }
+
+    if (keypress.name === "return" || keypress.sequence === "\r") {
+      return "submit";
+    }
+
+    if (keypress.name === "backspace") {
+      commandInput = commandInput.slice(0, -1);
+      commandError = undefined;
+
+      return "edit";
+    }
+
+    if (keypress.sequence !== undefined && isPrintableCommandCharacter(keypress.sequence)) {
+      commandInput += keypress.sequence;
+      commandError = undefined;
+
+      return "edit";
+    }
+
+    return "none";
+  }
+
   async function readKeyEvent(): Promise<Awaited<ReturnType<KeyInput["readKey"]>>> {
     pendingKeyRead ??= options.keyInput.readKey();
     const keypress = await pendingKeyRead;
@@ -244,6 +358,10 @@ export async function runInteractiveDashboard(
 
     return event;
   }
+}
+
+function isPrintableCommandCharacter(sequence: string): boolean {
+  return sequence.length === 1 && sequence >= " " && sequence !== "\x7f";
 }
 
 function wait(milliseconds: number): Promise<void> {

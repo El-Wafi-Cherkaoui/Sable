@@ -32,6 +32,10 @@ describe("mapDashboardKey", () => {
     expect(mapDashboardKey({ sequence: "?" })).toBe("openHelp");
   });
 
+  it("maps colon to open command mode", () => {
+    expect(mapDashboardKey({ sequence: ":" })).toBe("openCommand");
+  });
+
   it("ignores unknown keys", () => {
     expect(mapDashboardKey({ sequence: "x" })).toBe("none");
   });
@@ -45,10 +49,11 @@ describe("mapLogsKey", () => {
     expect(mapLogsKey({ sequence: "k" })).toBe("scrollUp");
   });
 
-  it("maps jump, help, back, and quit keys", () => {
+  it("maps jump, help, command, back, and quit keys", () => {
     expect(mapLogsKey({ sequence: "g" })).toBe("scrollTop");
     expect(mapLogsKey({ sequence: "G" })).toBe("scrollBottom");
     expect(mapLogsKey({ sequence: "?" })).toBe("openHelp");
+    expect(mapLogsKey({ sequence: ":" })).toBe("openCommand");
     expect(mapLogsKey({ name: "escape" })).toBe("back");
     expect(mapLogsKey({ sequence: "q" })).toBe("quit");
   });
@@ -59,8 +64,9 @@ describe("mapLogsKey", () => {
 });
 
 describe("mapHelpKey", () => {
-  it("maps escape back and q quit", () => {
+  it("maps escape back, colon command, and q quit", () => {
     expect(mapHelpKey({ name: "escape" })).toBe("back");
+    expect(mapHelpKey({ sequence: ":" })).toBe("openCommand");
     expect(mapHelpKey({ sequence: "q" })).toBe("quit");
   });
 
