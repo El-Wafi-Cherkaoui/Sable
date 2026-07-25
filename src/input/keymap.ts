@@ -29,6 +29,38 @@ export type LogsAction =
 
 export type HelpAction = "back" | "openCommand" | "quit" | "none";
 
+export type WorkspacePickerAction =
+  | "selectNext"
+  | "selectPrevious"
+  | "run"
+  | "openHelp"
+  | "quit"
+  | "none";
+
+export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction {
+  if (keypress.name === "down" || keypress.sequence === "j") {
+    return "selectNext";
+  }
+
+  if (keypress.name === "up" || keypress.sequence === "k") {
+    return "selectPrevious";
+  }
+
+  if (keypress.name === "return" || keypress.sequence === "\r") {
+    return "run";
+  }
+
+  if (keypress.sequence === "?") {
+    return "openHelp";
+  }
+
+  if (keypress.sequence === "q") {
+    return "quit";
+  }
+
+  return "none";
+}
+
 export function mapDashboardKey(keypress: Keypress): DashboardAction {
   if (keypress.name === "down" || keypress.sequence === "j") {
     return "selectNext";

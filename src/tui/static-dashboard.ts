@@ -1,6 +1,16 @@
 import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 
-export function renderStaticDashboard(state: RuntimeWorkspaceState): string {
+export type RenderStaticDashboardOptions = {
+  quitLabel?: string;
+};
+
+export function renderStaticDashboard(
+  state: RuntimeWorkspaceState,
+  options: RenderStaticDashboardOptions = {},
+): string {
+  const dashboardFooter = `j/k move  S start  s stop  r restart  Enter logs  ? help  : command  q ${
+    options.quitLabel ?? "quit"
+  }`;
   const lines = [state.workspace.name, ""];
 
   if (state.services.length === 0) {
@@ -24,6 +34,3 @@ export function renderStaticDashboard(state: RuntimeWorkspaceState): string {
 
   return lines.join("\n");
 }
-
-const dashboardFooter =
-  "j/k move  S start  s stop  r restart  Enter logs  ? help  : command  q quit";

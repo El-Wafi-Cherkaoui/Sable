@@ -10,7 +10,7 @@ describe("runWorkspaceCommand", () => {
     const controller = createFakeController(workspace);
     const createController = vi.fn(() => controller);
     const keyInput = createKeyInput();
-    const runDashboard = vi.fn(async () => undefined);
+    const runDashboard = vi.fn(async () => ({ type: "back" as const }));
 
     await runWorkspaceCommand(" Ecommerce ", {
       store: createStore(config),
@@ -25,6 +25,7 @@ describe("runWorkspaceCommand", () => {
       controller,
       keyInput,
       abortSignal: expect.any(AbortSignal),
+      dashboardQuitLabel: undefined,
     });
     expect(keyInput.close).toHaveBeenCalledOnce();
     expect(controller.shutdown).toHaveBeenCalledOnce();
@@ -36,8 +37,12 @@ describe("runWorkspaceCommand", () => {
     const signalSource = createSignalSource();
     const runDashboard = vi.fn(
       async ({ abortSignal }: { abortSignal?: AbortSignal }) =>
-        new Promise<void>((resolve) => {
-          abortSignal?.addEventListener("abort", () => resolve(), { once: true });
+        new Promise<{ type: "exit" }>((resolve) => {
+          abortSignal?.addEventListener(
+            "abort",
+            () => resolve({ type: "exit" }),
+            { once: true },
+          );
         }),
     );
 

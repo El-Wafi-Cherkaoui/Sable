@@ -31,9 +31,12 @@ export type RunInteractiveDashboardOptions = {
   renderLogs?: typeof renderLogsView;
   renderHelp?: typeof renderHelpView;
   renderCommand?: typeof renderCommandView;
+  dashboardQuitLabel?: string;
   logVisibleLineCount?: number;
   logsRefreshIntervalMs?: number;
 };
+
+export type InteractiveDashboardResult = { type: "back" } | { type: "exit" };
 
 type ViewMode = "dashboard" | "logs" | "help" | "command";
 type HelpReturnMode = "dashboard" | "logs";
@@ -45,9 +48,12 @@ type LoopEvent =
 
 export async function runInteractiveDashboard(
   options: RunInteractiveDashboardOptions,
-): Promise<void> {
+): Promise<InteractiveDashboardResult> {
   const screen = options.screen ?? terminalScreen;
-  const render = options.render ?? renderStaticDashboard;
+  const render =
+    options.render ??
+    ((state: RuntimeWorkspaceState) =>
+      renderStaticDashboard(state, { quitLabel: options.dashboardQuitLabel }));
   const renderLogs = options.renderLogs ?? renderLogsView;
   const renderHelp = options.renderHelp ?? renderHelpView;
   const renderCommand = options.renderCommand ?? renderCommandView;
@@ -74,13 +80,11 @@ export async function runInteractiveDashboard(
         : await readKeyOrAbort();
 
     if (event.type === "abort") {
-      shouldQuit = true;
-      continue;
+      return { type: "exit" };
     }
 
     if (event.type === "key" && isCtrlC(event.keypress)) {
-      shouldQuit = true;
-      continue;
+      return { type: "exit" };
     }
 
     if (currentMode === "command") {
@@ -262,6 +266,8 @@ export async function runInteractiveDashboard(
         break;
     }
   }
+
+  return { type: "back" };
 
   function renderLogsFrame(): void {
     const logs = options.controller.getSelectedServiceLogs();

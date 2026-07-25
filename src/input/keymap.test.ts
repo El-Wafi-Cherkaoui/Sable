@@ -1,5 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { mapDashboardKey, mapHelpKey, mapLogsKey } from "./keymap.js";
+import {
+  mapDashboardKey,
+  mapHelpKey,
+  mapLogsKey,
+  mapWorkspacePickerKey,
+} from "./keymap.js";
+
+describe("mapWorkspacePickerKey", () => {
+  it("maps navigation keys", () => {
+    expect(mapWorkspacePickerKey({ name: "down" })).toBe("selectNext");
+    expect(mapWorkspacePickerKey({ sequence: "j" })).toBe("selectNext");
+    expect(mapWorkspacePickerKey({ name: "up" })).toBe("selectPrevious");
+    expect(mapWorkspacePickerKey({ sequence: "k" })).toBe("selectPrevious");
+  });
+
+  it("maps run, help, and quit keys", () => {
+    expect(mapWorkspacePickerKey({ name: "return" })).toBe("run");
+    expect(mapWorkspacePickerKey({ sequence: "\r" })).toBe("run");
+    expect(mapWorkspacePickerKey({ sequence: "?" })).toBe("openHelp");
+    expect(mapWorkspacePickerKey({ sequence: "q" })).toBe("quit");
+  });
+
+  it("ignores unknown picker keys", () => {
+    expect(mapWorkspacePickerKey({ sequence: "x" })).toBe("none");
+  });
+});
 
 describe("mapDashboardKey", () => {
   it("maps down and j to select next", () => {

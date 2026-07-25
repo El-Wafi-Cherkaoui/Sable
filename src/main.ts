@@ -15,6 +15,7 @@ import {
 import { runListWorkspacesCommand } from "./workspaces/list-workspaces.js";
 import { WorkspaceLookupError } from "./workspaces/find-workspace.js";
 import { runWorkspaceCommand } from "./workspaces/run-workspace.js";
+import { runWorkspaceHome } from "./workspaces/workspace-home.js";
 
 const program = new Command();
 
@@ -25,7 +26,12 @@ function printNotImplemented(commandName: string): void {
 program
   .name(product.binaryName)
   .description("A keyboard-first terminal workspace manager for developers.")
-  .version(product.version);
+  .version(product.version)
+  .action(async () => {
+    await runWorkspaceHome({
+      store: new ConfigStore(),
+    });
+  });
 
 program
   .command("create")
