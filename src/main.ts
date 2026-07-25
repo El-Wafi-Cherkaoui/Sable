@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { confirm, input } from "@inquirer/prompts";
+import { confirm, input, select } from "@inquirer/prompts";
 import { ConfigStore } from "./config/config-store.js";
 import { product } from "./shared/product.js";
 import {
@@ -30,7 +30,7 @@ program
   .action(async () => {
     await runWorkspaceHome({
       store: new ConfigStore(),
-      prompts: { confirm, input },
+      prompts: { confirm, input, select },
     });
   });
 

@@ -5,11 +5,13 @@ import type { KeyInput } from "../input/terminal-key-input.js";
 export type WorkspacePickerState = {
   workspaces: WorkspaceConfig[];
   selectedWorkspaceIndex: number | undefined;
+  statusMessage?: string;
 };
 
 export type WorkspacePickerResult =
   | { type: "run"; workspace: WorkspaceConfig }
   | { type: "addService"; workspace: WorkspaceConfig }
+  | { type: "editService"; workspace: WorkspaceConfig }
   | { type: "exit" };
 
 export type WorkspacePickerScreen = {
@@ -25,6 +27,7 @@ export type RunWorkspacePickerOptions = {
   render?: typeof renderWorkspacePicker;
   renderHelp?: typeof renderWorkspacePickerHelp;
   renderDetails?: typeof renderWorkspaceDetails;
+  statusMessage?: string;
 };
 
 type PickerMode = "picker" | "help" | "details";
@@ -39,7 +42,7 @@ export async function runWorkspacePicker(
   const render = options.render ?? renderWorkspacePicker;
   const renderHelp = options.renderHelp ?? renderWorkspacePickerHelp;
   const renderDetails = options.renderDetails ?? renderWorkspaceDetails;
-  let state = createWorkspacePickerState(options.workspaces);
+  let state = createWorkspacePickerState(options.workspaces, options.statusMessage);
   let mode: PickerMode = "picker";
 
   renderFrame(screen, render(state));
@@ -108,6 +111,15 @@ export async function runWorkspacePicker(
 
         break;
       }
+      case "editService": {
+        const workspace = getSelectedWorkspace(state);
+
+        if (workspace !== undefined) {
+          return { type: "editService", workspace };
+        }
+
+        break;
+      }
       case "openHelp":
         mode = "help";
         renderFrame(screen, renderHelp());
@@ -122,10 +134,12 @@ export async function runWorkspacePicker(
 
 export function createWorkspacePickerState(
   workspaces: WorkspaceConfig[],
+  statusMessage?: string,
 ): WorkspacePickerState {
   return {
     workspaces,
     selectedWorkspaceIndex: workspaces.length > 0 ? 0 : undefined,
+    statusMessage,
   };
 }
 
@@ -170,6 +184,10 @@ export function getSelectedWorkspace(
 export function renderWorkspacePicker(state: WorkspacePickerState): string {
   const lines = ["workspaces", ""];
 
+  if (state.statusMessage !== undefined) {
+    lines.push(state.statusMessage, "");
+  }
+
   if (state.workspaces.length === 0) {
     lines.push("No workspaces found.");
     lines.push("Create one with `sable create <name>`.");
@@ -190,7 +208,7 @@ export function renderWorkspacePicker(state: WorkspacePickerState): string {
     );
   }
 
-  lines.push("", "j/k move  Enter run  v view  a add service  ? help  q quit");
+  lines.push("", "j/k move  Enter run  v view  a add service  e edit service  ? help  q quit");
 
   return lines.join("\n");
 }
@@ -207,6 +225,7 @@ export function renderWorkspacePickerHelp(): string {
     "Enter       run selected workspace",
     "v           view selected workspace",
     "a           add service to selected workspace",
+    "e           edit service in selected workspace",
     "",
     "Global",
     "?           help",

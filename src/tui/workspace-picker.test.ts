@@ -39,8 +39,16 @@ describe("renderWorkspacePicker", () => {
         "> ecommerce  2 services",
         "  portfolio  1 service",
         "",
-        "j/k move  Enter run  v view  a add service  ? help  q quit",
+        "j/k move  Enter run  v view  a add service  e edit service  ? help  q quit",
       ].join("\n"),
+    );
+  });
+
+
+
+  it("renders a status message", () => {
+    expect(renderWorkspacePicker(createWorkspacePickerState(workspaces, 'Auto-start disabled for "api".'))).toContain(
+      'Auto-start disabled for "api".',
     );
   });
 
@@ -92,6 +100,9 @@ describe("renderWorkspacePicker", () => {
     expect(renderWorkspacePickerHelp()).toContain("v           view selected workspace");
     expect(renderWorkspacePickerHelp()).toContain(
       "a           add service to selected workspace",
+    );
+    expect(renderWorkspacePickerHelp()).toContain(
+      "e           edit service in selected workspace",
     );
   });
 });
@@ -160,6 +171,16 @@ describe("runWorkspacePicker", () => {
         screen: { clear: vi.fn(), write: vi.fn() },
       }),
     ).resolves.toEqual({ type: "addService", workspace: workspaces[0] });
+  });
+
+  it("returns the selected workspace on edit service", async () => {
+    await expect(
+      runWorkspacePicker({
+        workspaces,
+        keyInput: createKeyInput([{ sequence: "e" }]),
+        screen: { clear: vi.fn(), write: vi.fn() },
+      }),
+    ).resolves.toEqual({ type: "editService", workspace: workspaces[0] });
   });
 
   it("exits on Ctrl+C", async () => {

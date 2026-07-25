@@ -24,6 +24,7 @@ describe("runWorkspaceHome", () => {
       workspaces: config.workspaces,
       keyInput,
       abortSignal: expect.any(AbortSignal),
+      statusMessage: undefined,
     });
     expect(runSession).toHaveBeenCalledWith({
       workspace,
@@ -51,7 +52,7 @@ describe("runWorkspaceHome", () => {
 
   it("adds a service from the picker and reloads workspaces", async () => {
     const keyInput = createKeyInput();
-    const addService = vi.fn(async () => undefined);
+    const addService = vi.fn(async () => "Added service.");
     const runPicker = vi
       .fn()
       .mockResolvedValueOnce({ type: "addService", workspace })
@@ -67,7 +68,80 @@ describe("runWorkspaceHome", () => {
 
     expect(addService).toHaveBeenCalledWith(workspace);
     expect(runPicker).toHaveBeenCalledTimes(2);
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      statusMessage: "Added service.",
+    }));
     expect(keyInput.close).toHaveBeenCalledOnce();
+  });
+
+  it("edits a service from the picker and reloads workspaces", async () => {
+    const keyInput = createKeyInput();
+    const editService = vi.fn(async () => "Auto-start disabled for api.");
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "editService", workspace })
+      .mockResolvedValueOnce({ type: "exit" });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput,
+      runPicker,
+      editService,
+      runSession: vi.fn(),
+    });
+
+    expect(editService).toHaveBeenCalledWith(workspace);
+    expect(runPicker).toHaveBeenCalledTimes(2);
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      statusMessage: "Auto-start disabled for api.",
+    }));
+    expect(keyInput.close).toHaveBeenCalledOnce();
+  });
+
+  it("returns to the picker with a message when add service prompts are cancelled", async () => {
+    const keyInput = createKeyInput();
+    const addService = vi.fn(async () => {
+      throw createPromptCancelError();
+    });
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "addService", workspace })
+      .mockResolvedValueOnce({ type: "exit" });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput,
+      runPicker,
+      addService,
+      runSession: vi.fn(),
+    });
+
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      statusMessage: "Add service cancelled.",
+    }));
+  });
+
+  it("returns to the picker with a message when edit service prompts are cancelled", async () => {
+    const keyInput = createKeyInput();
+    const editService = vi.fn(async () => {
+      throw createPromptCancelError();
+    });
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "editService", workspace })
+      .mockResolvedValueOnce({ type: "exit" });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput,
+      runPicker,
+      editService,
+      runSession: vi.fn(),
+    });
+
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      statusMessage: "Edit cancelled.",
+    }));
   });
 
   it("aborts picker wait on SIGINT and removes signal listeners", async () => {
@@ -118,6 +192,12 @@ function createKeyInput() {
     readKey: vi.fn(async () => ({ sequence: "q" })),
     close: vi.fn(),
   };
+}
+
+function createPromptCancelError(): Error {
+  const error = new Error("Prompt cancelled.");
+  error.name = "ExitPromptError";
+  return error;
 }
 
 function createSignalSource() {

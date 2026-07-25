@@ -14,11 +14,12 @@ describe("mapWorkspacePickerKey", () => {
     expect(mapWorkspacePickerKey({ sequence: "k" })).toBe("selectPrevious");
   });
 
-  it("maps run, view, add service, help, and quit keys", () => {
+  it("maps run, view, add service, edit service, help, and quit keys", () => {
     expect(mapWorkspacePickerKey({ name: "return" })).toBe("run");
     expect(mapWorkspacePickerKey({ sequence: "\r" })).toBe("run");
     expect(mapWorkspacePickerKey({ sequence: "v" })).toBe("view");
     expect(mapWorkspacePickerKey({ sequence: "a" })).toBe("addService");
+    expect(mapWorkspacePickerKey({ sequence: "e" })).toBe("editService");
     expect(mapWorkspacePickerKey({ sequence: "?" })).toBe("openHelp");
     expect(mapWorkspacePickerKey({ sequence: "q" })).toBe("quit");
   });

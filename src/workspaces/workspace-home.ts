@@ -14,6 +14,10 @@ import {
   runAddServiceToWorkspaceCommand,
   type AddServicePrompts,
 } from "./add-service.js";
+import {
+  runEditServiceInWorkspaceCommand,
+  type EditServicePrompts,
+} from "./edit-service.js";
 
 export type WorkspaceHomeConfigStore = {
   load(): Promise<AppConfig>;
@@ -25,8 +29,9 @@ export type RunWorkspaceHomeOptions = {
   keyInput?: KeyInput;
   runPicker?: (options: RunWorkspacePickerOptions) => Promise<WorkspacePickerResult>;
   runSession?: (options: RunWorkspaceSessionOptions) => Promise<{ type: "back" } | { type: "exit" }>;
-  addService?: (workspace: WorkspaceConfig) => Promise<void>;
-  prompts?: AddServicePrompts;
+  addService?: (workspace: WorkspaceConfig) => Promise<string | undefined>;
+  editService?: (workspace: WorkspaceConfig) => Promise<string | undefined>;
+  prompts?: AddServicePrompts & EditServicePrompts;
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   signalSource?: WorkspaceHomeSignalSource;
 };
@@ -44,6 +49,7 @@ export async function runWorkspaceHome(
   const runSession = options.runSession ?? runWorkspaceSession;
   const shutdownAbortController = new AbortController();
   const signalSource = options.signalSource ?? process;
+  let statusMessage: string | undefined;
   const abortShutdown = () => shutdownAbortController.abort();
 
   signalSource.once("SIGINT", abortShutdown);
@@ -56,6 +62,7 @@ export async function runWorkspaceHome(
         workspaces: config.workspaces,
         keyInput,
         abortSignal: shutdownAbortController.signal,
+        statusMessage,
       });
 
       if (pickerResult.type === "exit") {
@@ -63,9 +70,27 @@ export async function runWorkspaceHome(
       }
 
       if (pickerResult.type === "addService") {
-        await runPromptFlow(options, keyInput, async () => {
-          await addServiceToWorkspace(options, pickerResult.workspace);
-        });
+        statusMessage = await runPromptFlow(
+          options,
+          keyInput,
+          "Add service cancelled.",
+          async () => addServiceToWorkspace(options, pickerResult.workspace),
+        );
+
+        if (options.keyInput === undefined) {
+          keyInput = new TerminalKeyInput();
+        }
+
+        continue;
+      }
+
+      if (pickerResult.type === "editService") {
+        statusMessage = await runPromptFlow(
+          options,
+          keyInput,
+          "Edit cancelled.",
+          async () => editServiceInWorkspace(options, pickerResult.workspace),
+        );
 
         if (options.keyInput === undefined) {
           keyInput = new TerminalKeyInput();
@@ -96,30 +121,82 @@ export async function runWorkspaceHome(
 async function runPromptFlow(
   options: RunWorkspaceHomeOptions,
   keyInput: KeyInput,
-  action: () => Promise<void>,
-): Promise<void> {
+  cancelMessage: string,
+  action: () => Promise<string | undefined>,
+): Promise<string | undefined> {
   if (options.keyInput === undefined) {
     keyInput.close();
   }
 
-  await action();
+  try {
+    return await action();
+  } catch (error) {
+    if (isPromptCancelError(error)) {
+      return cancelMessage;
+    }
+
+    throw error;
+  }
 }
 
 async function addServiceToWorkspace(
   options: RunWorkspaceHomeOptions,
   workspace: WorkspaceConfig,
-): Promise<void> {
+): Promise<string | undefined> {
   if (options.addService !== undefined) {
-    await options.addService(workspace);
-    return;
+    return options.addService(workspace);
   }
 
   if (options.prompts === undefined) {
     throw new Error("Add service prompts are required.");
   }
 
+  let message: string | undefined;
+
   await runAddServiceToWorkspaceCommand(workspace.id, {
     store: options.store,
     prompts: options.prompts,
+    output: {
+      log(value) {
+        message = value;
+      },
+    },
   });
+
+  return message;
+}
+
+function isPromptCancelError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.name === "ExitPromptError";
+}
+
+async function editServiceInWorkspace(
+  options: RunWorkspaceHomeOptions,
+  workspace: WorkspaceConfig,
+): Promise<string | undefined> {
+  if (options.editService !== undefined) {
+    return options.editService(workspace);
+  }
+
+  if (options.prompts === undefined) {
+    throw new Error("Edit service prompts are required.");
+  }
+
+  let message: string | undefined;
+
+  await runEditServiceInWorkspaceCommand(workspace.id, {
+    store: options.store,
+    prompts: options.prompts,
+    output: {
+      log(value) {
+        message = value;
+      },
+    },
+  });
+
+  return message;
 }
