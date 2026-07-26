@@ -96,6 +96,7 @@ describe("runCreateWorkspaceCommand", () => {
         {
           id: "ws_abc12345",
           name: "ecommerce",
+          projectDirectory,
           services: [],
         },
       ],
@@ -107,6 +108,7 @@ describe("runCreateWorkspaceCommand", () => {
     const existingWorkspace = {
       id: "ws_existing",
       name: "api",
+      projectDirectory,
       services: [],
     };
     const store = createStore({
@@ -127,6 +129,7 @@ describe("runCreateWorkspaceCommand", () => {
       {
         id: "ws_new1234",
         name: "web",
+        projectDirectory,
         services: [],
       },
     ]);
@@ -154,6 +157,7 @@ describe("runCreateWorkspaceCommand", () => {
     expect(store.savedConfig?.workspaces[0]).toEqual({
       id: "ws_efgh5678",
       name: "ecommerce",
+      projectDirectory,
       services: [
         {
           id: "svc_abcd1234",
@@ -184,7 +188,7 @@ describe("runCreateWorkspaceCommand", () => {
   it("rejects exact duplicate workspace names", async () => {
     const store = createStore({
       version: 1,
-      workspaces: [{ id: "ws_existing", name: "ecommerce", services: [] }],
+      workspaces: [{ id: "ws_existing", name: "ecommerce", projectDirectory, services: [] }],
     });
 
     await expect(
@@ -201,7 +205,7 @@ describe("runCreateWorkspaceCommand", () => {
   it("rejects case-insensitive duplicate workspace names", async () => {
     const store = createStore({
       version: 1,
-      workspaces: [{ id: "ws_existing", name: "Ecommerce", services: [] }],
+      workspaces: [{ id: "ws_existing", name: "Ecommerce", projectDirectory, services: [] }],
     });
 
     await expect(

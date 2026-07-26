@@ -13,6 +13,7 @@ export type DashboardAction =
   | "start"
   | "stop"
   | "restart"
+  | "addService"
   | "quit"
   | "none";
 
@@ -33,9 +34,8 @@ export type WorkspacePickerAction =
   | "selectNext"
   | "selectPrevious"
   | "run"
+  | "createWorkspace"
   | "view"
-  | "addService"
-  | "editService"
   | "openHelp"
   | "quit"
   | "none";
@@ -57,12 +57,8 @@ export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction
     return "view";
   }
 
-  if (keypress.sequence === "a") {
-    return "addService";
-  }
-
-  if (keypress.sequence === "e") {
-    return "editService";
+  if (keypress.sequence === "c") {
+    return "createWorkspace";
   }
 
   if (keypress.sequence === "?") {
@@ -111,6 +107,10 @@ export function mapDashboardKey(keypress: Keypress): DashboardAction {
 
   if (keypress.sequence === "r") {
     return "restart";
+  }
+
+  if (keypress.sequence === "a") {
+    return "addService";
   }
 
   return "none";

@@ -12,7 +12,11 @@ Sable is early MVP software.
 
 Current capabilities:
 
+- open a workspace picker/home screen with `sable`
 - create, list, delete, and run saved workspaces
+- create blank workspaces from the picker
+- view workspace details from the picker
+- add services from the running workspace dashboard
 - start, stop, and restart selected services
 - capture stdout, stderr, and lifecycle logs in memory
 - view and scroll logs
@@ -56,6 +60,12 @@ npm.cmd link
 
 ## Commands
 
+Open the workspace picker/home screen:
+
+```sh
+sable
+```
+
 Create a workspace interactively:
 
 ```sh
@@ -82,21 +92,40 @@ sable run <workspace-name>
 
 During creation, Sable asks for a project directory. Relative service working directories are resolved against that project directory so you can run the workspace later from anywhere.
 
-## Dashboard keys
+## Workspace picker keys
 
-In `sable run`:
+In `sable`:
+
+```text
+j / Down    select next workspace
+k / Up      select previous workspace
+Enter       run selected workspace
+c           create blank workspace
+v           view selected workspace details
+?           show help
+Esc         back from help/details/create flows
+q           quit Sable from the picker
+Ctrl+C      quit Sable from anywhere
+```
+
+Only one workspace is active at a time. When a workspace is launched from the picker, `q` / `:quit` in the service dashboard stops that workspace and returns to the picker.
+
+## Service dashboard keys
+
+In `sable run`, or after opening a workspace from the picker:
 
 ```text
 j / Down    select next service
 k / Up      select previous service
+a           add service
 S           start selected service
 s           stop selected service
 r           restart selected service
 Enter       show selected service logs
 ?           show help
 :           command mode
-q           quit
-Ctrl+C      quit cleanly
+q           quit, or return to picker when launched from picker
+Ctrl+C      quit Sable cleanly
 ```
 
 ## Logs view keys
@@ -109,8 +138,8 @@ G           jump to bottom
 Esc         return to dashboard
 ?           show help
 :           command mode
-q           quit
-Ctrl+C      quit cleanly
+q           quit, or return to picker when launched from picker
+Ctrl+C      quit Sable cleanly
 ```
 
 Logs are kept in memory and bounded per service. They are not persisted to disk.
@@ -149,7 +178,7 @@ The npm package is configured to include built files from `dist`.
 ## MVP limitations
 
 - no persistent logs
-- no workspace editing command yet
+- no dedicated workspace rename/reorder commands yet
 - no command history or autocomplete
 - no mouse support
 - no colors/themes beyond plain terminal output

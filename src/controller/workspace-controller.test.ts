@@ -189,6 +189,18 @@ describe("WorkspaceController", () => {
     expect(controller.getState().selectedServiceIndex).toBe(0);
   });
 
+  it("adds a service to runtime state", () => {
+    const controller = new WorkspaceController({
+      workspace: { id: "ws_empty", name: "empty", projectDirectory: process.cwd(), services: [] },
+      processManager: createFakeProcessManager(),
+    });
+
+    controller.addService(createService({ id: "svc_api", name: "api" }));
+
+    expect(controller.getState().services.map((serviceState) => serviceState.service.id)).toEqual(["svc_api"]);
+    expect(controller.getState().selectedServiceIndex).toBe(0);
+  });
+
   it("reads logs for a service and the selected service", () => {
     const processManager = createFakeProcessManager({
       getLogs: vi.fn((serviceId: string) => [
@@ -274,10 +286,11 @@ function serviceStatus(
 }
 
 function createWorkspace(): WorkspaceConfig {
-  return {
-    id: "ws_ecommerce",
-    name: "ecommerce",
-    services: [
+    return {
+      id: "ws_ecommerce",
+      name: "ecommerce",
+      projectDirectory: process.cwd(),
+      services: [
       createService({ id: "svc_backend", name: "backend", autoStart: true }),
       createService({ id: "svc_frontend", name: "frontend", autoStart: true }),
       createService({ id: "svc_worker", name: "worker", autoStart: false }),

@@ -11,11 +11,10 @@ import {
   type RunWorkspaceSessionOptions,
 } from "./run-workspace.js";
 import {
-  runAddServiceFlow,
-  runEditServiceFlow,
-  type ServiceFlowOptions,
-  type ServiceFlowResult,
-} from "./service-flows.js";
+  runCreateWorkspaceFlow,
+  type CreateWorkspaceFlowOptions,
+  type CreateWorkspaceFlowResult,
+} from "./create-workspace-flow.js";
 
 export type WorkspaceHomeConfigStore = {
   load(): Promise<AppConfig>;
@@ -27,8 +26,7 @@ export type RunWorkspaceHomeOptions = {
   keyInput?: KeyInput;
   runPicker?: (options: RunWorkspacePickerOptions) => Promise<WorkspacePickerResult>;
   runSession?: (options: RunWorkspaceSessionOptions) => Promise<{ type: "back" } | { type: "exit" }>;
-  runAddService?: (options: ServiceFlowOptions) => Promise<ServiceFlowResult>;
-  runEditService?: (options: ServiceFlowOptions) => Promise<ServiceFlowResult>;
+  runCreateWorkspace?: (options: CreateWorkspaceFlowOptions) => Promise<CreateWorkspaceFlowResult>;
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   signalSource?: WorkspaceHomeSignalSource;
@@ -45,11 +43,11 @@ export async function runWorkspaceHome(
   const keyInput = options.keyInput ?? new TerminalKeyInput();
   const runPicker = options.runPicker ?? runWorkspacePicker;
   const runSession = options.runSession ?? runWorkspaceSession;
-  const addService = options.runAddService ?? runAddServiceFlow;
-  const editService = options.runEditService ?? runEditServiceFlow;
+  const createWorkspace = options.runCreateWorkspace ?? runCreateWorkspaceFlow;
   const shutdownAbortController = new AbortController();
   const signalSource = options.signalSource ?? process;
   let statusMessage: string | undefined;
+  let selectedWorkspaceId: string | undefined;
   const abortShutdown = () => shutdownAbortController.abort();
 
   signalSource.once("SIGINT", abortShutdown);
@@ -63,6 +61,7 @@ export async function runWorkspaceHome(
         keyInput,
         abortSignal: shutdownAbortController.signal,
         statusMessage,
+        selectedWorkspaceId,
         screen: options.screen,
       });
 
@@ -70,10 +69,9 @@ export async function runWorkspaceHome(
         return;
       }
 
-      if (pickerResult.type === "addService") {
-        const flowResult = await addService({
+      if (pickerResult.type === "createWorkspace") {
+        const flowResult = await createWorkspace({
           store: options.store,
-          workspace: pickerResult.workspace,
           keyInput,
           screen: options.screen,
         });
@@ -83,23 +81,7 @@ export async function runWorkspaceHome(
         }
 
         statusMessage = flowResult.message;
-
-        continue;
-      }
-
-      if (pickerResult.type === "editService") {
-        const flowResult = await editService({
-          store: options.store,
-          workspace: pickerResult.workspace,
-          keyInput,
-          screen: options.screen,
-        });
-
-        if (flowResult.type === "exit") {
-          return;
-        }
-
-        statusMessage = flowResult.message;
+        selectedWorkspaceId = flowResult.type === "completed" ? flowResult.workspaceId : undefined;
 
         continue;
       }
@@ -110,6 +92,7 @@ export async function runWorkspaceHome(
         keyInput,
         abortSignal: shutdownAbortController.signal,
         dashboardQuitLabel: "back",
+        store: options.store,
       });
 
       if (sessionResult.type === "exit") {

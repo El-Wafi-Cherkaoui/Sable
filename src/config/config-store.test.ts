@@ -34,6 +34,7 @@ describe("ConfigStore", () => {
         {
           id: "workspace-1",
           name: "ecommerce",
+          projectDirectory: "/projects/ecommerce",
           services: [
             {
               id: "service-1",
@@ -53,6 +54,86 @@ describe("ConfigStore", () => {
     await store.save(config);
 
     await expect(store.load()).resolves.toEqual(config);
+  });
+
+  it("loads older workspaces without projectDirectory by inferring from the first service", async () => {
+    const store = new ConfigStore({ directory: tempDirectory });
+
+    await fs.writeFile(
+      store.paths.file,
+      JSON.stringify({
+        version: 1,
+        workspaces: [
+          {
+            id: "workspace-1",
+            name: "ecommerce",
+            services: [
+              {
+                id: "service-1",
+                name: "backend",
+                command: "npm run dev",
+                cwd: "/projects/ecommerce/backend",
+                autoStart: true,
+                env: {},
+              },
+            ],
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    await expect(store.load()).resolves.toEqual({
+      version: 1,
+      workspaces: [
+        {
+          id: "workspace-1",
+          name: "ecommerce",
+          projectDirectory: path.resolve("/projects/ecommerce/backend"),
+          services: [
+            {
+              id: "service-1",
+              name: "backend",
+              command: "npm run dev",
+              cwd: "/projects/ecommerce/backend",
+              autoStart: true,
+              env: {},
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("loads older empty workspaces without projectDirectory by using the current directory", async () => {
+    const store = new ConfigStore({ directory: tempDirectory });
+
+    await fs.writeFile(
+      store.paths.file,
+      JSON.stringify({
+        version: 1,
+        workspaces: [
+          {
+            id: "workspace-1",
+            name: "empty",
+            services: [],
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    await expect(store.load()).resolves.toEqual({
+      version: 1,
+      workspaces: [
+        {
+          id: "workspace-1",
+          name: "empty",
+          projectDirectory: process.cwd(),
+          services: [],
+        },
+      ],
+    });
   });
 
   it("throws a parse error for malformed JSON", async () => {

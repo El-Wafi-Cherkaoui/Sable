@@ -11,7 +11,7 @@ import {
 } from "../tui/prompt-view.js";
 
 export type ServiceFlowResult =
-  | { type: "completed"; message: string }
+  | { type: "completed"; message: string; serviceId?: string }
   | { type: "back"; message: string }
   | { type: "exit" };
 
@@ -41,7 +41,7 @@ export async function runAddServiceFlow(
     return { type: "back", message: `Workspace "${options.workspace.name}" was not found.` };
   }
 
-  const baseDirectory = workspace.services[0]?.cwd ?? process.cwd();
+  const baseDirectory = workspace.projectDirectory;
   const directoryExists = options.directoryExists ?? defaultDirectoryExists;
   const nameResult = await runTextPrompt({
     title: "Add service",
@@ -129,6 +129,7 @@ export async function runAddServiceFlow(
   return {
     type: "completed",
     message: `Added service "${service.name}" to workspace "${workspace.name}".`,
+    serviceId: service.id,
   };
 }
 

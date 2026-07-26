@@ -12,9 +12,11 @@ import {
   type RunInteractiveDashboardOptions,
 } from "../tui/interactive-dashboard.js";
 import { requireWorkspaceByName } from "./find-workspace.js";
+import { runAddServiceFlow } from "./service-flows.js";
 
 export type WorkspaceConfigReader = {
   load(): Promise<AppConfig>;
+  save(config: AppConfig): Promise<void>;
 };
 
 export type RunWorkspaceOutput = {
@@ -29,6 +31,8 @@ export type RunWorkspaceController = {
   startSelectedService(): Promise<ManagedProcessState>;
   stopSelectedService(): Promise<ManagedProcessState>;
   restartSelectedService(): Promise<ManagedProcessState>;
+  startService(serviceId: string): Promise<ManagedProcessState>;
+  addService(service: WorkspaceConfig["services"][number]): ReturnType<WorkspaceController["addService"]>;
   getSelectedServiceLogs(): ServiceLogEntry[];
   shutdown(): Promise<void>;
 };
@@ -57,6 +61,7 @@ export type RunWorkspaceSessionOptions = {
   ) => Promise<InteractiveDashboardResult>;
   abortSignal?: AbortSignal;
   dashboardQuitLabel?: string;
+  store?: WorkspaceConfigReader;
 };
 
 export async function runWorkspaceCommand(
@@ -80,6 +85,7 @@ export async function runWorkspaceCommand(
       keyInput,
       runDashboard: options.runDashboard,
       abortSignal: shutdownAbortController.signal,
+      store: options.store,
     });
   } finally {
     signalSource.off("SIGINT", abortShutdown);
@@ -106,6 +112,35 @@ export async function runWorkspaceSession(
       keyInput: options.keyInput,
       abortSignal: options.abortSignal,
       dashboardQuitLabel: options.dashboardQuitLabel,
+      onAddService: options.store === undefined
+        ? undefined
+        : async () => {
+          const flowResult = await runAddServiceFlow({
+            store: options.store!,
+            workspace: options.workspace,
+            keyInput: options.keyInput,
+          });
+
+          if (flowResult.type === "exit") {
+            return { type: "exit" };
+          }
+
+          if (flowResult.type === "completed" && flowResult.serviceId !== undefined) {
+            const config = await options.store!.load();
+            const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
+            const service = workspace?.services.find((candidate) => candidate.id === flowResult.serviceId);
+
+            if (service !== undefined) {
+              controller.addService(service);
+
+              if (service.autoStart) {
+                await controller.startService(service.id);
+              }
+            }
+          }
+
+          return { type: "continue" };
+        },
     });
   } finally {
     await controller.shutdown();

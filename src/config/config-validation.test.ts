@@ -27,6 +27,7 @@ describe("config validation", () => {
         {
           id: "workspace-1",
           name: "ecommerce",
+          projectDirectory: "/projects/app",
           services: [
             {
               ...validService,
@@ -72,6 +73,7 @@ describe("config validation", () => {
         {
           id: "workspace-1",
           name: "my ecommerce",
+          projectDirectory: "/projects/app",
           services: [],
         },
       ],
@@ -109,11 +111,13 @@ describe("config validation", () => {
         {
           id: "workspace-1",
           name: "ecommerce",
+          projectDirectory: "/projects/app",
           services: [],
         },
         {
           id: "workspace-2",
           name: "ecommerce",
+          projectDirectory: "/projects/app-copy",
           services: [],
         },
       ],
@@ -129,6 +133,7 @@ describe("config validation", () => {
         {
           id: "workspace-1",
           name: "ecommerce",
+          projectDirectory: "/projects/app",
           services: [
             validService,
             {

@@ -98,6 +98,30 @@ export function updateServiceProcessState(
   };
 }
 
+export function addServiceToRuntimeState(
+  state: RuntimeWorkspaceState,
+  service: ServiceConfig,
+): RuntimeWorkspaceState {
+  if (state.serviceIndexById[service.id] !== undefined) {
+    return state;
+  }
+
+  const services = [
+    ...state.services,
+    {
+      service,
+      process: stoppedProcessState,
+    },
+  ];
+
+  return {
+    ...state,
+    services,
+    serviceIndexById: createServiceIndexById(services),
+    selectedServiceIndex: services.length - 1,
+  };
+}
+
 function createServiceIndexById(
   services: RuntimeServiceState[],
 ): Record<string, number> {

@@ -6,6 +6,7 @@ import {
   selectNextService,
   selectPreviousService,
   updateServiceProcessState,
+  addServiceToRuntimeState,
 } from "./runtime-state.js";
 
 describe("runtime state", () => {
@@ -88,6 +89,27 @@ describe("runtime state", () => {
     expect(initialState.services[1]?.process).toEqual({ status: "stopped" });
   });
 
+  it("adds a service and selects it", () => {
+    const initialState = createRuntimeState({
+      id: "ws_empty",
+      name: "empty",
+      projectDirectory: process.cwd(),
+      services: [],
+    });
+    const nextState = addServiceToRuntimeState(initialState, {
+      id: "svc_api",
+      name: "api",
+      command: "npm run dev",
+      cwd: ".",
+      autoStart: true,
+      env: {},
+    });
+
+    expect(nextState.services.map((serviceState) => serviceState.service.id)).toEqual(["svc_api"]);
+    expect(nextState.selectedServiceIndex).toBe(0);
+    expect(nextState.serviceIndexById).toEqual({ svc_api: 0 });
+  });
+
   it("ignores unknown service ids safely", () => {
     const initialState = createRuntimeState(createWorkspace());
     const nextState = updateServiceProcessState(initialState, "missing", {
@@ -103,6 +125,7 @@ function createWorkspace(): WorkspaceConfig {
   return {
     id: "ws_ecommerce",
     name: "ecommerce",
+    projectDirectory: process.cwd(),
     services: [
       {
         id: "svc_backend",

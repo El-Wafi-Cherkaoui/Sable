@@ -8,6 +8,7 @@ export function renderHelpView(context: HelpContext): string {
       "Dashboard",
       "j / Down    select next service",
       "k / Up      select previous service",
+      "a           add service",
       "S           start selected service",
       "s           stop selected service",
       "r           restart selected service",

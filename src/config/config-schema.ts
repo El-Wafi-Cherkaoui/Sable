@@ -22,6 +22,7 @@ export const workspaceConfigSchema = z
         workspaceNamePattern,
         "Workspace names may only contain letters, numbers, dashes, and underscores.",
       ),
+    projectDirectory: z.string().trim().min(1, "Workspace project directory is required."),
     services: z.array(serviceConfigSchema),
   })
   .superRefine((workspace, context) => {

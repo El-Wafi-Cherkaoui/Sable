@@ -140,6 +140,40 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenCalledTimes(4);
   });
 
+  it("runs the add service callback from the dashboard", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const onAddService = vi.fn(async () => ({ type: "continue" as const }));
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "a" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      onAddService,
+    });
+
+    expect(onAddService).toHaveBeenCalledOnce();
+    expect(write).toHaveBeenCalledTimes(2);
+  });
+
+  it("exits when the add service callback exits", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const onAddService = vi.fn(async () => ({ type: "exit" as const }));
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "a" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: () => "dashboard",
+      onAddService,
+    });
+
+    expect(onAddService).toHaveBeenCalledOnce();
+  });
+
   it("opens help from dashboard and returns to dashboard", async () => {
     const state = createState();
     const controller = createController(state, () => []);
@@ -530,6 +564,7 @@ function createState(): RuntimeWorkspaceState {
   return createRuntimeState({
     id: "ws_ecommerce",
     name: "ecommerce",
+    projectDirectory: process.cwd(),
     services: [
       {
         id: "svc_backend",

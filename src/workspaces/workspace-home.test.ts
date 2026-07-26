@@ -26,6 +26,7 @@ describe("runWorkspaceHome", () => {
       keyInput,
       abortSignal: expect.any(AbortSignal),
       statusMessage: undefined,
+      selectedWorkspaceId: undefined,
       screen: undefined,
     });
     expect(runSession).toHaveBeenCalledWith({
@@ -34,6 +35,7 @@ describe("runWorkspaceHome", () => {
       keyInput,
       abortSignal: expect.any(AbortSignal),
       dashboardQuitLabel: "back",
+      store: expect.any(Object),
     });
     expect(keyInput.close).toHaveBeenCalledOnce();
   });
@@ -52,147 +54,78 @@ describe("runWorkspaceHome", () => {
     expect(runPicker).toHaveBeenCalledOnce();
   });
 
-  it("adds a service from the picker and reloads workspaces", async () => {
+  it("creates a workspace from the picker and reloads workspaces with the new selection", async () => {
     const keyInput = createKeyInput();
-    const runAddService = vi.fn(async () => ({
+    const runCreateWorkspace = vi.fn(async () => ({
       type: "completed" as const,
-      message: "Added service.",
+      workspaceId: "ws_new",
+      message: "Created workspace.",
     }));
     const runPicker = vi
       .fn()
-      .mockResolvedValueOnce({ type: "addService", workspace })
+      .mockResolvedValueOnce({ type: "createWorkspace" })
       .mockResolvedValueOnce({ type: "exit" });
 
     await runWorkspaceHome({
       store: createStore(config),
       keyInput,
       runPicker,
-      runAddService,
+      runCreateWorkspace,
       runSession: vi.fn(),
     });
 
-    expect(runAddService).toHaveBeenCalledWith(expect.objectContaining({ workspace }));
+    expect(runCreateWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      store: expect.any(Object),
+      keyInput,
+      screen: undefined,
+    }));
     expect(runPicker).toHaveBeenCalledTimes(2);
     expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      statusMessage: "Added service.",
+      statusMessage: "Created workspace.",
+      selectedWorkspaceId: "ws_new",
     }));
     expect(keyInput.close).toHaveBeenCalledOnce();
   });
 
-  it("edits a service from the picker and reloads workspaces", async () => {
+  it("returns to the picker with a message when create workspace goes back", async () => {
     const keyInput = createKeyInput();
-    const runEditService = vi.fn(async () => ({
-      type: "completed" as const,
-      message: "Auto-start disabled for api.",
-    }));
-    const runPicker = vi
-      .fn()
-      .mockResolvedValueOnce({ type: "editService", workspace })
-      .mockResolvedValueOnce({ type: "exit" });
-
-    await runWorkspaceHome({
-      store: createStore(config),
-      keyInput,
-      runPicker,
-      runEditService,
-      runSession: vi.fn(),
-    });
-
-    expect(runEditService).toHaveBeenCalledWith(expect.objectContaining({ workspace }));
-    expect(runPicker).toHaveBeenCalledTimes(2);
-    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      statusMessage: "Auto-start disabled for api.",
-    }));
-    expect(keyInput.close).toHaveBeenCalledOnce();
-  });
-
-  it("returns to the picker with a message when add service goes back", async () => {
-    const keyInput = createKeyInput();
-    const runAddService = vi.fn(async () => ({
+    const runCreateWorkspace = vi.fn(async () => ({
       type: "back" as const,
-      message: "Add service cancelled.",
+      message: "Create workspace cancelled.",
     }));
     const runPicker = vi
       .fn()
-      .mockResolvedValueOnce({ type: "addService", workspace })
+      .mockResolvedValueOnce({ type: "createWorkspace" })
       .mockResolvedValueOnce({ type: "exit" });
 
     await runWorkspaceHome({
       store: createStore(config),
       keyInput,
       runPicker,
-      runAddService,
+      runCreateWorkspace,
       runSession: vi.fn(),
     });
 
     expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      statusMessage: "Add service cancelled.",
+      statusMessage: "Create workspace cancelled.",
+      selectedWorkspaceId: undefined,
     }));
   });
 
-  it("returns to the picker with a message when edit service goes back", async () => {
+  it("exits the app when create workspace flow exits", async () => {
     const keyInput = createKeyInput();
-    const runEditService = vi.fn(async () => ({
-      type: "back" as const,
-      message: "Edit cancelled.",
-    }));
-    const runPicker = vi
-      .fn()
-      .mockResolvedValueOnce({ type: "editService", workspace })
-      .mockResolvedValueOnce({ type: "exit" });
+    const runCreateWorkspace = vi.fn(async () => ({ type: "exit" as const }));
+    const runPicker = vi.fn(async () => ({ type: "createWorkspace" as const }));
 
     await runWorkspaceHome({
       store: createStore(config),
       keyInput,
       runPicker,
-      runEditService,
-      runSession: vi.fn(),
-    });
-
-    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      statusMessage: "Edit cancelled.",
-    }));
-  });
-
-  it("exits the app when edit service flow exits", async () => {
-    const keyInput = createKeyInput();
-    const runEditService = vi.fn(async () => ({ type: "exit" as const }));
-    const runPicker = vi.fn(async () => ({ type: "editService" as const, workspace }));
-
-    await runWorkspaceHome({
-      store: createStore(config),
-      keyInput,
-      runPicker,
-      runEditService,
+      runCreateWorkspace,
       runSession: vi.fn(),
     });
 
     expect(runPicker).toHaveBeenCalledOnce();
-    expect(keyInput.close).toHaveBeenCalledOnce();
-  });
-
-  it("can enter edit, Esc back, enter edit again, and Esc back again", async () => {
-    const keyInput = createQueuedKeyInput([
-      { sequence: "e" },
-      { name: "escape" },
-      { sequence: "e" },
-      { name: "escape" },
-      { sequence: "q" },
-    ]);
-    const store = createStore(configWithService);
-    const screen = { clear: vi.fn(), write: vi.fn() };
-
-    await runWorkspaceHome({
-      store,
-      keyInput,
-      runSession: vi.fn(),
-      runPicker: undefined,
-      runEditService: undefined,
-      screen,
-    });
-
-    expect(store.savedConfig).toBeUndefined();
-    expect(screen.write.mock.calls.map(([contents]) => contents).join("\n")).not.toContain("^[");
     expect(keyInput.close).toHaveBeenCalledOnce();
   });
 
@@ -298,12 +231,14 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
 const workspace: WorkspaceConfig = {
   id: "ws_ecommerce",
   name: "ecommerce",
+  projectDirectory: process.cwd(),
   services: [],
 };
 
 const workspaceWithService: WorkspaceConfig = {
   id: "ws_ecommerce",
   name: "ecommerce",
+  projectDirectory: process.cwd(),
   services: [
     {
       id: "svc_api",

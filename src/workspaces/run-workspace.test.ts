@@ -26,6 +26,7 @@ describe("runWorkspaceCommand", () => {
       keyInput,
       abortSignal: expect.any(AbortSignal),
       dashboardQuitLabel: undefined,
+      onAddService: expect.any(Function),
     });
     expect(keyInput.close).toHaveBeenCalledOnce();
     expect(controller.shutdown).toHaveBeenCalledOnce();
@@ -101,6 +102,9 @@ function createStore(appConfig: AppConfig) {
     async load() {
       return appConfig;
     },
+    async save() {
+      return undefined;
+    },
   };
 }
 
@@ -113,6 +117,8 @@ function createFakeController(workspaceConfig: WorkspaceConfig) {
     startSelectedService: vi.fn(async () => ({ status: "running" as const })),
     stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
     restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
+    startService: vi.fn(async () => ({ status: "running" as const })),
+    addService: vi.fn(() => createRuntimeState(workspaceConfig)),
     getSelectedServiceLogs: vi.fn(() => []),
     shutdown: vi.fn(async () => undefined),
   };
@@ -167,6 +173,7 @@ function createControllerForWorkspace(
 const workspace: WorkspaceConfig = {
   id: "ws_ecommerce",
   name: "ecommerce",
+  projectDirectory: process.cwd(),
   services: [],
 };
 

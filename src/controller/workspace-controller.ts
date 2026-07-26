@@ -2,6 +2,7 @@ import type { ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
 import {
   createRuntimeState,
+  addServiceToRuntimeState,
   getSelectedService,
   selectNextService,
   selectPreviousService,
@@ -93,6 +94,12 @@ export class WorkspaceController {
     }
 
     return this.startService(selectedService.service.id);
+  }
+
+  addService(service: ServiceConfig): RuntimeWorkspaceState {
+    this.state = addServiceToRuntimeState(this.state, service);
+
+    return this.state;
   }
 
   async stopSelectedService(): Promise<ManagedProcessState> {

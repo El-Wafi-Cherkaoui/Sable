@@ -57,7 +57,7 @@ export class ConfigStore {
     }
 
     try {
-      return validateAppConfig(parsedConfig);
+      return validateAppConfig(migrateConfig(parsedConfig));
     } catch (error) {
       if (error instanceof ZodError) {
         throw new ConfigValidationError(this.paths.file, error);
@@ -89,6 +89,45 @@ export class ConfigStore {
 
     await fs.rename(tempFile, this.paths.file);
   }
+}
+
+function migrateConfig(input: unknown): unknown {
+  if (!isRecord(input) || input.version !== 1 || !Array.isArray(input.workspaces)) {
+    return input;
+  }
+
+  return {
+    ...input,
+    workspaces: input.workspaces.map((workspace) => {
+      if (!isRecord(workspace) || typeof workspace.projectDirectory === "string") {
+        return workspace;
+      }
+
+      return {
+        ...workspace,
+        projectDirectory: inferProjectDirectory(workspace),
+      };
+    }),
+  };
+}
+
+function inferProjectDirectory(workspace: Record<string, unknown>): string {
+  if (Array.isArray(workspace.services)) {
+    const firstService = workspace.services.find(
+      (service): service is Record<string, unknown> =>
+        isRecord(service) && typeof service.cwd === "string" && service.cwd.trim().length > 0,
+    );
+
+    if (firstService !== undefined) {
+      return path.resolve(String(firstService.cwd));
+    }
+  }
+
+  return process.cwd();
+}
+
+function isRecord(input: unknown): input is Record<string, unknown> {
+  return typeof input === "object" && input !== null && !Array.isArray(input);
 }
 
 type NodeError = Error & {

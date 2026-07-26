@@ -34,6 +34,7 @@ export type RunInteractiveDashboardOptions = {
   dashboardQuitLabel?: string;
   logVisibleLineCount?: number;
   logsRefreshIntervalMs?: number;
+  onAddService?: () => Promise<{ type: "continue" } | { type: "exit" }>;
 };
 
 export type InteractiveDashboardResult = { type: "back" } | { type: "exit" };
@@ -242,6 +243,18 @@ export async function runInteractiveDashboard(
         await options.controller.restartSelectedService();
         renderFrame(screen, render(options.controller.getState()));
         break;
+      case "addService": {
+        if (options.onAddService !== undefined) {
+          const result = await options.onAddService();
+
+          if (result.type === "exit") {
+            return { type: "exit" };
+          }
+        }
+
+        renderFrame(screen, render(options.controller.getState()));
+        break;
+      }
       case "openLogs":
         mode = "logs";
         followLogTail = true;

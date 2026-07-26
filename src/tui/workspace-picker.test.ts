@@ -28,6 +28,12 @@ describe("workspace picker state", () => {
     expect(getSelectedWorkspace(state)).toBeUndefined();
     expect(selectNextWorkspace(state)).toBe(state);
   });
+
+  it("selects a workspace by id when provided", () => {
+    const state = createWorkspacePickerState(workspaces, undefined, "ws_portfolio");
+
+    expect(getSelectedWorkspace(state)?.name).toBe("portfolio");
+  });
 });
 
 describe("renderWorkspacePicker", () => {
@@ -39,7 +45,7 @@ describe("renderWorkspacePicker", () => {
         "> ecommerce  2 services",
         "  portfolio  1 service",
         "",
-        "j/k move  Enter run  v view  a add service  e edit service  ? help  q quit",
+        "j/k move  Enter run  c create  v view  ? help  q quit",
       ].join("\n"),
     );
   });
@@ -76,7 +82,7 @@ describe("renderWorkspacePicker", () => {
   });
 
   it("renders empty workspace details", () => {
-    expect(renderWorkspaceDetails({ id: "ws_empty", name: "empty", services: [] })).toBe(
+    expect(renderWorkspaceDetails({ id: "ws_empty", name: "empty", projectDirectory: process.cwd(), services: [] })).toBe(
       [
         "empty",
         "",
@@ -93,17 +99,17 @@ describe("renderWorkspacePicker", () => {
     expect(renderWorkspacePicker(createWorkspacePickerState([]))).toContain(
       "No workspaces found.",
     );
+    expect(renderWorkspacePicker(createWorkspacePickerState([]))).toContain(
+      "Press c to create one.",
+    );
   });
 
   it("renders help", () => {
     expect(renderWorkspacePickerHelp()).toContain("Enter       run selected workspace");
+    expect(renderWorkspacePickerHelp()).toContain("c           create blank workspace");
     expect(renderWorkspacePickerHelp()).toContain("v           view selected workspace");
-    expect(renderWorkspacePickerHelp()).toContain(
-      "a           add service to selected workspace",
-    );
-    expect(renderWorkspacePickerHelp()).toContain(
-      "e           edit service in selected workspace",
-    );
+    expect(renderWorkspacePickerHelp()).not.toContain("add service");
+    expect(renderWorkspacePickerHelp()).not.toContain("edit service");
   });
 });
 
@@ -163,24 +169,24 @@ describe("runWorkspacePicker", () => {
     expect(write).toHaveBeenNthCalledWith(3, "picker\n");
   });
 
-  it("returns the selected workspace on add service", async () => {
+  it("returns create workspace on c", async () => {
     await expect(
       runWorkspacePicker({
         workspaces,
-        keyInput: createKeyInput([{ sequence: "a" }]),
+        keyInput: createKeyInput([{ sequence: "c" }]),
         screen: { clear: vi.fn(), write: vi.fn() },
       }),
-    ).resolves.toEqual({ type: "addService", workspace: workspaces[0] });
+    ).resolves.toEqual({ type: "createWorkspace" });
   });
 
-  it("returns the selected workspace on edit service", async () => {
-    await expect(
-      runWorkspacePicker({
-        workspaces,
-        keyInput: createKeyInput([{ sequence: "e" }]),
-        screen: { clear: vi.fn(), write: vi.fn() },
-      }),
-    ).resolves.toEqual({ type: "editService", workspace: workspaces[0] });
+  it("ignores service action keys in the picker", async () => {
+    const result = await runWorkspacePicker({
+      workspaces,
+      keyInput: createKeyInput([{ sequence: "a" }, { sequence: "e" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+    });
+
+    expect(result).toEqual({ type: "exit" });
   });
 
   it("exits on Ctrl+C", async () => {
@@ -213,6 +219,7 @@ const workspaces: WorkspaceConfig[] = [
   {
     id: "ws_ecommerce",
     name: "ecommerce",
+    projectDirectory: process.cwd(),
     services: [
       {
         id: "svc_api",
@@ -235,6 +242,7 @@ const workspaces: WorkspaceConfig[] = [
   {
     id: "ws_portfolio",
     name: "portfolio",
+    projectDirectory: process.cwd(),
     services: [
       {
         id: "svc_site",

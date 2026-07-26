@@ -29,6 +29,7 @@ describe("runAddServiceFlow", () => {
     ).resolves.toEqual({
       type: "completed",
       message: 'Added service "w" to workspace "ecommerce".',
+      serviceId: "svc_worker",
     });
     expect(store.savedConfig?.workspaces[0]?.services[1]).toMatchObject({
       id: "svc_worker",
@@ -159,6 +160,7 @@ const projectDirectory = path.resolve("C:\\projects\\shop");
 const workspace = {
   id: "ws_ecommerce",
   name: "ecommerce",
+  projectDirectory,
   services: [
     {
       id: "svc_api",

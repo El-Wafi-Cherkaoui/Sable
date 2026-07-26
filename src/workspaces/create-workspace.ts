@@ -68,6 +68,7 @@ export async function runCreateWorkspaceCommand(
       {
         id: idGenerator("ws"),
         name: workspaceName,
+        projectDirectory,
         services,
       },
     ],
