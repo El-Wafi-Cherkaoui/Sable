@@ -55,6 +55,9 @@ describe("ProcessManager", () => {
     await waitForStatus(manager, service.id, "failed");
 
     expect(manager.getState(service.id).status).toBe("failed");
+    expect(manager.getLogs(service.id).map((entry) => entry.line)).toContainEqual(
+      expect.stringMatching(/^process error: /),
+    );
   });
 
   it("does not start duplicate processes for a running service", () => {

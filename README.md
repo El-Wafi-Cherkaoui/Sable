@@ -20,6 +20,7 @@ Current capabilities:
 - add services from the running workspace dashboard
 - edit stopped/failed services from the running workspace dashboard
 - start, stop, and restart selected services
+- show concise failed/exited details in the service dashboard
 - capture stdout, stderr, and lifecycle logs in memory
 - view and scroll logs
 - help overlay

@@ -10,7 +10,7 @@ describe("renderStaticDashboard", () => {
         "",
         "> backend   running",
         "  frontend  stopped",
-        "  worker    failed",
+        "  worker    failed: failed",
         "",
         "j/k move  a add  e edit  S start  s stop  r restart  Enter logs  ? help  : command  q quit",
       ].join("\n"),
@@ -34,6 +34,45 @@ describe("renderStaticDashboard", () => {
         "j/k move  a add  e edit  S start  s stop  r restart  Enter logs  ? help  : command  q quit",
       ].join("\n"),
     );
+  });
+
+  it("renders exited status details", () => {
+    expect(
+      renderStaticDashboard({
+        workspace: { id: "ws_ecommerce", name: "ecommerce" },
+        selectedServiceIndex: 0,
+        serviceIndexById: { svc_api: 0, svc_worker: 1 },
+        services: [
+          {
+            service: createService("svc_api", "api"),
+            process: { status: "exited", exitCode: 7, signal: null },
+          },
+          {
+            service: createService("svc_worker", "worker"),
+            process: { status: "exited", exitCode: null, signal: "SIGTERM" },
+          },
+        ],
+      }),
+    ).toContain(["> api     exited code 7", "  worker  exited signal SIGTERM"].join("\n"));
+  });
+
+  it("truncates long failure messages", () => {
+    expect(
+      renderStaticDashboard({
+        workspace: { id: "ws_ecommerce", name: "ecommerce" },
+        selectedServiceIndex: 0,
+        serviceIndexById: { svc_api: 0 },
+        services: [
+          {
+            service: createService("svc_api", "api"),
+            process: {
+              status: "failed",
+              error: new Error("this is a very long failure message that should be shortened in the dashboard"),
+            },
+          },
+        ],
+      }),
+    ).toContain("failed: this is a very long failure message that should be shorte...");
   });
 });
 

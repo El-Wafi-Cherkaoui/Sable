@@ -1,4 +1,5 @@
 import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import type { ManagedProcessState } from "../process/process-manager.js";
 
 export type RenderStaticDashboardOptions = {
   quitLabel?: string;
@@ -31,11 +32,38 @@ export function renderStaticDashboard(
   for (const [index, serviceState] of state.services.entries()) {
     const marker = index === state.selectedServiceIndex ? ">" : " ";
     lines.push(
-      `${marker} ${serviceState.service.name.padEnd(nameColumnWidth)}  ${serviceState.process.status}`,
+      `${marker} ${serviceState.service.name.padEnd(nameColumnWidth)}  ${formatProcessState(serviceState.process)}`,
     );
   }
 
   lines.push("", dashboardFooter);
 
   return lines.join("\n");
+}
+
+function formatProcessState(process: ManagedProcessState): string {
+  switch (process.status) {
+    case "failed":
+      return `failed: ${formatDetail(process.error.message)}`;
+    case "exited":
+      if (process.signal !== null) {
+        return `exited signal ${process.signal}`;
+      }
+
+      return `exited code ${process.exitCode ?? "null"}`;
+    case "running":
+      return "running";
+    case "stopped":
+      return "stopped";
+  }
+}
+
+function formatDetail(message: string): string {
+  const normalizedMessage = message.trim().replace(/\s+/g, " ");
+
+  if (normalizedMessage.length <= 60) {
+    return normalizedMessage;
+  }
+
+  return `${normalizedMessage.slice(0, 57)}...`;
 }
