@@ -1,4 +1,4 @@
-import { emitKeypressEvents } from "node:readline";
+import { createInterface, emitKeypressEvents, type Interface } from "node:readline";
 import type { Keypress } from "./keymap.js";
 
 export type KeyInput = {
@@ -8,13 +8,18 @@ export type KeyInput = {
 
 export class TerminalKeyInput implements KeyInput {
   private readonly input: NodeJS.ReadStream;
+  private readonly readlineInterface: Interface;
   private readonly wasRaw: boolean;
   private closed = false;
 
   constructor(input: NodeJS.ReadStream = process.stdin) {
     this.input = input;
     this.wasRaw = Boolean(input.isRaw);
-    emitKeypressEvents(input);
+    this.readlineInterface = createInterface({
+      input,
+      escapeCodeTimeout: 10,
+    });
+    emitKeypressEvents(input, this.readlineInterface);
 
     if (input.isTTY) {
       input.setRawMode(true);
@@ -42,6 +47,7 @@ export class TerminalKeyInput implements KeyInput {
       this.input.setRawMode(this.wasRaw);
     }
 
+    this.readlineInterface.close();
     this.input.pause();
   }
 }
