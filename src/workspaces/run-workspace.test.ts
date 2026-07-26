@@ -27,6 +27,7 @@ describe("runWorkspaceCommand", () => {
       abortSignal: expect.any(AbortSignal),
       dashboardQuitLabel: undefined,
       onAddService: expect.any(Function),
+      onEditService: expect.any(Function),
     });
     expect(keyInput.close).toHaveBeenCalledOnce();
     expect(controller.shutdown).toHaveBeenCalledOnce();
@@ -119,6 +120,8 @@ function createFakeController(workspaceConfig: WorkspaceConfig) {
     restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
     startService: vi.fn(async () => ({ status: "running" as const })),
     addService: vi.fn(() => createRuntimeState(workspaceConfig)),
+    updateService: vi.fn(() => createRuntimeState(workspaceConfig)),
+    removeService: vi.fn(() => createRuntimeState(workspaceConfig)),
     getSelectedServiceLogs: vi.fn(() => []),
     shutdown: vi.fn(async () => undefined),
   };

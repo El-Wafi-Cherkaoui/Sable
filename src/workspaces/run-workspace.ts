@@ -12,7 +12,7 @@ import {
   type RunInteractiveDashboardOptions,
 } from "../tui/interactive-dashboard.js";
 import { requireWorkspaceByName } from "./find-workspace.js";
-import { runAddServiceFlow } from "./service-flows.js";
+import { runAddServiceFlow, runEditServiceFlow } from "./service-flows.js";
 
 export type WorkspaceConfigReader = {
   load(): Promise<AppConfig>;
@@ -33,6 +33,8 @@ export type RunWorkspaceController = {
   restartSelectedService(): Promise<ManagedProcessState>;
   startService(serviceId: string): Promise<ManagedProcessState>;
   addService(service: WorkspaceConfig["services"][number]): ReturnType<WorkspaceController["addService"]>;
+  updateService(service: WorkspaceConfig["services"][number]): ReturnType<WorkspaceController["updateService"]>;
+  removeService(serviceId: string): ReturnType<WorkspaceController["removeService"]>;
   getSelectedServiceLogs(): ServiceLogEntry[];
   shutdown(): Promise<void>;
 };
@@ -139,10 +141,58 @@ export async function runWorkspaceSession(
             }
           }
 
-          return { type: "continue" };
+          return { type: "continue", message: flowResult.type === "completed" ? flowResult.message : flowResult.message };
+        },
+      onEditService: options.store === undefined
+        ? undefined
+        : async () => {
+          const selectedServiceState = getSelectedServiceState(controller.getState());
+
+          if (selectedServiceState === undefined) {
+            return { type: "continue", message: "Add a service first." };
+          }
+
+          if (selectedServiceState.process.status === "running") {
+            return { type: "continue", message: "Stop service before editing." };
+          }
+
+          const flowResult = await runEditServiceFlow({
+            store: options.store!,
+            workspace: options.workspace,
+            keyInput: options.keyInput,
+            serviceId: selectedServiceState.service.id,
+          });
+
+          if (flowResult.type === "exit") {
+            return { type: "exit" };
+          }
+
+          if (flowResult.type === "completed") {
+            if (flowResult.removedServiceId !== undefined) {
+              controller.removeService(flowResult.removedServiceId);
+            } else if (flowResult.serviceId !== undefined) {
+              const config = await options.store!.load();
+              const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
+              const service = workspace?.services.find((candidate) => candidate.id === flowResult.serviceId);
+
+              if (service !== undefined) {
+                controller.updateService(service);
+              }
+            }
+          }
+
+          return { type: "continue", message: flowResult.message };
         },
     });
   } finally {
     await controller.shutdown();
   }
+}
+
+function getSelectedServiceState(state: ReturnType<RunWorkspaceController["getState"]>) {
+  if (state.selectedServiceIndex === undefined) {
+    return undefined;
+  }
+
+  return state.services[state.selectedServiceIndex];
 }

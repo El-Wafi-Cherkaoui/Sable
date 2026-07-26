@@ -4,8 +4,10 @@ import {
   createRuntimeState,
   addServiceToRuntimeState,
   getSelectedService,
+  removeServiceFromRuntimeState,
   selectNextService,
   selectPreviousService,
+  updateServiceConfigInRuntimeState,
   updateServiceProcessState,
   type RuntimeWorkspaceState,
 } from "../runtime/runtime-state.js";
@@ -98,6 +100,18 @@ export class WorkspaceController {
 
   addService(service: ServiceConfig): RuntimeWorkspaceState {
     this.state = addServiceToRuntimeState(this.state, service);
+
+    return this.state;
+  }
+
+  updateService(service: ServiceConfig): RuntimeWorkspaceState {
+    this.state = updateServiceConfigInRuntimeState(this.state, service);
+
+    return this.state;
+  }
+
+  removeService(serviceId: string): RuntimeWorkspaceState {
+    this.state = removeServiceFromRuntimeState(this.state, serviceId);
 
     return this.state;
   }

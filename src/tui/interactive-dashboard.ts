@@ -7,6 +7,10 @@ import { renderHelpView, type HelpContext } from "./help-view.js";
 import { clampScrollOffset, maxScrollOffset, renderLogsView } from "./logs-view.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
 
+type DashboardCallbackResult =
+  | { type: "continue"; message?: string }
+  | { type: "exit" };
+
 export type InteractiveDashboardController = {
   getState(): RuntimeWorkspaceState;
   selectNextService(): RuntimeWorkspaceState;
@@ -34,7 +38,8 @@ export type RunInteractiveDashboardOptions = {
   dashboardQuitLabel?: string;
   logVisibleLineCount?: number;
   logsRefreshIntervalMs?: number;
-  onAddService?: () => Promise<{ type: "continue" } | { type: "exit" }>;
+  onAddService?: () => Promise<DashboardCallbackResult>;
+  onEditService?: () => Promise<DashboardCallbackResult>;
 };
 
 export type InteractiveDashboardResult = { type: "back" } | { type: "exit" };
@@ -51,10 +56,14 @@ export async function runInteractiveDashboard(
   options: RunInteractiveDashboardOptions,
 ): Promise<InteractiveDashboardResult> {
   const screen = options.screen ?? terminalScreen;
+  let dashboardMessage: string | undefined;
   const render =
     options.render ??
     ((state: RuntimeWorkspaceState) =>
-      renderStaticDashboard(state, { quitLabel: options.dashboardQuitLabel }));
+      renderStaticDashboard(state, {
+        quitLabel: options.dashboardQuitLabel,
+        statusMessage: dashboardMessage,
+      }));
   const renderLogs = options.renderLogs ?? renderLogsView;
   const renderHelp = options.renderHelp ?? renderHelpView;
   const renderCommand = options.renderCommand ?? renderCommandView;
@@ -250,6 +259,22 @@ export async function runInteractiveDashboard(
           if (result.type === "exit") {
             return { type: "exit" };
           }
+
+          dashboardMessage = result.message;
+        }
+
+        renderFrame(screen, render(options.controller.getState()));
+        break;
+      }
+      case "editService": {
+        if (options.onEditService !== undefined) {
+          const result = await options.onEditService();
+
+          if (result.type === "exit") {
+            return { type: "exit" };
+          }
+
+          dashboardMessage = result.message;
         }
 
         renderFrame(screen, render(options.controller.getState()));

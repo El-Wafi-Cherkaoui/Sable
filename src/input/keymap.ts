@@ -14,6 +14,7 @@ export type DashboardAction =
   | "stop"
   | "restart"
   | "addService"
+  | "editService"
   | "quit"
   | "none";
 
@@ -116,6 +117,10 @@ export function mapDashboardKey(keypress: Keypress): DashboardAction {
 
   if (keypress.sequence === "a") {
     return "addService";
+  }
+
+  if (keypress.sequence === "e") {
+    return "editService";
   }
 
   return "none";

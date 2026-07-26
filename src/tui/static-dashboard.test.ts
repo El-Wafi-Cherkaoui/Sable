@@ -12,7 +12,7 @@ describe("renderStaticDashboard", () => {
         "  frontend  stopped",
         "  worker    failed",
         "",
-        "j/k move  a add  S start  s stop  r restart  Enter logs  ? help  : command  q quit",
+        "j/k move  a add  e edit  S start  s stop  r restart  Enter logs  ? help  : command  q quit",
       ].join("\n"),
     );
   });
@@ -31,7 +31,7 @@ describe("renderStaticDashboard", () => {
         "",
         "No services yet. Press a to add one.",
         "",
-        "j/k move  a add  S start  s stop  r restart  Enter logs  ? help  : command  q quit",
+        "j/k move  a add  e edit  S start  s stop  r restart  Enter logs  ? help  : command  q quit",
       ].join("\n"),
     );
   });

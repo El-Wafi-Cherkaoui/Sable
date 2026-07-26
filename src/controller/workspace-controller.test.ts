@@ -201,6 +201,25 @@ describe("WorkspaceController", () => {
     expect(controller.getState().selectedServiceIndex).toBe(0);
   });
 
+  it("updates and removes services in runtime state", () => {
+    const controller = new WorkspaceController({
+      workspace: createWorkspace(),
+      processManager: createFakeProcessManager(),
+    });
+
+    controller.updateService({
+      ...controller.getState().services[0]!.service,
+      command: "npm run changed",
+    });
+    expect(controller.getState().services[0]?.service.command).toBe("npm run changed");
+
+    controller.removeService("svc_backend");
+    expect(controller.getState().services.map((serviceState) => serviceState.service.id)).toEqual([
+      "svc_frontend",
+      "svc_worker",
+    ]);
+  });
+
   it("reads logs for a service and the selected service", () => {
     const processManager = createFakeProcessManager({
       getLogs: vi.fn((serviceId: string) => [

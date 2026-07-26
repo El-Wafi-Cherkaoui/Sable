@@ -88,6 +88,7 @@ describe("runEditServiceFlow", () => {
     ).resolves.toEqual({
       type: "completed",
       message: 'Auto-start disabled for "api".',
+      serviceId: "svc_api",
     });
     expect(store.savedConfig?.workspaces[0]?.services[0]?.autoStart).toBe(false);
   });

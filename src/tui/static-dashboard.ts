@@ -2,16 +2,21 @@ import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 
 export type RenderStaticDashboardOptions = {
   quitLabel?: string;
+  statusMessage?: string;
 };
 
 export function renderStaticDashboard(
   state: RuntimeWorkspaceState,
   options: RenderStaticDashboardOptions = {},
 ): string {
-  const dashboardFooter = `j/k move  a add  S start  s stop  r restart  Enter logs  ? help  : command  q ${
+  const dashboardFooter = `j/k move  a add  e edit  S start  s stop  r restart  Enter logs  ? help  : command  q ${
     options.quitLabel ?? "quit"
   }`;
   const lines = [state.workspace.name, ""];
+
+  if (options.statusMessage !== undefined) {
+    lines.push(options.statusMessage, "");
+  }
 
   if (state.services.length === 0) {
     lines.push("No services yet. Press a to add one.");

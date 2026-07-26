@@ -11,7 +11,7 @@ import {
 } from "../tui/prompt-view.js";
 
 export type ServiceFlowResult =
-  | { type: "completed"; message: string; serviceId?: string }
+  | { type: "completed"; message: string; serviceId?: string; removedServiceId?: string }
   | { type: "back"; message: string }
   | { type: "exit" };
 
@@ -27,6 +27,7 @@ export type ServiceFlowOptions = {
   screen?: PromptScreen;
   generateId?: typeof generateShortId;
   directoryExists?: (directoryPath: string) => boolean;
+  serviceId?: string;
 };
 
 type EditAction = "command" | "cwd" | "autoStart" | "remove";
@@ -148,17 +149,16 @@ export async function runEditServiceFlow(
     return { type: "back", message: `Workspace "${workspace.name}" has no services to edit.` };
   }
 
-  const serviceResult = await runSelectPrompt({
-    title: "Edit service",
-    message: "Service",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    choices: workspace.services.map((service) => ({ label: service.name, value: service.id })),
-  });
-  if (serviceResult.type === "back") return { type: "back", message: "Edit cancelled." };
-  if (serviceResult.type === "exit") return { type: "exit" };
+  const service = options.serviceId === undefined
+    ? await promptForServiceToEdit({
+      workspace,
+      keyInput: options.keyInput,
+      screen: options.screen,
+    })
+    : workspace.services.find((candidate) => candidate.id === options.serviceId);
 
-  const service = workspace.services.find((candidate) => candidate.id === serviceResult.value);
+  if (service === "back") return { type: "back", message: "Edit cancelled." };
+  if (service === "exit") return { type: "exit" };
   if (service === undefined) return { type: "back", message: "Edit cancelled." };
 
   const actionResult = await runSelectPrompt<EditAction>({
@@ -196,6 +196,7 @@ export async function runEditServiceFlow(
     return {
       type: "completed",
       message: `Removed service "${service.name}" from workspace "${workspace.name}".`,
+      removedServiceId: service.id,
     };
   }
 
@@ -215,7 +216,30 @@ export async function runEditServiceFlow(
     services: workspace.services.map((candidate) => candidate.id === service.id ? nextService : candidate),
   }));
 
-  return { type: "completed", message: formatUpdateMessage(actionResult.value, nextService) };
+  return {
+    type: "completed",
+    message: formatUpdateMessage(actionResult.value, nextService),
+    serviceId: nextService.id,
+  };
+}
+
+async function promptForServiceToEdit(options: {
+  workspace: WorkspaceConfig;
+  keyInput: KeyInput;
+  screen?: PromptScreen;
+}): Promise<ServiceConfig | "back" | "exit" | undefined> {
+  const serviceResult = await runSelectPrompt({
+    title: "Edit service",
+    message: "Service",
+    keyInput: options.keyInput,
+    screen: options.screen,
+    choices: options.workspace.services.map((service) => ({ label: service.name, value: service.id })),
+  });
+
+  if (serviceResult.type === "back") return "back";
+  if (serviceResult.type === "exit") return "exit";
+
+  return options.workspace.services.find((candidate) => candidate.id === serviceResult.value);
 }
 
 type UpdateServiceFromActionOptions = {

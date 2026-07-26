@@ -122,6 +122,46 @@ export function addServiceToRuntimeState(
   };
 }
 
+export function updateServiceConfigInRuntimeState(
+  state: RuntimeWorkspaceState,
+  service: ServiceConfig,
+): RuntimeWorkspaceState {
+  const serviceIndex = state.serviceIndexById[service.id];
+
+  if (serviceIndex === undefined) {
+    return state;
+  }
+
+  return {
+    ...state,
+    services: state.services.map((serviceState, index) =>
+      index === serviceIndex ? { ...serviceState, service } : serviceState,
+    ),
+  };
+}
+
+export function removeServiceFromRuntimeState(
+  state: RuntimeWorkspaceState,
+  serviceId: string,
+): RuntimeWorkspaceState {
+  const serviceIndex = state.serviceIndexById[serviceId];
+
+  if (serviceIndex === undefined) {
+    return state;
+  }
+
+  const services = state.services.filter((_, index) => index !== serviceIndex);
+
+  return {
+    ...state,
+    services,
+    serviceIndexById: createServiceIndexById(services),
+    selectedServiceIndex: services.length === 0
+      ? undefined
+      : Math.min(state.selectedServiceIndex ?? 0, services.length - 1),
+  };
+}
+
 function createServiceIndexById(
   services: RuntimeServiceState[],
 ): Record<string, number> {

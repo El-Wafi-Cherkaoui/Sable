@@ -7,6 +7,8 @@ import {
   selectPreviousService,
   updateServiceProcessState,
   addServiceToRuntimeState,
+  updateServiceConfigInRuntimeState,
+  removeServiceFromRuntimeState,
 } from "./runtime-state.js";
 
 describe("runtime state", () => {
@@ -108,6 +110,29 @@ describe("runtime state", () => {
     expect(nextState.services.map((serviceState) => serviceState.service.id)).toEqual(["svc_api"]);
     expect(nextState.selectedServiceIndex).toBe(0);
     expect(nextState.serviceIndexById).toEqual({ svc_api: 0 });
+  });
+
+  it("updates service config without changing process state", () => {
+    const initialState = updateServiceProcessState(createRuntimeState(createWorkspace()), "svc_backend", {
+      status: "failed",
+      error: new Error("boom"),
+    });
+    const nextState = updateServiceConfigInRuntimeState(initialState, {
+      ...initialState.services[0]!.service,
+      command: "npm run dev:new",
+    });
+
+    expect(nextState.services[0]?.service.command).toBe("npm run dev:new");
+    expect(nextState.services[0]?.process.status).toBe("failed");
+  });
+
+  it("removes a service and keeps selection in range", () => {
+    const initialState = selectPreviousService(createRuntimeState(createWorkspace()));
+    const nextState = removeServiceFromRuntimeState(initialState, "svc_frontend");
+
+    expect(nextState.services.map((serviceState) => serviceState.service.id)).toEqual(["svc_backend"]);
+    expect(nextState.selectedServiceIndex).toBe(0);
+    expect(nextState.serviceIndexById).toEqual({ svc_backend: 0 });
   });
 
   it("ignores unknown service ids safely", () => {

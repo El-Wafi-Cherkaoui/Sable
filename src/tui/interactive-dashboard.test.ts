@@ -174,6 +174,23 @@ describe("runInteractiveDashboard", () => {
     expect(onAddService).toHaveBeenCalledOnce();
   });
 
+  it("runs the edit service callback from the dashboard", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const onEditService = vi.fn(async () => ({ type: "continue" as const, message: "Edited." }));
+    const writes: string[] = [];
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "e" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn((contents: string) => writes.push(contents)) },
+      onEditService,
+    });
+
+    expect(onEditService).toHaveBeenCalledOnce();
+    expect(writes.join("\n")).toContain("Edited.");
+  });
+
   it("opens help from dashboard and returns to dashboard", async () => {
     const state = createState();
     const controller = createController(state, () => []);

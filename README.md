@@ -18,6 +18,7 @@ Current capabilities:
 - delete workspaces from the picker with typed-name confirmation
 - view workspace details from the picker
 - add services from the running workspace dashboard
+- edit stopped/failed services from the running workspace dashboard
 - start, stop, and restart selected services
 - capture stdout, stderr, and lifecycle logs in memory
 - view and scroll logs
@@ -122,6 +123,7 @@ In `sable run`, or after opening a workspace from the picker:
 j / Down    select next service
 k / Up      select previous service
 a           add service
+e           edit selected stopped/failed service
 S           start selected service
 s           stop selected service
 r           restart selected service
