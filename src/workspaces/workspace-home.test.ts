@@ -129,6 +129,80 @@ describe("runWorkspaceHome", () => {
     expect(keyInput.close).toHaveBeenCalledOnce();
   });
 
+  it("deletes a workspace from the picker and reloads workspaces with the next selection", async () => {
+    const keyInput = createKeyInput();
+    const runDeleteWorkspace = vi.fn(async () => ({
+      type: "completed" as const,
+      selectedWorkspaceId: "ws_next",
+      message: "Deleted workspace.",
+    }));
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "deleteWorkspace", workspace })
+      .mockResolvedValueOnce({ type: "exit" });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput,
+      runPicker,
+      runDeleteWorkspace,
+      runSession: vi.fn(),
+    });
+
+    expect(runDeleteWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      store: expect.any(Object),
+      workspace,
+      keyInput,
+      screen: undefined,
+    }));
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      statusMessage: "Deleted workspace.",
+      selectedWorkspaceId: "ws_next",
+    }));
+  });
+
+  it("returns to the picker with a message when delete workspace goes back", async () => {
+    const keyInput = createKeyInput();
+    const runDeleteWorkspace = vi.fn(async () => ({
+      type: "back" as const,
+      message: "Delete workspace cancelled.",
+    }));
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "deleteWorkspace", workspace })
+      .mockResolvedValueOnce({ type: "exit" });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput,
+      runPicker,
+      runDeleteWorkspace,
+      runSession: vi.fn(),
+    });
+
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      statusMessage: "Delete workspace cancelled.",
+      selectedWorkspaceId: undefined,
+    }));
+  });
+
+  it("exits the app when delete workspace flow exits", async () => {
+    const keyInput = createKeyInput();
+    const runDeleteWorkspace = vi.fn(async () => ({ type: "exit" as const }));
+    const runPicker = vi.fn(async () => ({ type: "deleteWorkspace" as const, workspace }));
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput,
+      runPicker,
+      runDeleteWorkspace,
+      runSession: vi.fn(),
+    });
+
+    expect(runPicker).toHaveBeenCalledOnce();
+    expect(keyInput.close).toHaveBeenCalledOnce();
+  });
+
   it("aborts picker wait on SIGINT and removes signal listeners", async () => {
     const signalSource = createSignalSource();
     const runPicker = vi.fn(

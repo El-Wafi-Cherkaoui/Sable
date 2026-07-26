@@ -18,6 +18,7 @@ describe("mapWorkspacePickerKey", () => {
     expect(mapWorkspacePickerKey({ name: "return" })).toBe("run");
     expect(mapWorkspacePickerKey({ sequence: "\r" })).toBe("run");
     expect(mapWorkspacePickerKey({ sequence: "c" })).toBe("createWorkspace");
+    expect(mapWorkspacePickerKey({ sequence: "d" })).toBe("deleteWorkspace");
     expect(mapWorkspacePickerKey({ sequence: "v" })).toBe("view");
     expect(mapWorkspacePickerKey({ sequence: "?" })).toBe("openHelp");
     expect(mapWorkspacePickerKey({ sequence: "q" })).toBe("quit");

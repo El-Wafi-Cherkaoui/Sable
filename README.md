@@ -15,6 +15,7 @@ Current capabilities:
 - open a workspace picker/home screen with `sable`
 - create, list, delete, and run saved workspaces
 - create blank workspaces from the picker
+- delete workspaces from the picker with typed-name confirmation
 - view workspace details from the picker
 - add services from the running workspace dashboard
 - start, stop, and restart selected services
@@ -101,12 +102,15 @@ j / Down    select next workspace
 k / Up      select previous workspace
 Enter       run selected workspace
 c           create blank workspace
+d           delete selected workspace
 v           view selected workspace details
 ?           show help
-Esc         back from help/details/create flows
+Esc         back from help/details/create/delete flows
 q           quit Sable from the picker
 Ctrl+C      quit Sable from anywhere
 ```
+
+Deleting a workspace from the picker requires typing the workspace name exactly.
 
 Only one workspace is active at a time. When a workspace is launched from the picker, `q` / `:quit` in the service dashboard stops that workspace and returns to the picker.
 

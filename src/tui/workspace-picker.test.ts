@@ -45,7 +45,7 @@ describe("renderWorkspacePicker", () => {
         "> ecommerce  2 services",
         "  portfolio  1 service",
         "",
-        "j/k move  Enter run  c create  v view  ? help  q quit",
+        "j/k move  Enter run  c create  d delete  v view  ? help  q quit",
       ].join("\n"),
     );
   });
@@ -107,6 +107,7 @@ describe("renderWorkspacePicker", () => {
   it("renders help", () => {
     expect(renderWorkspacePickerHelp()).toContain("Enter       run selected workspace");
     expect(renderWorkspacePickerHelp()).toContain("c           create blank workspace");
+    expect(renderWorkspacePickerHelp()).toContain("d           delete selected workspace");
     expect(renderWorkspacePickerHelp()).toContain("v           view selected workspace");
     expect(renderWorkspacePickerHelp()).not.toContain("add service");
     expect(renderWorkspacePickerHelp()).not.toContain("edit service");
@@ -177,6 +178,16 @@ describe("runWorkspacePicker", () => {
         screen: { clear: vi.fn(), write: vi.fn() },
       }),
     ).resolves.toEqual({ type: "createWorkspace" });
+  });
+
+  it("returns the selected workspace on delete", async () => {
+    await expect(
+      runWorkspacePicker({
+        workspaces,
+        keyInput: createKeyInput([{ sequence: "d" }]),
+        screen: { clear: vi.fn(), write: vi.fn() },
+      }),
+    ).resolves.toEqual({ type: "deleteWorkspace", workspace: workspaces[0] });
   });
 
   it("ignores service action keys in the picker", async () => {

@@ -35,6 +35,7 @@ export type WorkspacePickerAction =
   | "selectPrevious"
   | "run"
   | "createWorkspace"
+  | "deleteWorkspace"
   | "view"
   | "openHelp"
   | "quit"
@@ -59,6 +60,10 @@ export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction
 
   if (keypress.sequence === "c") {
     return "createWorkspace";
+  }
+
+  if (keypress.sequence === "d") {
+    return "deleteWorkspace";
   }
 
   if (keypress.sequence === "?") {

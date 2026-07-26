@@ -11,6 +11,7 @@ export type WorkspacePickerState = {
 export type WorkspacePickerResult =
   | { type: "run"; workspace: WorkspaceConfig }
   | { type: "createWorkspace" }
+  | { type: "deleteWorkspace"; workspace: WorkspaceConfig }
   | { type: "exit" };
 
 export type WorkspacePickerScreen = {
@@ -108,6 +109,15 @@ export async function runWorkspacePicker(
       }
       case "createWorkspace":
         return { type: "createWorkspace" };
+      case "deleteWorkspace": {
+        const workspace = getSelectedWorkspace(state);
+
+        if (workspace !== undefined) {
+          return { type: "deleteWorkspace", workspace };
+        }
+
+        break;
+      }
       case "openHelp":
         mode = "help";
         renderFrame(screen, renderHelp());
@@ -203,7 +213,7 @@ export function renderWorkspacePicker(state: WorkspacePickerState): string {
     );
   }
 
-  lines.push("", "j/k move  Enter run  c create  v view  ? help  q quit");
+  lines.push("", "j/k move  Enter run  c create  d delete  v view  ? help  q quit");
 
   return lines.join("\n");
 }
@@ -219,6 +229,7 @@ export function renderWorkspacePickerHelp(): string {
     "Workspace",
     "Enter       run selected workspace",
     "c           create blank workspace",
+    "d           delete selected workspace",
     "v           view selected workspace",
     "",
     "Global",

@@ -15,6 +15,11 @@ import {
   type CreateWorkspaceFlowOptions,
   type CreateWorkspaceFlowResult,
 } from "./create-workspace-flow.js";
+import {
+  runDeleteWorkspaceFlow,
+  type DeleteWorkspaceFlowOptions,
+  type DeleteWorkspaceFlowResult,
+} from "./delete-workspace-flow.js";
 
 export type WorkspaceHomeConfigStore = {
   load(): Promise<AppConfig>;
@@ -27,6 +32,7 @@ export type RunWorkspaceHomeOptions = {
   runPicker?: (options: RunWorkspacePickerOptions) => Promise<WorkspacePickerResult>;
   runSession?: (options: RunWorkspaceSessionOptions) => Promise<{ type: "back" } | { type: "exit" }>;
   runCreateWorkspace?: (options: CreateWorkspaceFlowOptions) => Promise<CreateWorkspaceFlowResult>;
+  runDeleteWorkspace?: (options: DeleteWorkspaceFlowOptions) => Promise<DeleteWorkspaceFlowResult>;
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   signalSource?: WorkspaceHomeSignalSource;
@@ -44,6 +50,7 @@ export async function runWorkspaceHome(
   const runPicker = options.runPicker ?? runWorkspacePicker;
   const runSession = options.runSession ?? runWorkspaceSession;
   const createWorkspace = options.runCreateWorkspace ?? runCreateWorkspaceFlow;
+  const deleteWorkspace = options.runDeleteWorkspace ?? runDeleteWorkspaceFlow;
   const shutdownAbortController = new AbortController();
   const signalSource = options.signalSource ?? process;
   let statusMessage: string | undefined;
@@ -82,6 +89,24 @@ export async function runWorkspaceHome(
 
         statusMessage = flowResult.message;
         selectedWorkspaceId = flowResult.type === "completed" ? flowResult.workspaceId : undefined;
+
+        continue;
+      }
+
+      if (pickerResult.type === "deleteWorkspace") {
+        const flowResult = await deleteWorkspace({
+          store: options.store,
+          workspace: pickerResult.workspace,
+          keyInput,
+          screen: options.screen,
+        });
+
+        if (flowResult.type === "exit") {
+          return;
+        }
+
+        statusMessage = flowResult.message;
+        selectedWorkspaceId = flowResult.type === "completed" ? flowResult.selectedWorkspaceId : undefined;
 
         continue;
       }
