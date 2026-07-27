@@ -29,6 +29,8 @@ describe("runWorkspaceCommand", () => {
       onAddService: expect.any(Function),
       onEditService: expect.any(Function),
       onDeleteService: expect.any(Function),
+      onMoveServiceUp: expect.any(Function),
+      onMoveServiceDown: expect.any(Function),
     });
     expect(keyInput.close).toHaveBeenCalledOnce();
     expect(controller.shutdown).toHaveBeenCalledOnce();
@@ -128,6 +130,55 @@ describe("runWorkspaceSession", () => {
     expect(store.savedConfig?.workspaces[0]?.services).toEqual([]);
   });
 
+  it("moves a selected service down through the dashboard callback", async () => {
+    const controller = createFakeController(workspaceWithTwoServices);
+    const store = createStore(configWithTwoServices);
+
+    await runWorkspaceSession({
+      workspace: workspaceWithTwoServices,
+      createController: () => controller,
+      keyInput: createKeyInput(),
+      store,
+      runDashboard: async ({ onMoveServiceDown }) => {
+        await expect(onMoveServiceDown?.()).resolves.toEqual({
+          type: "continue",
+          message: 'Moved service "api" down.',
+        });
+
+        return { type: "back" };
+      },
+    });
+
+    expect(controller.moveService).toHaveBeenCalledWith("svc_api", "down");
+    expect(store.savedConfig?.workspaces[0]?.services.map((service) => service.id)).toEqual([
+      "svc_worker",
+      "svc_api",
+    ]);
+  });
+
+  it("does not move a selected service beyond the list boundary", async () => {
+    const controller = createFakeController(workspaceWithTwoServices);
+    const store = createStore(configWithTwoServices);
+
+    await runWorkspaceSession({
+      workspace: workspaceWithTwoServices,
+      createController: () => controller,
+      keyInput: createKeyInput(),
+      store,
+      runDashboard: async ({ onMoveServiceUp }) => {
+        await expect(onMoveServiceUp?.()).resolves.toEqual({
+          type: "continue",
+          message: 'Service "api" is already first.',
+        });
+
+        return { type: "back" };
+      },
+    });
+
+    expect(controller.moveService).not.toHaveBeenCalled();
+    expect(store.savedConfig).toBeUndefined();
+  });
+
   it("does not delete a running selected service", async () => {
     const controller = createFakeController(workspaceWithService);
     const state = createRuntimeState(workspaceWithService);
@@ -185,6 +236,7 @@ function createFakeController(workspaceConfig: WorkspaceConfig) {
     addService: vi.fn(() => createRuntimeState(workspaceConfig)),
     updateService: vi.fn(() => createRuntimeState(workspaceConfig)),
     removeService: vi.fn(() => createRuntimeState(workspaceConfig)),
+    moveService: vi.fn(() => createRuntimeState(workspaceConfig)),
     getSelectedServiceLogs: vi.fn(() => []),
     shutdown: vi.fn(async () => undefined),
   };
@@ -262,7 +314,27 @@ const config: AppConfig = {
   workspaces: [workspace],
 };
 
+const workspaceWithTwoServices: WorkspaceConfig = {
+  ...workspaceWithService,
+  services: [
+    ...workspaceWithService.services,
+    {
+      id: "svc_worker",
+      name: "worker",
+      command: "npm run worker",
+      cwd: process.cwd(),
+      autoStart: false,
+      env: {},
+    },
+  ],
+};
+
 const configWithService: AppConfig = {
   version: 1,
   workspaces: [workspaceWithService],
+};
+
+const configWithTwoServices: AppConfig = {
+  version: 1,
+  workspaces: [workspaceWithTwoServices],
 };

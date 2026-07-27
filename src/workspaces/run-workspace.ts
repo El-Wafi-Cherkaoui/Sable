@@ -35,6 +35,7 @@ export type RunWorkspaceController = {
   addService(service: WorkspaceConfig["services"][number]): ReturnType<WorkspaceController["addService"]>;
   updateService(service: WorkspaceConfig["services"][number]): ReturnType<WorkspaceController["updateService"]>;
   removeService(serviceId: string): ReturnType<WorkspaceController["removeService"]>;
+  moveService(serviceId: string, direction: "up" | "down"): ReturnType<WorkspaceController["moveService"]>;
   getSelectedServiceLogs(): ServiceLogEntry[];
   shutdown(): Promise<void>;
 };
@@ -213,6 +214,22 @@ export async function runWorkspaceSession(
 
           return { type: "continue", message: flowResult.message };
         },
+      onMoveServiceUp: options.store === undefined
+        ? undefined
+        : async () => moveSelectedService({
+          store: options.store!,
+          workspace: options.workspace,
+          controller,
+          direction: "up",
+        }),
+      onMoveServiceDown: options.store === undefined
+        ? undefined
+        : async () => moveSelectedService({
+          store: options.store!,
+          workspace: options.workspace,
+          controller,
+          direction: "down",
+        }),
     });
   } finally {
     await controller.shutdown();
@@ -225,4 +242,65 @@ function getSelectedServiceState(state: ReturnType<RunWorkspaceController["getSt
   }
 
   return state.services[state.selectedServiceIndex];
+}
+
+
+type MoveSelectedServiceOptions = {
+  store: WorkspaceConfigReader;
+  workspace: WorkspaceConfig;
+  controller: RunWorkspaceController;
+  direction: "up" | "down";
+};
+
+async function moveSelectedService(
+  options: MoveSelectedServiceOptions,
+): Promise<{ type: "continue"; message: string }> {
+  const selectedServiceState = getSelectedServiceState(options.controller.getState());
+
+  if (selectedServiceState === undefined) {
+    return { type: "continue", message: "Add a service first." };
+  }
+
+  const config = await options.store.load();
+  const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
+
+  if (workspace === undefined) {
+    return { type: "continue", message: `Workspace "${options.workspace.name}" was not found.` };
+  }
+
+  const serviceIndex = workspace.services.findIndex((service) => service.id === selectedServiceState.service.id);
+
+  if (serviceIndex < 0) {
+    return { type: "continue", message: `Service "${selectedServiceState.service.name}" was not found.` };
+  }
+
+  const targetIndex = options.direction === "up" ? serviceIndex - 1 : serviceIndex + 1;
+
+  if (targetIndex < 0) {
+    return { type: "continue", message: `Service "${selectedServiceState.service.name}" is already first.` };
+  }
+
+  if (targetIndex >= workspace.services.length) {
+    return { type: "continue", message: `Service "${selectedServiceState.service.name}" is already last.` };
+  }
+
+  const nextServices = [...workspace.services];
+  const [service] = nextServices.splice(serviceIndex, 1);
+
+  if (service === undefined) {
+    return { type: "continue", message: `Service "${selectedServiceState.service.name}" was not found.` };
+  }
+
+  nextServices.splice(targetIndex, 0, service);
+
+  await options.store.save({
+    ...config,
+    workspaces: config.workspaces.map((candidate) =>
+      candidate.id === workspace.id ? { ...candidate, services: nextServices } : candidate,
+    ),
+  });
+
+  options.controller.moveService(service.id, options.direction);
+
+  return { type: "continue", message: `Moved service "${service.name}" ${options.direction}.` };
 }

@@ -23,6 +23,7 @@ Current capabilities:
 - view workspace details from the picker
 - add services from the running workspace dashboard
 - edit non-running services from the running workspace dashboard
+- reorder services directly from the running workspace dashboard
 - start, stop, and restart selected services
 - show concise failed/exited details in the service dashboard
 - capture stdout, stderr, and lifecycle logs in memory
@@ -133,6 +134,8 @@ k / Up      select previous service
 a           add service
 e           edit selected non-running service
 d           delete selected non-running service
+K           move selected service up
+J           move selected service down
 S           start selected service
 s           stop selected service
 r           restart selected service

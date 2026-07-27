@@ -11,6 +11,8 @@ export function renderHelpView(context: HelpContext): string {
       "a           add service",
       "e           edit selected non-running service",
       "d           delete selected non-running service",
+      "K           move selected service up",
+      "J           move selected service down",
       "S           start selected service",
       "s           stop selected service",
       "r           restart selected service",

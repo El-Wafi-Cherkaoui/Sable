@@ -41,6 +41,8 @@ export type RunInteractiveDashboardOptions = {
   onAddService?: () => Promise<DashboardCallbackResult>;
   onEditService?: () => Promise<DashboardCallbackResult>;
   onDeleteService?: () => Promise<DashboardCallbackResult>;
+  onMoveServiceUp?: () => Promise<DashboardCallbackResult>;
+  onMoveServiceDown?: () => Promise<DashboardCallbackResult>;
 };
 
 export type InteractiveDashboardResult = { type: "back" } | { type: "exit" };
@@ -288,6 +290,34 @@ export async function runInteractiveDashboard(
       case "deleteService": {
         if (options.onDeleteService !== undefined) {
           const result = await options.onDeleteService();
+
+          if (result.type === "exit") {
+            return { type: "exit" };
+          }
+
+          dashboardMessage = result.message;
+        }
+
+        renderFrame(screen, render(options.controller.getState()));
+        break;
+      }
+      case "moveServiceUp": {
+        if (options.onMoveServiceUp !== undefined) {
+          const result = await options.onMoveServiceUp();
+
+          if (result.type === "exit") {
+            return { type: "exit" };
+          }
+
+          dashboardMessage = result.message;
+        }
+
+        renderFrame(screen, render(options.controller.getState()));
+        break;
+      }
+      case "moveServiceDown": {
+        if (options.onMoveServiceDown !== undefined) {
+          const result = await options.onMoveServiceDown();
 
           if (result.type === "exit") {
             return { type: "exit" };

@@ -9,6 +9,7 @@ import {
   addServiceToRuntimeState,
   updateServiceConfigInRuntimeState,
   removeServiceFromRuntimeState,
+  moveServiceInRuntimeState,
 } from "./runtime-state.js";
 
 describe("runtime state", () => {
@@ -133,6 +134,27 @@ describe("runtime state", () => {
     expect(nextState.services.map((serviceState) => serviceState.service.id)).toEqual(["svc_backend"]);
     expect(nextState.selectedServiceIndex).toBe(0);
     expect(nextState.serviceIndexById).toEqual({ svc_backend: 0 });
+  });
+
+  it("moves a service and keeps it selected", () => {
+    const initialState = createRuntimeState(createWorkspace());
+    const nextState = moveServiceInRuntimeState(initialState, "svc_frontend", "up");
+
+    expect(nextState.services.map((serviceState) => serviceState.service.id)).toEqual([
+      "svc_frontend",
+      "svc_backend",
+    ]);
+    expect(nextState.selectedServiceIndex).toBe(0);
+    expect(nextState.serviceIndexById).toEqual({
+      svc_frontend: 0,
+      svc_backend: 1,
+    });
+  });
+
+  it("does not move a service beyond the list boundary", () => {
+    const initialState = createRuntimeState(createWorkspace());
+
+    expect(moveServiceInRuntimeState(initialState, "svc_backend", "up")).toBe(initialState);
   });
 
   it("ignores unknown service ids safely", () => {

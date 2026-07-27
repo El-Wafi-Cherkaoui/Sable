@@ -4,6 +4,7 @@ import {
   createRuntimeState,
   addServiceToRuntimeState,
   getSelectedService,
+  moveServiceInRuntimeState,
   removeServiceFromRuntimeState,
   selectNextService,
   selectPreviousService,
@@ -112,6 +113,12 @@ export class WorkspaceController {
 
   removeService(serviceId: string): RuntimeWorkspaceState {
     this.state = removeServiceFromRuntimeState(this.state, serviceId);
+
+    return this.state;
+  }
+
+  moveService(serviceId: string, direction: "up" | "down"): RuntimeWorkspaceState {
+    this.state = moveServiceInRuntimeState(this.state, serviceId, direction);
 
     return this.state;
   }

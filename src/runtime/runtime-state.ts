@@ -162,6 +162,40 @@ export function removeServiceFromRuntimeState(
   };
 }
 
+export function moveServiceInRuntimeState(
+  state: RuntimeWorkspaceState,
+  serviceId: string,
+  direction: "up" | "down",
+): RuntimeWorkspaceState {
+  const serviceIndex = state.serviceIndexById[serviceId];
+
+  if (serviceIndex === undefined) {
+    return state;
+  }
+
+  const targetIndex = direction === "up" ? serviceIndex - 1 : serviceIndex + 1;
+
+  if (targetIndex < 0 || targetIndex >= state.services.length) {
+    return state;
+  }
+
+  const services = [...state.services];
+  const [service] = services.splice(serviceIndex, 1);
+
+  if (service === undefined) {
+    return state;
+  }
+
+  services.splice(targetIndex, 0, service);
+
+  return {
+    ...state,
+    services,
+    serviceIndexById: createServiceIndexById(services),
+    selectedServiceIndex: targetIndex,
+  };
+}
+
 function createServiceIndexById(
   services: RuntimeServiceState[],
 ): Record<string, number> {

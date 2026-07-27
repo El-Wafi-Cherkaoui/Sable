@@ -244,6 +244,23 @@ describe("WorkspaceController", () => {
     expect(controller.getServiceLogs("missing")).toEqual([]);
   });
 
+  it("moves services while preserving process state", () => {
+    const processManager = createFakeProcessManager();
+    const controller = new WorkspaceController({
+      workspace: createWorkspace(),
+      processManager,
+    });
+
+    controller.moveService("svc_frontend", "up");
+
+    expect(controller.getState().services.map((serviceState) => serviceState.service.id)).toEqual([
+      "svc_frontend",
+      "svc_backend",
+      "svc_worker",
+    ]);
+    expect(controller.getState().selectedServiceIndex).toBe(0);
+  });
+
   it("shuts down all managed services", async () => {
     const processManager = createFakeProcessManager();
     const controller = new WorkspaceController({

@@ -253,6 +253,26 @@ describe("runInteractiveDashboard", () => {
     expect(writes.join("\n")).toContain("Deleted.");
   });
 
+  it("runs the move service callbacks from the dashboard", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const onMoveServiceUp = vi.fn(async () => ({ type: "continue" as const, message: "Moved up." }));
+    const onMoveServiceDown = vi.fn(async () => ({ type: "continue" as const, message: "Moved down." }));
+    const writes: string[] = [];
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "K" }, { sequence: "J" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn((contents: string) => writes.push(contents)) },
+      onMoveServiceUp,
+      onMoveServiceDown,
+    });
+
+    expect(onMoveServiceUp).toHaveBeenCalledOnce();
+    expect(onMoveServiceDown).toHaveBeenCalledOnce();
+    expect(writes.join("\n")).toContain("Moved down.");
+  });
+
   it("exits when the delete service callback exits", async () => {
     const state = createState();
     const controller = createController(state, () => []);
