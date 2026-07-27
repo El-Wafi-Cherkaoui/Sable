@@ -1,16 +1,20 @@
 import type { ServiceLogEntry } from "../process/process-manager.js";
 import { getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import { createTuiStyle, type TuiStyle } from "./style.js";
 
 export type RenderLogsViewOptions = {
   state: RuntimeWorkspaceState;
   logs: ServiceLogEntry[];
   scrollOffset: number;
   visibleLineCount?: number;
+  color?: boolean;
+  style?: TuiStyle;
 };
 
 const defaultVisibleLineCount = 20;
 
 export function renderLogsView(options: RenderLogsViewOptions): string {
+  const style = options.style ?? createTuiStyle(options.color ?? false);
   const selectedService = getSelectedService(options.state);
   const serviceName = selectedService?.service.name ?? "No service selected";
   const visibleLineCount = options.visibleLineCount ?? defaultVisibleLineCount;
@@ -23,9 +27,13 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
     normalizedScrollOffset,
     normalizedScrollOffset + visibleLineCount,
   );
+  const labelWidth = 9;
   const lines = [
-    `${options.state.workspace.name} / ${serviceName} logs`,
-    formatLogRange(normalizedScrollOffset, visibleLogs.length, options.logs.length),
+    style.title("Logs"),
+    "",
+    `${style.muted("workspace".padEnd(labelWidth))} ${options.state.workspace.name}`,
+    `${style.muted("service".padEnd(labelWidth))} ${serviceName}`,
+    `${style.muted("range".padEnd(labelWidth))} ${formatLogRange(normalizedScrollOffset, visibleLogs.length, options.logs.length)}`,
     "",
   ];
 
@@ -36,10 +44,10 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
     lines.push("");
     lines.push("Start the service or wait for output.");
   } else {
-    lines.push(...visibleLogs.map(formatLogEntry));
+    lines.push(...visibleLogs.map((entry) => formatLogEntry(entry, style)));
   }
 
-  lines.push("", "j/k scroll  Esc back  ? help  q quit");
+  lines.push("", style.muted("j/k scroll  Esc back  ? help  q quit"));
 
   return lines.join("\n");
 }
@@ -56,8 +64,8 @@ export function maxScrollOffset(logLineCount: number, visibleLineCount: number):
   return Math.max(0, logLineCount - visibleLineCount);
 }
 
-function formatLogEntry(entry: ServiceLogEntry): string {
-  return `${entry.stream.padEnd(6)} ${entry.line}`;
+function formatLogEntry(entry: ServiceLogEntry, style: TuiStyle): string {
+  return `${style.stream(entry.stream)} ${entry.line}`;
 }
 
 function formatLogRange(

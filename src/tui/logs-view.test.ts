@@ -17,8 +17,11 @@ describe("renderLogsView", () => {
       }),
     ).toBe(
       [
-        "ecommerce / backend logs",
-        "lines 1-2 of 2",
+        "Logs",
+        "",
+        "workspace ecommerce",
+        "service   backend",
+        "range     lines 1-2 of 2",
         "",
         "stdout server ready",
         "stderr warning",
@@ -37,6 +40,19 @@ describe("renderLogsView", () => {
         visibleLineCount: 10,
       }),
     ).toContain("system service stopped");
+  });
+
+  it("can render logs with restrained color", () => {
+    const rendered = renderLogsView({
+      state: createState(),
+      logs: [createLog("stderr", "warning")],
+      scrollOffset: 0,
+      visibleLineCount: 10,
+      color: true,
+    });
+
+    expect(rendered).toContain("\x1b[1mLogs\x1b[22m");
+    expect(rendered).toContain("\x1b[31mstderr\x1b[39m warning");
   });
 
   it("renders a visible slice based on scroll offset", () => {

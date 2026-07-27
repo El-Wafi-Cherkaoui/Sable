@@ -1,6 +1,7 @@
 import type { WorkspaceConfig } from "../config/config-types.js";
 import { mapWorkspacePickerKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
+import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
 
 export type WorkspacePickerState = {
   workspaces: WorkspaceConfig[];
@@ -20,6 +21,11 @@ export type WorkspacePickerResult =
 export type WorkspacePickerScreen = {
   clear(): void;
   write(contents: string): void;
+};
+
+export type RenderWorkspacePickerOptions = {
+  color?: boolean;
+  style?: TuiStyle;
 };
 
 export type RunWorkspacePickerOptions = {
@@ -43,7 +49,8 @@ export async function runWorkspacePicker(
   options: RunWorkspacePickerOptions,
 ): Promise<WorkspacePickerResult> {
   const screen = options.screen ?? terminalScreen;
-  const render = options.render ?? renderWorkspacePicker;
+  const color = shouldUseColor();
+  const render = options.render ?? ((state: WorkspacePickerState) => renderWorkspacePicker(state, { color }));
   const renderHelp = options.renderHelp ?? renderWorkspacePickerHelp;
   const renderDetails = options.renderDetails ?? renderWorkspaceDetails;
   let state = createWorkspacePickerState(
@@ -216,35 +223,40 @@ export function getSelectedWorkspace(
   return state.workspaces[state.selectedWorkspaceIndex];
 }
 
-export function renderWorkspacePicker(state: WorkspacePickerState): string {
-  const lines = ["workspaces", ""];
+export function renderWorkspacePicker(
+  state: WorkspacePickerState,
+  options: RenderWorkspacePickerOptions = {},
+): string {
+  const style = options.style ?? createTuiStyle(options.color ?? false);
+  const lines = [style.title("Workspaces"), ""];
 
   if (state.statusMessage !== undefined) {
-    lines.push(`Status: ${state.statusMessage}`, "");
+    lines.push(`${style.statusLabel("Status:")} ${state.statusMessage}`, "");
   }
 
   if (state.workspaces.length === 0) {
     lines.push("No workspaces yet.");
     lines.push("");
     lines.push("Press c to create your first workspace.");
-    lines.push("", "j/k select  ? help  q quit");
+    lines.push("", style.muted("j/k select  ? help  q quit"));
     return lines.join("\n");
   }
 
   const nameColumnWidth = Math.max(
+    "Workspace".length,
     ...state.workspaces.map((workspace) => workspace.name.length),
   );
 
+  lines.push(style.muted(`  ${"Workspace".padEnd(nameColumnWidth)}  Services`));
+
   for (const [index, workspace] of state.workspaces.entries()) {
     const marker = index === state.selectedWorkspaceIndex ? ">" : " ";
-    lines.push(
-      `${marker} ${workspace.name.padEnd(nameColumnWidth)}  ${formatServiceCount(
-        workspace.services.length,
-      )}`,
-    );
+    const line = `${marker} ${workspace.name.padEnd(nameColumnWidth)}  ${style.muted(String(workspace.services.length))}`;
+
+    lines.push(index === state.selectedWorkspaceIndex ? style.selected(line) : line);
   }
 
-  lines.push("", "j/k select  ? help  q quit");
+  lines.push("", style.muted("j/k select  ? help  q quit"));
 
   return lines.join("\n");
 }
@@ -302,10 +314,6 @@ export function renderWorkspaceDetails(workspace: WorkspaceConfig): string {
   lines.push("", "Esc back  q back");
 
   return lines.join("\n");
-}
-
-function formatServiceCount(count: number): string {
-  return `${count} ${count === 1 ? "service" : "services"}`;
 }
 
 function isCtrlC(keypress: Awaited<ReturnType<KeyInput["readKey"]>>): boolean {

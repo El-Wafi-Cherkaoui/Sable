@@ -40,10 +40,11 @@ describe("renderWorkspacePicker", () => {
   it("renders workspaces with service counts", () => {
     expect(renderWorkspacePicker(createWorkspacePickerState(workspaces))).toBe(
       [
-        "workspaces",
+        "Workspaces",
         "",
-        "> ecommerce  2 services",
-        "  portfolio  1 service",
+        "  Workspace  Services",
+        "> ecommerce  2",
+        "  portfolio  1",
         "",
         "j/k select  ? help  q quit",
       ].join("\n"),
@@ -56,6 +57,13 @@ describe("renderWorkspacePicker", () => {
     expect(renderWorkspacePicker(createWorkspacePickerState(workspaces, 'Auto-start disabled for "api".'))).toContain(
       'Status: Auto-start disabled for "api".',
     );
+  });
+
+  it("can render with restrained color", () => {
+    const rendered = renderWorkspacePicker(createWorkspacePickerState(workspaces), { color: true });
+
+    expect(rendered).toContain("\x1b[1mWorkspaces\x1b[22m");
+    expect(rendered).toContain("\x1b[2m2\x1b[22m");
   });
 
   it("renders selected workspace details", () => {

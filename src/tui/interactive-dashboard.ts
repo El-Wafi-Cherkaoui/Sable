@@ -6,6 +6,7 @@ import { parseCommand, renderCommandView } from "./command-view.js";
 import { renderHelpView, type HelpContext } from "./help-view.js";
 import { clampScrollOffset, maxScrollOffset, renderLogsView } from "./logs-view.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
+import { shouldUseColor } from "./style.js";
 
 type DashboardCallbackResult =
   | { type: "continue"; message?: string }
@@ -63,6 +64,7 @@ export async function runInteractiveDashboard(
   options: RunInteractiveDashboardOptions,
 ): Promise<InteractiveDashboardResult> {
   const screen = options.screen ?? terminalScreen;
+  const color = shouldUseColor();
   let dashboardMessage: string | undefined;
   const render =
     options.render ??
@@ -70,6 +72,7 @@ export async function runInteractiveDashboard(
       renderStaticDashboard(state, {
         quitLabel: options.dashboardQuitLabel,
         statusMessage: dashboardMessage,
+        color,
       }));
   const renderLogs = options.renderLogs ?? renderLogsView;
   const renderHelp = options.renderHelp ?? renderHelpView;
@@ -371,6 +374,7 @@ export async function runInteractiveDashboard(
         logs,
         scrollOffset: logScrollOffset,
         visibleLineCount: logVisibleLineCount,
+        color,
       }),
     );
   }

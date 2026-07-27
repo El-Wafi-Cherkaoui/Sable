@@ -6,8 +6,10 @@ describe("renderStaticDashboard", () => {
   it("renders workspace name and ordered service statuses", () => {
     expect(renderStaticDashboard(createState())).toBe(
       [
+        "Workspace",
         "ecommerce",
         "",
+        "  Service   Status",
         "> backend   running",
         "  frontend  stopped",
         "  worker    failed: failed",
@@ -27,6 +29,7 @@ describe("renderStaticDashboard", () => {
       }),
     ).toBe(
       [
+        "Workspace",
         "empty",
         "",
         "No services yet.",
@@ -36,6 +39,14 @@ describe("renderStaticDashboard", () => {
         "j/k select  ? help  q quit",
       ].join("\n"),
     );
+  });
+
+  it("can render process states with restrained color", () => {
+    const rendered = renderStaticDashboard(createState(), { color: true });
+
+    expect(rendered).toContain("\x1b[1mecommerce\x1b[22m");
+    expect(rendered).toContain("\x1b[32mrunning\x1b[39m");
+    expect(rendered).toContain("\x1b[31mfailed: failed\x1b[39m");
   });
 
   it("renders exited status details", () => {
@@ -55,7 +66,7 @@ describe("renderStaticDashboard", () => {
           },
         ],
       }),
-    ).toContain(["> api     exited code 7", "  worker  exited signal SIGTERM"].join("\n"));
+    ).toContain(["> api      exited code 7", "  worker   exited signal SIGTERM"].join("\n"));
   });
 
   it("truncates long failure messages", () => {
