@@ -5,30 +5,38 @@ import { clampScrollOffset, maxScrollOffset, renderLogsView } from "./logs-view.
 
 describe("renderLogsView", () => {
   it("renders selected service logs with stream labels", () => {
-    expect(
-      renderLogsView({
-        state: createState(),
-        logs: [
-          createLog("stdout", "server ready"),
-          createLog("stderr", "warning"),
-        ],
-        scrollOffset: 0,
-        visibleLineCount: 10,
-      }),
-    ).toBe(
-      [
-        "Logs",
-        "",
-        "workspace ecommerce",
-        "service   backend",
-        "range     lines 1-2 of 2",
-        "",
-        "stdout server ready",
-        "stderr warning",
-        "",
-        "j/k scroll  Esc back  ? help  q quit",
-      ].join("\n"),
-    );
+    const rendered = renderLogsView({
+      state: createState(),
+      logs: [
+        createLog("stdout", "server ready"),
+        createLog("stderr", "warning"),
+      ],
+      scrollOffset: 0,
+      visibleLineCount: 10,
+      viewportColumns: 60,
+    });
+
+    expect(rendered).toContain("Logs");
+    expect(rendered).toContain("workspace ecommerce");
+    expect(rendered).toContain("range     lines 1-2 of 2");
+    expect(rendered).toContain(`┌${"─".repeat(54)}┐`);
+    expect(rendered).toContain("│ stdout server ready");
+    expect(rendered).toContain("│ stderr warning");
+    expect(rendered).toContain(`└${"─".repeat(54)}┘`);
+    expect(rendered).toContain("j/k scroll  Esc back  ? help  q quit");
+  });
+
+  it("keeps the log box width stable and truncates long lines", () => {
+    const rendered = renderLogsView({
+      state: createState(),
+      logs: [createLog("stdout", "this is a very long log line that should not wrap the viewport")],
+      scrollOffset: 0,
+      visibleLineCount: 1,
+      viewportColumns: 52,
+    });
+
+    expect(rendered).toContain(`┌${"─".repeat(46)}┐`);
+    expect(rendered).toContain("stdout this is a very long log line that ...");
   });
 
   it("renders system lifecycle entries with logs", () => {
@@ -56,14 +64,15 @@ describe("renderLogsView", () => {
   });
 
   it("renders a visible slice based on scroll offset", () => {
-    expect(
-      renderLogsView({
-        state: createState(),
-        logs: [createLog("stdout", "one"), createLog("stdout", "two"), createLog("stdout", "three")],
-        scrollOffset: 1,
-        visibleLineCount: 2,
-      }),
-    ).toContain(["stdout two", "stdout three"].join("\n"));
+    const rendered = renderLogsView({
+      state: createState(),
+      logs: [createLog("stdout", "one"), createLog("stdout", "two"), createLog("stdout", "three")],
+      scrollOffset: 1,
+      visibleLineCount: 2,
+    });
+
+    expect(rendered).toContain("stdout two");
+    expect(rendered).toContain("stdout three");
     expect(
       renderLogsView({
         state: createState(),

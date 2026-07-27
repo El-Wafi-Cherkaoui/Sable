@@ -77,7 +77,7 @@ export async function runInteractiveDashboard(
   const renderLogs = options.renderLogs ?? renderLogsView;
   const renderHelp = options.renderHelp ?? renderHelpView;
   const renderCommand = options.renderCommand ?? renderCommandView;
-  const logVisibleLineCount = options.logVisibleLineCount ?? 20;
+  const configuredLogVisibleLineCount = options.logVisibleLineCount;
   const logsRefreshIntervalMs = options.logsRefreshIntervalMs ?? 250;
   let shouldQuit = false;
   let mode = "dashboard" as ViewMode;
@@ -174,8 +174,8 @@ export async function runInteractiveDashboard(
         const logs = options.controller.getSelectedServiceLogs();
 
         logScrollOffset = followLogTail
-          ? maxScrollOffset(logs.length, logVisibleLineCount)
-          : clampScrollOffset(logScrollOffset, logs.length, logVisibleLineCount);
+          ? maxScrollOffset(logs.length, getLogVisibleLineCount())
+          : clampScrollOffset(logScrollOffset, logs.length, getLogVisibleLineCount());
         renderLogsFrame();
         continue;
       }
@@ -189,16 +189,16 @@ export async function runInteractiveDashboard(
           logScrollOffset = clampScrollOffset(
             logScrollOffset + 1,
             logs.length,
-            logVisibleLineCount,
+            getLogVisibleLineCount(),
           );
-          followLogTail = logScrollOffset === maxScrollOffset(logs.length, logVisibleLineCount);
+          followLogTail = logScrollOffset === maxScrollOffset(logs.length, getLogVisibleLineCount());
           renderLogsFrame();
           break;
         case "scrollUp":
           logScrollOffset = clampScrollOffset(
             logScrollOffset - 1,
             logs.length,
-            logVisibleLineCount,
+            getLogVisibleLineCount(),
           );
           followLogTail = false;
           renderLogsFrame();
@@ -209,7 +209,7 @@ export async function runInteractiveDashboard(
           renderLogsFrame();
           break;
         case "scrollBottom":
-          logScrollOffset = maxScrollOffset(logs.length, logVisibleLineCount);
+          logScrollOffset = maxScrollOffset(logs.length, getLogVisibleLineCount());
           followLogTail = true;
           renderLogsFrame();
           break;
@@ -337,7 +337,7 @@ export async function runInteractiveDashboard(
         followLogTail = true;
         logScrollOffset = maxScrollOffset(
           options.controller.getSelectedServiceLogs().length,
-          logVisibleLineCount,
+          getLogVisibleLineCount(),
         );
         renderLogsFrame();
         break;
@@ -365,7 +365,7 @@ export async function runInteractiveDashboard(
     logScrollOffset = clampScrollOffset(
       logScrollOffset,
       logs.length,
-      logVisibleLineCount,
+        getLogVisibleLineCount(),
     );
     renderFrame(
       screen,
@@ -373,10 +373,25 @@ export async function runInteractiveDashboard(
         state: options.controller.getState(),
         logs,
         scrollOffset: logScrollOffset,
-        visibleLineCount: logVisibleLineCount,
+        visibleLineCount: getLogVisibleLineCount(),
+        viewportColumns: process.stdout.columns,
         color,
       }),
     );
+  }
+
+  function getLogVisibleLineCount(): number {
+    if (configuredLogVisibleLineCount !== undefined) {
+      return configuredLogVisibleLineCount;
+    }
+
+    const rows = process.stdout.rows;
+
+    if (rows === undefined || rows <= 0) {
+      return 12;
+    }
+
+    return Math.max(3, rows - 12);
   }
 
   function renderHelpFrame(context: HelpContext): void {

@@ -250,8 +250,7 @@ export function renderWorkspacePicker(
   lines.push(style.muted(`  ${"Workspace".padEnd(nameColumnWidth)}  Services`));
 
   for (const [index, workspace] of state.workspaces.entries()) {
-    const marker = index === state.selectedWorkspaceIndex ? ">" : " ";
-    const line = `${marker} ${workspace.name.padEnd(nameColumnWidth)}  ${style.muted(String(workspace.services.length))}`;
+    const line = `  ${workspace.name.padEnd(nameColumnWidth)}  ${style.muted(String(workspace.services.length))}`;
 
     lines.push(index === state.selectedWorkspaceIndex ? style.selected(line) : line);
   }

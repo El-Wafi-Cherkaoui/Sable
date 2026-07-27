@@ -43,7 +43,7 @@ describe("renderWorkspacePicker", () => {
         "Workspaces",
         "",
         "  Workspace  Services",
-        "> ecommerce  2",
+        "  ecommerce  2",
         "  portfolio  1",
         "",
         "j/k select  ? help  q quit",

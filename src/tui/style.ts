@@ -1,6 +1,7 @@
 export type TuiStyle = {
   title(text: string): string;
   selected(text: string): string;
+  border(text: string): string;
   statusLabel(text: string): string;
   muted(text: string): string;
   running(text: string): string;
@@ -40,7 +41,8 @@ export function createTuiStyle(enabled = false): TuiStyle {
 
   return {
     title: ansi("\x1b[1m", "\x1b[22m"),
-    selected: ansi("\x1b[1m", "\x1b[22m"),
+    selected: ansi("\x1b[48;5;236m", "\x1b[49m"),
+    border: ansi("\x1b[2m", "\x1b[22m"),
     statusLabel: ansi("\x1b[36m\x1b[1m", "\x1b[22m\x1b[39m"),
     muted: ansi("\x1b[2m", "\x1b[22m"),
     running: ansi("\x1b[32m", "\x1b[39m"),
@@ -62,6 +64,7 @@ export function createTuiStyle(enabled = false): TuiStyle {
 export const plainStyle: TuiStyle = {
   title: identity,
   selected: identity,
+  border: identity,
   statusLabel: identity,
   muted: identity,
   running: identity,

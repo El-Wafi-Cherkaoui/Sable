@@ -10,7 +10,7 @@ describe("renderStaticDashboard", () => {
         "ecommerce",
         "",
         "  Service   Status",
-        "> backend   running",
+        "  backend   running",
         "  frontend  stopped",
         "  worker    failed: failed",
         "",
@@ -66,7 +66,7 @@ describe("renderStaticDashboard", () => {
           },
         ],
       }),
-    ).toContain(["> api      exited code 7", "  worker   exited signal SIGTERM"].join("\n"));
+    ).toContain(["  api      exited code 7", "  worker   exited signal SIGTERM"].join("\n"));
   });
 
   it("truncates long failure messages", () => {

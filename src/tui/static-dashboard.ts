@@ -39,8 +39,7 @@ export function renderStaticDashboard(
   lines.push(style.muted(`  ${"Service".padEnd(nameColumnWidth)}  Status`));
 
   for (const [index, serviceState] of state.services.entries()) {
-    const marker = index === state.selectedServiceIndex ? ">" : " ";
-    const line = `${marker} ${serviceState.service.name.padEnd(nameColumnWidth)}  ${formatProcessState(
+    const line = `  ${serviceState.service.name.padEnd(nameColumnWidth)}  ${formatProcessState(
       serviceState.process,
       style,
     )}`;
