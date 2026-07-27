@@ -8,7 +8,7 @@ Sable is not a task runner, tmux replacement, IDE, Docker manager, Kubernetes to
 
 ## Status
 
-Sable is early MVP software preparing for a first release candidate. The current focus is reliability, packaging confidence, and clear first-user documentation rather than expanding scope.
+Sable 0.1.0 is complete. Current work is focused on Phase 2 daily-use improvements while keeping the product small and local-first.
 
 Requirements: Node.js 20+ and npm. Sable is intended to work on Windows, macOS, and Linux, with early smoke testing on Windows and Linux.
 
@@ -22,7 +22,9 @@ Current capabilities:
 - delete workspaces from the picker with typed-name confirmation
 - view workspace details from the picker
 - add services from the running workspace dashboard
+- rename services through the dashboard edit flow
 - edit non-running services from the running workspace dashboard
+- delete non-running services from the running workspace dashboard
 - reorder services directly from the running workspace dashboard
 - start, stop, and restart selected services
 - show concise failed/exited details in the service dashboard

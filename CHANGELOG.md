@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Workspace rename from the home picker.
+- Workspace reorder from the home picker with `K` / `J`.
+- Service rename from the dashboard edit flow.
+- Service deletion from the dashboard with typed-name confirmation.
+- Service reorder from the dashboard with `K` / `J`.
+
 ## 0.1.0 - MVP release candidate
 
 Sable 0.1.0 is the first MVP checkpoint for a keyboard-first terminal workspace manager.
