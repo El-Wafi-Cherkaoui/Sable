@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import { createRuntimeState } from "../runtime/runtime-state.js";
 import { WorkspaceLookupError } from "./find-workspace.js";
-import { runWorkspaceCommand, type RunWorkspaceController } from "./run-workspace.js";
+import { runWorkspaceCommand, runWorkspaceSession, type RunWorkspaceController } from "./run-workspace.js";
 
 describe("runWorkspaceCommand", () => {
   it("loads a workspace, starts auto-start services, opens dashboard, and shuts down", async () => {
@@ -28,6 +28,7 @@ describe("runWorkspaceCommand", () => {
       dashboardQuitLabel: undefined,
       onAddService: expect.any(Function),
       onEditService: expect.any(Function),
+      onDeleteService: expect.any(Function),
     });
     expect(keyInput.close).toHaveBeenCalledOnce();
     expect(controller.shutdown).toHaveBeenCalledOnce();
@@ -98,13 +99,75 @@ describe("runWorkspaceCommand", () => {
   });
 });
 
+describe("runWorkspaceSession", () => {
+  it("deletes a stopped selected service through the dashboard callback", async () => {
+    const controller = createFakeController(workspaceWithService);
+    const store = createStore(configWithService);
+
+    await runWorkspaceSession({
+      workspace: workspaceWithService,
+      createController: () => controller,
+      keyInput: createKeyInput([
+        { sequence: "a" },
+        { sequence: "p" },
+        { sequence: "i" },
+        { name: "return" },
+      ]),
+      store,
+      runDashboard: async ({ onDeleteService }) => {
+        await expect(onDeleteService?.()).resolves.toEqual({
+          type: "continue",
+          message: 'Deleted service "api" from workspace "ecommerce".',
+        });
+
+        return { type: "back" };
+      },
+    });
+
+    expect(controller.removeService).toHaveBeenCalledWith("svc_api");
+    expect(store.savedConfig?.workspaces[0]?.services).toEqual([]);
+  });
+
+  it("does not delete a running selected service", async () => {
+    const controller = createFakeController(workspaceWithService);
+    const state = createRuntimeState(workspaceWithService);
+    controller.getState.mockReturnValue({
+      ...state,
+      services: state.services.map((serviceState) => ({
+        ...serviceState,
+        process: { status: "running" as const, pid: 1234 },
+      })),
+    });
+    const store = createStore(configWithService);
+
+    await runWorkspaceSession({
+      workspace: workspaceWithService,
+      createController: () => controller,
+      keyInput: createKeyInput(),
+      store,
+      runDashboard: async ({ onDeleteService }) => {
+        await expect(onDeleteService?.()).resolves.toEqual({
+          type: "continue",
+          message: "Stop service before deleting.",
+        });
+
+        return { type: "back" };
+      },
+    });
+
+    expect(controller.removeService).not.toHaveBeenCalled();
+    expect(store.savedConfig).toBeUndefined();
+  });
+});
+
 function createStore(appConfig: AppConfig) {
   return {
+    savedConfig: undefined as AppConfig | undefined,
     async load() {
       return appConfig;
     },
-    async save() {
-      return undefined;
+    async save(config: AppConfig) {
+      this.savedConfig = config;
     },
   };
 }
@@ -127,9 +190,9 @@ function createFakeController(workspaceConfig: WorkspaceConfig) {
   };
 }
 
-function createKeyInput() {
+function createKeyInput(keys: Array<{ sequence?: string; name?: string; ctrl?: boolean }> = []) {
   return {
-    readKey: vi.fn(async () => ({ sequence: "q" })),
+    readKey: vi.fn(async () => keys.shift() ?? { sequence: "q" }),
     close: vi.fn(),
   };
 }
@@ -180,7 +243,26 @@ const workspace: WorkspaceConfig = {
   services: [],
 };
 
+const workspaceWithService: WorkspaceConfig = {
+  ...workspace,
+  services: [
+    {
+      id: "svc_api",
+      name: "api",
+      command: "npm run dev",
+      cwd: ".",
+      autoStart: true,
+      env: {},
+    },
+  ],
+};
+
 const config: AppConfig = {
   version: 1,
   workspaces: [workspace],
+};
+
+const configWithService: AppConfig = {
+  version: 1,
+  workspaces: [workspaceWithService],
 };

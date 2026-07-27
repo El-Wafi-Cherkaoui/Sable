@@ -12,7 +12,7 @@ import {
   type RunInteractiveDashboardOptions,
 } from "../tui/interactive-dashboard.js";
 import { requireWorkspaceByName } from "./find-workspace.js";
-import { runAddServiceFlow, runEditServiceFlow } from "./service-flows.js";
+import { runAddServiceFlow, runDeleteServiceFlow, runEditServiceFlow } from "./service-flows.js";
 
 export type WorkspaceConfigReader = {
   load(): Promise<AppConfig>;
@@ -179,6 +179,36 @@ export async function runWorkspaceSession(
                 controller.updateService(service);
               }
             }
+          }
+
+          return { type: "continue", message: flowResult.message };
+        },
+      onDeleteService: options.store === undefined
+        ? undefined
+        : async () => {
+          const selectedServiceState = getSelectedServiceState(controller.getState());
+
+          if (selectedServiceState === undefined) {
+            return { type: "continue", message: "Add a service first." };
+          }
+
+          if (selectedServiceState.process.status === "running") {
+            return { type: "continue", message: "Stop service before deleting." };
+          }
+
+          const flowResult = await runDeleteServiceFlow({
+            store: options.store!,
+            workspace: options.workspace,
+            keyInput: options.keyInput,
+            serviceId: selectedServiceState.service.id,
+          });
+
+          if (flowResult.type === "exit") {
+            return { type: "exit" };
+          }
+
+          if (flowResult.type === "completed" && flowResult.removedServiceId !== undefined) {
+            controller.removeService(flowResult.removedServiceId);
           }
 
           return { type: "continue", message: flowResult.message };

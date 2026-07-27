@@ -126,7 +126,8 @@ In `sable run`, or after opening a workspace from the picker:
 j / Down    select next service
 k / Up      select previous service
 a           add service
-e           edit selected stopped/failed service
+e           edit selected non-running service
+d           delete selected non-running service
 S           start selected service
 s           stop selected service
 r           restart selected service

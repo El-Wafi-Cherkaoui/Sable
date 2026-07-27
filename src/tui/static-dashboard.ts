@@ -10,7 +10,7 @@ export function renderStaticDashboard(
   state: RuntimeWorkspaceState,
   options: RenderStaticDashboardOptions = {},
 ): string {
-  const dashboardFooter = `j/k move  a add  e edit  S start  s stop  r restart  Enter logs  ? help  : command  q ${
+  const dashboardFooter = `j/k move  a add  e edit  d delete  S start  s stop  r restart  Enter logs  ? help  : command  q ${
     options.quitLabel ?? "quit"
   }`;
   const lines = [state.workspace.name, ""];

@@ -56,6 +56,7 @@ describe("mapDashboardKey", () => {
     expect(mapDashboardKey({ sequence: "r" })).toBe("restart");
     expect(mapDashboardKey({ sequence: "a" })).toBe("addService");
     expect(mapDashboardKey({ sequence: "e" })).toBe("editService");
+    expect(mapDashboardKey({ sequence: "d" })).toBe("deleteService");
   });
 
   it("maps enter to open logs", () => {

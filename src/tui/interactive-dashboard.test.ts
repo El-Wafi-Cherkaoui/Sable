@@ -236,6 +236,39 @@ describe("runInteractiveDashboard", () => {
     expect(writes.join("\n")).toContain("Edited.");
   });
 
+  it("runs the delete service callback from the dashboard", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const onDeleteService = vi.fn(async () => ({ type: "continue" as const, message: "Deleted." }));
+    const writes: string[] = [];
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "d" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn((contents: string) => writes.push(contents)) },
+      onDeleteService,
+    });
+
+    expect(onDeleteService).toHaveBeenCalledOnce();
+    expect(writes.join("\n")).toContain("Deleted.");
+  });
+
+  it("exits when the delete service callback exits", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const onDeleteService = vi.fn(async () => ({ type: "exit" as const }));
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "d" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: () => "dashboard",
+      onDeleteService,
+    });
+
+    expect(onDeleteService).toHaveBeenCalledOnce();
+  });
+
   it("opens help from dashboard and returns to dashboard", async () => {
     const state = createState();
     const controller = createController(state, () => []);

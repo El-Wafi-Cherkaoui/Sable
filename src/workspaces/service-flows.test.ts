@@ -2,7 +2,12 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { AppConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
-import { runAddServiceFlow, runEditServiceFlow, type ServiceFlowStore } from "./service-flows.js";
+import {
+  runAddServiceFlow,
+  runDeleteServiceFlow,
+  runEditServiceFlow,
+  type ServiceFlowStore,
+} from "./service-flows.js";
 
 describe("runAddServiceFlow", () => {
   it("adds a service through native prompts", async () => {
@@ -114,6 +119,84 @@ describe("runEditServiceFlow", () => {
       runEditServiceFlow({
         store,
         workspace,
+        keyInput: createKeyInput([{ name: "c", ctrl: true }]),
+        screen: createScreen(),
+      }),
+    ).resolves.toEqual({ type: "exit" });
+    expect(store.savedConfig).toBeUndefined();
+  });
+});
+
+describe("runDeleteServiceFlow", () => {
+  it("deletes a service after typed-name confirmation", async () => {
+    const store = createStore(config);
+
+    await expect(
+      runDeleteServiceFlow({
+        store,
+        workspace,
+        serviceId: "svc_api",
+        keyInput: createKeyInput([
+          { sequence: "a" },
+          { sequence: "p" },
+          { sequence: "i" },
+          { name: "return" },
+        ]),
+        screen: createScreen(),
+      }),
+    ).resolves.toEqual({
+      type: "completed",
+      message: 'Deleted service "api" from workspace "ecommerce".',
+      removedServiceId: "svc_api",
+    });
+    expect(store.savedConfig?.workspaces[0]?.services).toEqual([]);
+  });
+
+  it("keeps prompting when the typed service name does not match", async () => {
+    const store = createStore(config);
+
+    await runDeleteServiceFlow({
+      store,
+      workspace,
+      serviceId: "svc_api",
+      keyInput: createKeyInput([
+        { sequence: "x" },
+        { name: "return" },
+        { name: "backspace" },
+        { sequence: "a" },
+        { sequence: "p" },
+        { sequence: "i" },
+        { name: "return" },
+      ]),
+      screen: createScreen(),
+    });
+
+    expect(store.savedConfig?.workspaces[0]?.services).toEqual([]);
+  });
+
+  it("goes back without saving on Esc", async () => {
+    const store = createStore(config);
+
+    await expect(
+      runDeleteServiceFlow({
+        store,
+        workspace,
+        serviceId: "svc_api",
+        keyInput: createKeyInput([{ name: "escape" }]),
+        screen: createScreen(),
+      }),
+    ).resolves.toEqual({ type: "back", message: "Delete service cancelled." });
+    expect(store.savedConfig).toBeUndefined();
+  });
+
+  it("exits without saving on Ctrl+C", async () => {
+    const store = createStore(config);
+
+    await expect(
+      runDeleteServiceFlow({
+        store,
+        workspace,
+        serviceId: "svc_api",
         keyInput: createKeyInput([{ name: "c", ctrl: true }]),
         screen: createScreen(),
       }),

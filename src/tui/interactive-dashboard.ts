@@ -40,6 +40,7 @@ export type RunInteractiveDashboardOptions = {
   logsRefreshIntervalMs?: number;
   onAddService?: () => Promise<DashboardCallbackResult>;
   onEditService?: () => Promise<DashboardCallbackResult>;
+  onDeleteService?: () => Promise<DashboardCallbackResult>;
 };
 
 export type InteractiveDashboardResult = { type: "back" } | { type: "exit" };
@@ -273,6 +274,20 @@ export async function runInteractiveDashboard(
       case "editService": {
         if (options.onEditService !== undefined) {
           const result = await options.onEditService();
+
+          if (result.type === "exit") {
+            return { type: "exit" };
+          }
+
+          dashboardMessage = result.message;
+        }
+
+        renderFrame(screen, render(options.controller.getState()));
+        break;
+      }
+      case "deleteService": {
+        if (options.onDeleteService !== undefined) {
+          const result = await options.onDeleteService();
 
           if (result.type === "exit") {
             return { type: "exit" };

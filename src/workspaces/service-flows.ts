@@ -30,6 +30,10 @@ export type ServiceFlowOptions = {
   serviceId?: string;
 };
 
+export type DeleteServiceFlowOptions = ServiceFlowOptions & {
+  serviceId: string;
+};
+
 type EditAction = "command" | "cwd" | "autoStart" | "remove";
 
 export async function runAddServiceFlow(
@@ -220,6 +224,51 @@ export async function runEditServiceFlow(
     type: "completed",
     message: formatUpdateMessage(actionResult.value, nextService),
     serviceId: nextService.id,
+  };
+}
+
+export async function runDeleteServiceFlow(
+  options: DeleteServiceFlowOptions,
+): Promise<ServiceFlowResult> {
+  const config = await options.store.load();
+  const workspace = findWorkspace(config, options.workspace.id);
+
+  if (workspace === undefined) {
+    return { type: "back", message: `Workspace "${options.workspace.name}" was not found.` };
+  }
+
+  const service = workspace.services.find((candidate) => candidate.id === options.serviceId);
+
+  if (service === undefined) {
+    return { type: "back", message: "Delete cancelled." };
+  }
+
+  const confirmationResult = await runTextPrompt({
+    title: "Delete service",
+    message: `Type "${service.name}" to delete this service`,
+    keyInput: options.keyInput,
+    screen: options.screen,
+    validate(value) {
+      return value === service.name ? true : "Name does not match. Try again or press Esc to cancel.";
+    },
+  });
+
+  if (confirmationResult.type === "back") {
+    return { type: "back", message: "Delete service cancelled." };
+  }
+  if (confirmationResult.type === "exit") {
+    return { type: "exit" };
+  }
+
+  await options.store.save(updateWorkspace(config, workspace.id, {
+    ...workspace,
+    services: workspace.services.filter((candidate) => candidate.id !== service.id),
+  }));
+
+  return {
+    type: "completed",
+    message: `Deleted service "${service.name}" from workspace "${workspace.name}".`,
+    removedServiceId: service.id,
   };
 }
 
