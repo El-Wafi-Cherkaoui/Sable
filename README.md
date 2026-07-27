@@ -8,7 +8,7 @@ Sable is not a task runner, tmux replacement, IDE, Docker manager, Kubernetes to
 
 ## Status
 
-Sable is early MVP software.
+Sable is early MVP software preparing for a first release candidate. The current focus is reliability, packaging confidence, and clear first-user documentation rather than expanding scope.
 
 Requirements: Node.js 20+ and npm. Sable is intended to work on Windows, macOS, and Linux, with early smoke testing on Windows and Linux.
 
@@ -174,21 +174,18 @@ Sable stores workspace configuration as JSON in an OS-aware user config director
 
 Workspace commands are treated as trusted local configuration.
 
-## Packaging check
+## First-user notes
 
-Preview package contents:
+Sable runs workspace service commands through the user's shell. Treat workspace configuration as trusted local configuration, not as safe input from untrusted sources.
 
-```sh
-npm pack --dry-run
-```
-
-The npm package is configured to include built files from `dist`.
+The primary interactive flow is the no-argument `sable` home picker. Common service actions are direct keys on the selected service; less common global actions belong in command mode.
 
 ## MVP limitations
 
-- no persistent logs
+- no persistent logs; logs are in-memory only
 - no dedicated workspace rename/reorder commands yet
 - no command history or autocomplete
 - no mouse support
-- no colors/themes beyond plain terminal output
+- no theme system or visual customization
+- no panes, built-in editor, file explorer, task runner, Docker/Kubernetes abstraction, SSH, plugin system, or AI features
 - no remote process management
