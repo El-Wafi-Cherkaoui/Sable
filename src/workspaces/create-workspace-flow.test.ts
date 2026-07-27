@@ -1,4 +1,5 @@
 import path from "node:path";
+import os from "node:os";
 import { describe, expect, it, vi } from "vitest";
 import type { AppConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
@@ -122,6 +123,37 @@ describe("runCreateWorkspaceFlow", () => {
     expect(store.savedConfig?.workspaces[0]?.projectDirectory).toBe(validDirectory);
   });
 
+  it("falls back to the home directory when cwd cannot be read", async () => {
+    const store = createStore(emptyConfig);
+    const homeDirectory = path.join(originalCwd, "sable-home");
+    const cwd = vi.spyOn(process, "cwd").mockImplementation(() => {
+      throw Object.assign(new Error("EIO: i/o error, uv_cwd"), {
+        code: "EIO",
+        syscall: "uv_cwd",
+      });
+    });
+    const homedir = vi.spyOn(os, "homedir").mockReturnValue(homeDirectory);
+
+    try {
+      await runCreateWorkspaceFlow({
+        store,
+        keyInput: createKeyInput([
+          ...text("shop"),
+          { name: "return" },
+          { name: "return" },
+        ]),
+        screen: createScreen(),
+        generateId: () => "ws_shop",
+        projectDirectoryExists: (directoryPath) => directoryPath === homeDirectory,
+      });
+    } finally {
+      cwd.mockRestore();
+      homedir.mockRestore();
+    }
+
+    expect(store.savedConfig?.workspaces[0]?.projectDirectory).toBe(homeDirectory);
+  });
+
   it("cancels without saving on Esc", async () => {
     const store = createStore(emptyConfig);
 
@@ -198,3 +230,5 @@ const emptyConfig: AppConfig = {
   version: 1,
   workspaces: [],
 };
+
+const originalCwd = process.cwd();

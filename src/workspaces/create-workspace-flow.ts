@@ -1,4 +1,5 @@
 import { existsSync, statSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
@@ -63,7 +64,7 @@ export async function runCreateWorkspaceFlow(
     message: "Project directory",
     keyInput: options.keyInput,
     screen: options.screen,
-    defaultValue: options.defaultProjectDirectory ?? process.cwd(),
+    defaultValue: options.defaultProjectDirectory ?? getDefaultProjectDirectory(),
     validate(value) {
       const trimmedValue = value.trim();
 
@@ -105,5 +106,17 @@ function defaultProjectDirectoryExists(directoryPath: string): boolean {
     return existsSync(directoryPath) && statSync(directoryPath).isDirectory();
   } catch {
     return false;
+  }
+}
+
+function getDefaultProjectDirectory(): string {
+  try {
+    return process.cwd();
+  } catch {
+    try {
+      return os.homedir() || "";
+    } catch {
+      return "";
+    }
   }
 }
