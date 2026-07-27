@@ -51,6 +51,10 @@ type LoopEvent =
   | { type: "key"; keypress: Awaited<ReturnType<KeyInput["readKey"]>> }
   | { type: "refresh" }
   | { type: "abort" };
+type AbortWait = {
+  promise: Promise<void>;
+  cleanup(): void;
+};
 
 export async function runInteractiveDashboard(
   options: RunInteractiveDashboardOptions,
@@ -404,12 +408,13 @@ export async function runInteractiveDashboard(
 
   async function readKeyOrRefresh(refreshIntervalMs: number): Promise<LoopEvent> {
     pendingKeyRead ??= options.keyInput.readKey();
+    const abortWait = createAbortWait(options.abortSignal);
 
     const event = await Promise.race([
       pendingKeyRead.then((keypress) => ({ type: "key" as const, keypress })),
       wait(refreshIntervalMs).then(() => ({ type: "refresh" as const })),
-      waitForAbort(options.abortSignal).then(() => ({ type: "abort" as const })),
-    ]);
+      abortWait.promise.then(() => ({ type: "abort" as const })),
+    ]).finally(() => abortWait.cleanup());
 
     if (event.type === "key") {
       pendingKeyRead = undefined;
@@ -419,10 +424,12 @@ export async function runInteractiveDashboard(
   }
 
   async function readKeyOrAbort(): Promise<LoopEvent> {
+    const abortWait = createAbortWait(options.abortSignal);
+
     return Promise.race([
       readKeyEvent().then((keypress) => ({ type: "key" as const, keypress })),
-      waitForAbort(options.abortSignal).then(() => ({ type: "abort" as const })),
-    ]);
+      abortWait.promise.then(() => ({ type: "abort" as const })),
+    ]).finally(() => abortWait.cleanup());
   }
 }
 
@@ -430,18 +437,36 @@ function isCtrlC(keypress: Awaited<ReturnType<KeyInput["readKey"]>>): boolean {
   return keypress.ctrl === true && keypress.name === "c";
 }
 
-function waitForAbort(signal: AbortSignal | undefined): Promise<void> {
+function createAbortWait(signal: AbortSignal | undefined): AbortWait {
   if (signal === undefined) {
-    return new Promise(() => undefined);
+    return {
+      promise: new Promise(() => undefined),
+      cleanup() {},
+    };
   }
 
   if (signal.aborted) {
-    return Promise.resolve();
+    return {
+      promise: Promise.resolve(),
+      cleanup() {},
+    };
   }
 
-  return new Promise((resolve) => {
-    signal.addEventListener("abort", () => resolve(), { once: true });
+  let abortListener: (() => void) | undefined;
+
+  const promise = new Promise<void>((resolve) => {
+    abortListener = () => resolve();
+    signal.addEventListener("abort", abortListener, { once: true });
   });
+
+  return {
+    promise,
+    cleanup() {
+      if (abortListener !== undefined) {
+        signal.removeEventListener("abort", abortListener);
+      }
+    },
+  };
 }
 
 function isPrintableCommandCharacter(sequence: string): boolean {

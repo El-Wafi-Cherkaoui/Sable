@@ -43,11 +43,24 @@ export class TerminalKeyInput implements KeyInput {
 
     this.closed = true;
 
-    if (this.input.isTTY) {
-      this.input.setRawMode(this.wasRaw);
+    try {
+      if (this.input.isTTY) {
+        this.input.setRawMode(this.wasRaw);
+      }
+    } catch {
+      // Terminal cleanup is best-effort; continue with the remaining cleanup steps.
     }
 
-    this.readlineInterface.close();
-    this.input.pause();
+    try {
+      this.readlineInterface.close();
+    } catch {
+      // Terminal cleanup is best-effort; continue with the remaining cleanup steps.
+    }
+
+    try {
+      this.input.pause();
+    } catch {
+      // Terminal cleanup is best-effort.
+    }
   }
 }

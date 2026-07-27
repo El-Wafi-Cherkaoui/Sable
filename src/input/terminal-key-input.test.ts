@@ -72,6 +72,32 @@ describe("TerminalKeyInput", () => {
       expect.objectContaining({ close: readlineMocks.close }),
     );
   });
+
+  it("continues cleanup when restoring raw mode fails", () => {
+    const input = createInput({ isTTY: true, isRaw: false });
+    const keyInput = new TerminalKeyInput(input);
+    input.setRawMode.mockImplementationOnce(() => {
+      throw new Error("raw mode failed");
+    });
+
+    expect(() => keyInput.close()).not.toThrow();
+
+    expect(readlineMocks.close).toHaveBeenCalledOnce();
+    expect(input.pause).toHaveBeenCalledOnce();
+  });
+
+  it("continues cleanup when closing readline fails", () => {
+    const input = createInput({ isTTY: true, isRaw: false });
+    const keyInput = new TerminalKeyInput(input);
+    readlineMocks.close.mockImplementationOnce(() => {
+      throw new Error("readline close failed");
+    });
+
+    expect(() => keyInput.close()).not.toThrow();
+
+    expect(input.setRawMode).toHaveBeenNthCalledWith(2, false);
+    expect(input.pause).toHaveBeenCalledOnce();
+  });
 });
 
 function createInput(options: { isTTY: boolean; isRaw: boolean }): NodeJS.ReadStream {

@@ -10,6 +10,8 @@ Sable is not a task runner, tmux replacement, IDE, Docker manager, Kubernetes to
 
 Sable is early MVP software.
 
+Requirements: Node.js 20+ and npm. Sable is intended to work on Windows, macOS, and Linux, with early smoke testing on Windows and Linux.
+
 Current capabilities:
 
 - open a workspace picker/home screen with `sable`

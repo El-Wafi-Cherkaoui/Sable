@@ -84,6 +84,51 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenCalledOnce();
   });
 
+  it("removes abort listeners when key input wins the dashboard race", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const abortController = new AbortController();
+    const addAbortListener = vi.spyOn(abortController.signal, "addEventListener");
+    const removeAbortListener = vi.spyOn(abortController.signal, "removeEventListener");
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "x" }, { sequence: "q" }]),
+      abortSignal: abortController.signal,
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: () => "dashboard",
+    });
+
+    expect(addAbortListener).toHaveBeenCalledTimes(2);
+    expect(removeAbortListener).toHaveBeenCalledTimes(2);
+  });
+
+  it("removes abort listeners when log refresh wins the dashboard race", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const keyInput = createControlledKeyInput([{ name: "return" }]);
+    const abortController = new AbortController();
+    const removeAbortListener = vi.spyOn(abortController.signal, "removeEventListener");
+    const write = vi.fn();
+
+    const runPromise = runInteractiveDashboard({
+      controller,
+      keyInput,
+      abortSignal: abortController.signal,
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderLogs: () => "logs",
+      logsRefreshIntervalMs: 1,
+    });
+
+    await waitForWrite(write, "logs\n");
+    await waitUntil(() => removeAbortListener.mock.calls.length >= 2);
+    keyInput.resolveNext({ sequence: "q" });
+    await runPromise;
+
+    expect(removeAbortListener).toHaveBeenCalled();
+  });
+
   it("ignores unknown keys without re-rendering", async () => {
     const state = createState();
     const controller = {
