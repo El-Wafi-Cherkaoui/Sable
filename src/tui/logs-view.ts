@@ -32,12 +32,14 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
   if (selectedService === undefined) {
     lines.push("No service selected.");
   } else if (options.logs.length === 0) {
-    lines.push("No logs captured yet.");
+    lines.push("No logs yet.");
+    lines.push("");
+    lines.push("Start the service or wait for output.");
   } else {
     lines.push(...visibleLogs.map(formatLogEntry));
   }
 
-  lines.push("", "j/k scroll  g top  G bottom  Esc back  ? help  : command  q quit");
+  lines.push("", "j/k scroll  Esc back  ? help  q quit");
 
   return lines.join("\n");
 }

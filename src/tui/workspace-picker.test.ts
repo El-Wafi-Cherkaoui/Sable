@@ -45,7 +45,7 @@ describe("renderWorkspacePicker", () => {
         "> ecommerce  2 services",
         "  portfolio  1 service",
         "",
-        "j/k select  K/J move  Enter run  c create  e rename  d delete  v view  ? help  q quit",
+        "j/k select  ? help  q quit",
       ].join("\n"),
     );
   });
@@ -54,7 +54,7 @@ describe("renderWorkspacePicker", () => {
 
   it("renders a status message", () => {
     expect(renderWorkspacePicker(createWorkspacePickerState(workspaces, 'Auto-start disabled for "api".'))).toContain(
-      'Auto-start disabled for "api".',
+      'Status: Auto-start disabled for "api".',
     );
   });
 
@@ -97,10 +97,10 @@ describe("renderWorkspacePicker", () => {
 
   it("renders an empty state", () => {
     expect(renderWorkspacePicker(createWorkspacePickerState([]))).toContain(
-      "No workspaces found.",
+      "No workspaces yet.",
     );
     expect(renderWorkspacePicker(createWorkspacePickerState([]))).toContain(
-      "Press c to create one.",
+      "Press c to create your first workspace.",
     );
   });
 

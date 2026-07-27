@@ -220,13 +220,14 @@ export function renderWorkspacePicker(state: WorkspacePickerState): string {
   const lines = ["workspaces", ""];
 
   if (state.statusMessage !== undefined) {
-    lines.push(state.statusMessage, "");
+    lines.push(`Status: ${state.statusMessage}`, "");
   }
 
   if (state.workspaces.length === 0) {
-    lines.push("No workspaces found.");
-    lines.push("Press c to create one.");
-    lines.push("", "c create  ? help  q quit");
+    lines.push("No workspaces yet.");
+    lines.push("");
+    lines.push("Press c to create your first workspace.");
+    lines.push("", "j/k select  ? help  q quit");
     return lines.join("\n");
   }
 
@@ -243,7 +244,7 @@ export function renderWorkspacePicker(state: WorkspacePickerState): string {
     );
   }
 
-  lines.push("", "j/k select  K/J move  Enter run  c create  e rename  d delete  v view  ? help  q quit");
+  lines.push("", "j/k select  ? help  q quit");
 
   return lines.join("\n");
 }

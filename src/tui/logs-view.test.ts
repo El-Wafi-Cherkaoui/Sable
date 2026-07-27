@@ -23,7 +23,7 @@ describe("renderLogsView", () => {
         "stdout server ready",
         "stderr warning",
         "",
-        "j/k scroll  g top  G bottom  Esc back  ? help  : command  q quit",
+        "j/k scroll  Esc back  ? help  q quit",
       ].join("\n"),
     );
   });
@@ -66,7 +66,7 @@ describe("renderLogsView", () => {
         scrollOffset: 0,
         visibleLineCount: 10,
       }),
-    ).toContain("No logs captured yet.");
+    ).toContain("No logs yet.");
     expect(
       renderLogsView({
         state: createState(),
@@ -75,6 +75,14 @@ describe("renderLogsView", () => {
         visibleLineCount: 10,
       }),
     ).toContain("0 lines");
+    expect(
+      renderLogsView({
+        state: createState(),
+        logs: [],
+        scrollOffset: 0,
+        visibleLineCount: 10,
+      }),
+    ).toContain("Start the service or wait for output.");
   });
 });
 

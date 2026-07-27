@@ -10,17 +10,19 @@ export function renderStaticDashboard(
   state: RuntimeWorkspaceState,
   options: RenderStaticDashboardOptions = {},
 ): string {
-  const dashboardFooter = `j/k select  K/J move  a add  e edit  d delete  S start  s stop  r restart  Enter logs  ? help  : command  q ${
+  const dashboardFooter = `j/k select  ? help  q ${
     options.quitLabel ?? "quit"
   }`;
   const lines = [state.workspace.name, ""];
 
   if (options.statusMessage !== undefined) {
-    lines.push(options.statusMessage, "");
+    lines.push(`Status: ${options.statusMessage}`, "");
   }
 
   if (state.services.length === 0) {
-    lines.push("No services yet. Press a to add one.");
+    lines.push("No services yet.");
+    lines.push("");
+    lines.push("Press a to add a service to this workspace.");
     lines.push("", dashboardFooter);
     return lines.join("\n");
   }
