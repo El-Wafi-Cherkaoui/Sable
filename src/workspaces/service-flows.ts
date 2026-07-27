@@ -34,7 +34,7 @@ export type DeleteServiceFlowOptions = ServiceFlowOptions & {
   serviceId: string;
 };
 
-type EditAction = "command" | "cwd" | "autoStart" | "remove";
+type EditAction = "rename" | "command" | "cwd" | "autoStart" | "remove";
 
 export async function runAddServiceFlow(
   options: ServiceFlowOptions,
@@ -171,6 +171,7 @@ export async function runEditServiceFlow(
     keyInput: options.keyInput,
     screen: options.screen,
     choices: [
+      { label: "Rename service", value: "rename" },
       { label: "Edit command", value: "command" },
       { label: "Edit working directory", value: "cwd" },
       { label: "Toggle auto-start", value: "autoStart" },
@@ -210,6 +211,7 @@ export async function runEditServiceFlow(
     keyInput: options.keyInput,
     screen: options.screen,
     directoryExists,
+    workspace,
   });
   if (nextServiceResult.type === "back") return { type: "back", message: "Edit cancelled." };
   if (nextServiceResult.type === "exit") return { type: "exit" };
@@ -222,7 +224,7 @@ export async function runEditServiceFlow(
 
   return {
     type: "completed",
-    message: formatUpdateMessage(actionResult.value, nextService),
+    message: formatUpdateMessage(actionResult.value, service, nextService),
     serviceId: nextService.id,
   };
 }
@@ -294,6 +296,7 @@ async function promptForServiceToEdit(options: {
 type UpdateServiceFromActionOptions = {
   action: Exclude<EditAction, "remove">;
   service: ServiceConfig;
+  workspace: WorkspaceConfig;
   keyInput: KeyInput;
   screen?: PromptScreen;
   directoryExists: (directoryPath: string) => boolean;
@@ -302,6 +305,35 @@ type UpdateServiceFromActionOptions = {
 async function updateServiceFromAction(
   options: UpdateServiceFromActionOptions,
 ): Promise<{ type: "submit"; value: ServiceConfig } | { type: "back" } | { type: "exit" }> {
+  if (options.action === "rename") {
+    const result = await runTextPrompt({
+      title: "Edit service",
+      message: "Service name",
+      keyInput: options.keyInput,
+      screen: options.screen,
+      defaultValue: options.service.name,
+      validate(value) {
+        const trimmedValue = value.trim();
+
+        if (trimmedValue.length === 0) {
+          return "Service name is required.";
+        }
+
+        if (options.workspace.services.some((candidate) =>
+          candidate.id !== options.service.id &&
+          normalizeName(candidate.name) === normalizeName(trimmedValue)
+        )) {
+          return `Service "${trimmedValue}" already exists in this workspace.`;
+        }
+
+        return true;
+      },
+    });
+
+    if (result.type !== "submit") return result;
+    return { type: "submit", value: { ...options.service, name: result.value.trim() } };
+  }
+
   if (options.action === "autoStart") {
     return { type: "submit", value: { ...options.service, autoStart: !options.service.autoStart } };
   }
@@ -370,9 +402,12 @@ function updateWorkspace(
 
 function formatUpdateMessage(
   action: Exclude<EditAction, "remove">,
+  previousService: ServiceConfig,
   service: ServiceConfig,
 ): string {
   switch (action) {
+    case "rename":
+      return `Renamed service "${previousService.name}" to "${service.name}".`;
     case "command":
       return `Updated command for "${service.name}".`;
     case "cwd":

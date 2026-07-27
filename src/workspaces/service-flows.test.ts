@@ -75,6 +75,36 @@ describe("runAddServiceFlow", () => {
 });
 
 describe("runEditServiceFlow", () => {
+  it("renames a service through native prompts", async () => {
+    const store = createStore(config);
+
+    await expect(
+      runEditServiceFlow({
+        store,
+        workspace,
+        keyInput: createKeyInput([
+          { name: "return" },
+          { name: "return" },
+          ...backspaces("api".length),
+          { sequence: "b" },
+          { sequence: "a" },
+          { sequence: "c" },
+          { sequence: "k" },
+          { sequence: "e" },
+          { sequence: "n" },
+          { sequence: "d" },
+          { name: "return" },
+        ]),
+        screen: createScreen(),
+      }),
+    ).resolves.toEqual({
+      type: "completed",
+      message: 'Renamed service "api" to "backend".',
+      serviceId: "svc_api",
+    });
+    expect(store.savedConfig?.workspaces[0]?.services[0]?.name).toBe("backend");
+  });
+
   it("toggles autoStart through native prompts", async () => {
     const store = createStore(config);
 
@@ -84,6 +114,7 @@ describe("runEditServiceFlow", () => {
         workspace,
         keyInput: createKeyInput([
           { name: "return" },
+          { sequence: "j" },
           { sequence: "j" },
           { sequence: "j" },
           { name: "return" },
@@ -96,6 +127,63 @@ describe("runEditServiceFlow", () => {
       serviceId: "svc_api",
     });
     expect(store.savedConfig?.workspaces[0]?.services[0]?.autoStart).toBe(false);
+  });
+
+  it("rejects duplicate service names case-insensitively while renaming", async () => {
+    const store = createStore(configWithTwoServices);
+    const screen = createScreen();
+
+    await runEditServiceFlow({
+      store,
+      workspace: workspaceWithTwoServices,
+      serviceId: "svc_api",
+      keyInput: createKeyInput([
+        { name: "return" },
+        ...backspaces("api".length),
+        { sequence: "W" },
+        { sequence: "O" },
+        { sequence: "R" },
+        { sequence: "K" },
+        { sequence: "E" },
+        { sequence: "R" },
+        { name: "return" },
+        ...backspaces("WORKER".length),
+        { sequence: "b" },
+        { sequence: "a" },
+        { sequence: "c" },
+        { sequence: "k" },
+        { sequence: "e" },
+        { sequence: "n" },
+        { sequence: "d" },
+        { name: "return" },
+      ]),
+      screen,
+    });
+
+    expect(screen.output()).toContain('Service "WORKER" already exists in this workspace.');
+    expect(store.savedConfig?.workspaces[0]?.services.map((service) => service.name)).toEqual([
+      "backend",
+      "worker",
+    ]);
+  });
+
+  it("allows an unchanged service name while renaming", async () => {
+    const store = createStore(config);
+
+    await expect(
+      runEditServiceFlow({
+        store,
+        workspace,
+        serviceId: "svc_api",
+        keyInput: createKeyInput([{ name: "return" }, { name: "return" }]),
+        screen: createScreen(),
+      }),
+    ).resolves.toEqual({
+      type: "completed",
+      message: 'Renamed service "api" to "api".',
+      serviceId: "svc_api",
+    });
+    expect(store.savedConfig?.workspaces[0]?.services[0]?.name).toBe("api");
   });
 
   it("goes back from service selection repeatedly without saving", async () => {
@@ -234,10 +322,17 @@ function createKeyInput(keys: Awaited<ReturnType<KeyInput["readKey"]>>[]): KeyIn
 }
 
 function createScreen() {
+  const writes: string[] = [];
+
   return {
     clear: vi.fn(),
-    write: vi.fn(),
+    write: vi.fn((contents: string) => writes.push(contents)),
+    output: () => writes.join("\n"),
   };
+}
+
+function backspaces(count: number): Array<{ name: "backspace" }> {
+  return Array.from({ length: count }, () => ({ name: "backspace" as const }));
 }
 
 const projectDirectory = path.resolve("C:\\projects\\shop");
@@ -259,4 +354,24 @@ const workspace = {
 const config: AppConfig = {
   version: 1,
   workspaces: [workspace],
+};
+
+const workspaceWithTwoServices = {
+  ...workspace,
+  services: [
+    ...workspace.services,
+    {
+      id: "svc_worker",
+      name: "worker",
+      command: "npm run worker",
+      cwd: projectDirectory,
+      autoStart: false,
+      env: {},
+    },
+  ],
+};
+
+const configWithTwoServices: AppConfig = {
+  version: 1,
+  workspaces: [workspaceWithTwoServices],
 };
