@@ -18,7 +18,10 @@ describe("mapWorkspacePickerKey", () => {
     expect(mapWorkspacePickerKey({ name: "return" })).toBe("run");
     expect(mapWorkspacePickerKey({ sequence: "\r" })).toBe("run");
     expect(mapWorkspacePickerKey({ sequence: "c" })).toBe("createWorkspace");
+    expect(mapWorkspacePickerKey({ sequence: "e" })).toBe("renameWorkspace");
     expect(mapWorkspacePickerKey({ sequence: "d" })).toBe("deleteWorkspace");
+    expect(mapWorkspacePickerKey({ sequence: "K" })).toBe("moveWorkspaceUp");
+    expect(mapWorkspacePickerKey({ sequence: "J" })).toBe("moveWorkspaceDown");
     expect(mapWorkspacePickerKey({ sequence: "v" })).toBe("view");
     expect(mapWorkspacePickerKey({ sequence: "?" })).toBe("openHelp");
     expect(mapWorkspacePickerKey({ sequence: "q" })).toBe("quit");
@@ -26,7 +29,7 @@ describe("mapWorkspacePickerKey", () => {
 
   it("ignores service action keys in the picker", () => {
     expect(mapWorkspacePickerKey({ sequence: "a" })).toBe("none");
-    expect(mapWorkspacePickerKey({ sequence: "e" })).toBe("none");
+    expect(mapWorkspacePickerKey({ sequence: "S" })).toBe("none");
   });
 
   it("ignores unknown picker keys", () => {

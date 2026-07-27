@@ -15,12 +15,14 @@ Requirements: Node.js 20+ and npm. Sable is intended to work on Windows, macOS, 
 Current capabilities:
 
 - open a workspace picker/home screen with `sable`
-- create, list, delete, and run saved workspaces
+- create, list, rename, reorder, delete, and run saved workspaces
 - create blank workspaces from the picker
+- rename workspaces from the picker
+- reorder workspaces directly from the picker
 - delete workspaces from the picker with typed-name confirmation
 - view workspace details from the picker
 - add services from the running workspace dashboard
-- edit stopped/failed services from the running workspace dashboard
+- edit non-running services from the running workspace dashboard
 - start, stop, and restart selected services
 - show concise failed/exited details in the service dashboard
 - capture stdout, stderr, and lifecycle logs in memory
@@ -106,10 +108,13 @@ j / Down    select next workspace
 k / Up      select previous workspace
 Enter       run selected workspace
 c           create blank workspace
+e           rename selected workspace
 d           delete selected workspace
+K           move selected workspace up
+J           move selected workspace down
 v           view selected workspace details
 ?           show help
-Esc         back from help/details/create/delete flows
+Esc         back from help/details/create/delete/rename flows
 q           quit Sable from the picker
 Ctrl+C      quit Sable from anywhere
 ```
@@ -184,7 +189,6 @@ The primary interactive flow is the no-argument `sable` home picker. Common serv
 ## MVP limitations
 
 - no persistent logs; logs are in-memory only
-- no dedicated workspace rename/reorder commands yet
 - no command history or autocomplete
 - no mouse support
 - no theme system or visual customization

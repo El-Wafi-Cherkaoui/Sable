@@ -12,6 +12,9 @@ export type WorkspacePickerResult =
   | { type: "run"; workspace: WorkspaceConfig }
   | { type: "createWorkspace" }
   | { type: "deleteWorkspace"; workspace: WorkspaceConfig }
+  | { type: "renameWorkspace"; workspace: WorkspaceConfig }
+  | { type: "moveWorkspaceUp"; workspace: WorkspaceConfig }
+  | { type: "moveWorkspaceDown"; workspace: WorkspaceConfig }
   | { type: "exit" };
 
 export type WorkspacePickerScreen = {
@@ -118,6 +121,33 @@ export async function runWorkspacePicker(
 
         break;
       }
+      case "renameWorkspace": {
+        const workspace = getSelectedWorkspace(state);
+
+        if (workspace !== undefined) {
+          return { type: "renameWorkspace", workspace };
+        }
+
+        break;
+      }
+      case "moveWorkspaceUp": {
+        const workspace = getSelectedWorkspace(state);
+
+        if (workspace !== undefined) {
+          return { type: "moveWorkspaceUp", workspace };
+        }
+
+        break;
+      }
+      case "moveWorkspaceDown": {
+        const workspace = getSelectedWorkspace(state);
+
+        if (workspace !== undefined) {
+          return { type: "moveWorkspaceDown", workspace };
+        }
+
+        break;
+      }
       case "openHelp":
         mode = "help";
         renderFrame(screen, renderHelp());
@@ -213,7 +243,7 @@ export function renderWorkspacePicker(state: WorkspacePickerState): string {
     );
   }
 
-  lines.push("", "j/k move  Enter run  c create  d delete  v view  ? help  q quit");
+  lines.push("", "j/k select  K/J move  Enter run  c create  e rename  d delete  v view  ? help  q quit");
 
   return lines.join("\n");
 }
@@ -229,7 +259,10 @@ export function renderWorkspacePickerHelp(): string {
     "Workspace",
     "Enter       run selected workspace",
     "c           create blank workspace",
+    "e           rename selected workspace",
     "d           delete selected workspace",
+    "K           move selected workspace up",
+    "J           move selected workspace down",
     "v           view selected workspace",
     "",
     "Global",

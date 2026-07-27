@@ -38,6 +38,9 @@ export type WorkspacePickerAction =
   | "run"
   | "createWorkspace"
   | "deleteWorkspace"
+  | "renameWorkspace"
+  | "moveWorkspaceUp"
+  | "moveWorkspaceDown"
   | "view"
   | "openHelp"
   | "quit"
@@ -58,6 +61,18 @@ export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction
 
   if (keypress.sequence === "v") {
     return "view";
+  }
+
+  if (keypress.sequence === "e") {
+    return "renameWorkspace";
+  }
+
+  if (keypress.sequence === "K") {
+    return "moveWorkspaceUp";
+  }
+
+  if (keypress.sequence === "J") {
+    return "moveWorkspaceDown";
   }
 
   if (keypress.sequence === "c") {

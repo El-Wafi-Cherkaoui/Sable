@@ -45,7 +45,7 @@ describe("renderWorkspacePicker", () => {
         "> ecommerce  2 services",
         "  portfolio  1 service",
         "",
-        "j/k move  Enter run  c create  d delete  v view  ? help  q quit",
+        "j/k select  K/J move  Enter run  c create  e rename  d delete  v view  ? help  q quit",
       ].join("\n"),
     );
   });
@@ -107,7 +107,10 @@ describe("renderWorkspacePicker", () => {
   it("renders help", () => {
     expect(renderWorkspacePickerHelp()).toContain("Enter       run selected workspace");
     expect(renderWorkspacePickerHelp()).toContain("c           create blank workspace");
+    expect(renderWorkspacePickerHelp()).toContain("e           rename selected workspace");
     expect(renderWorkspacePickerHelp()).toContain("d           delete selected workspace");
+    expect(renderWorkspacePickerHelp()).toContain("K           move selected workspace up");
+    expect(renderWorkspacePickerHelp()).toContain("J           move selected workspace down");
     expect(renderWorkspacePickerHelp()).toContain("v           view selected workspace");
     expect(renderWorkspacePickerHelp()).not.toContain("add service");
     expect(renderWorkspacePickerHelp()).not.toContain("edit service");
@@ -180,6 +183,36 @@ describe("runWorkspacePicker", () => {
     ).resolves.toEqual({ type: "createWorkspace" });
   });
 
+  it("returns the selected workspace on rename", async () => {
+    await expect(
+      runWorkspacePicker({
+        workspaces,
+        keyInput: createKeyInput([{ sequence: "e" }]),
+        screen: { clear: vi.fn(), write: vi.fn() },
+      }),
+    ).resolves.toEqual({ type: "renameWorkspace", workspace: workspaces[0] });
+  });
+
+  it("returns the selected workspace on move up", async () => {
+    await expect(
+      runWorkspacePicker({
+        workspaces,
+        keyInput: createKeyInput([{ sequence: "K" }]),
+        screen: { clear: vi.fn(), write: vi.fn() },
+      }),
+    ).resolves.toEqual({ type: "moveWorkspaceUp", workspace: workspaces[0] });
+  });
+
+  it("returns the selected workspace on move down", async () => {
+    await expect(
+      runWorkspacePicker({
+        workspaces,
+        keyInput: createKeyInput([{ sequence: "J" }]),
+        screen: { clear: vi.fn(), write: vi.fn() },
+      }),
+    ).resolves.toEqual({ type: "moveWorkspaceDown", workspace: workspaces[0] });
+  });
+
   it("returns the selected workspace on delete", async () => {
     await expect(
       runWorkspacePicker({
@@ -193,7 +226,7 @@ describe("runWorkspacePicker", () => {
   it("ignores service action keys in the picker", async () => {
     const result = await runWorkspacePicker({
       workspaces,
-      keyInput: createKeyInput([{ sequence: "a" }, { sequence: "e" }, { sequence: "q" }]),
+      keyInput: createKeyInput([{ sequence: "a" }, { sequence: "S" }, { sequence: "q" }]),
       screen: { clear: vi.fn(), write: vi.fn() },
     });
 
