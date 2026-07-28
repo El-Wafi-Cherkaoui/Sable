@@ -35,6 +35,7 @@ describe("ConfigStore", () => {
           id: "workspace-1",
           name: "ecommerce",
           projectDirectory: "/projects/ecommerce",
+          commands: [],
           services: [
             {
               id: "service-1",
@@ -90,6 +91,7 @@ describe("ConfigStore", () => {
           id: "workspace-1",
           name: "ecommerce",
           projectDirectory: path.resolve("/projects/ecommerce/backend"),
+          commands: [],
           services: [
             {
               id: "service-1",
@@ -131,6 +133,7 @@ describe("ConfigStore", () => {
           name: "empty",
           projectDirectory: process.cwd(),
           services: [],
+          commands: [],
         },
       ],
     });

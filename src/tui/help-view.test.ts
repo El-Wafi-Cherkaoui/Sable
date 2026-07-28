@@ -7,9 +7,10 @@ describe("renderHelpView", () => {
 
     expect(rendered).toContain("Dashboard");
     expect(rendered).toContain("S           start selected service");
-    expect(rendered).toContain("d           delete selected non-running service");
+    expect(rendered).toContain("a           add service or command");
+    expect(rendered).toContain("d           delete selected non-running item");
     expect(rendered).toContain("K           move selected service up");
-    expect(rendered).toContain("Enter       show selected service logs");
+    expect(rendered).toContain("Enter       show selected logs/output");
     expect(rendered).toContain(":           command mode");
     expect(rendered).toContain("Esc back  : command  q quit");
   });

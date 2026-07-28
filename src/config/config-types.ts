@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type {
   appConfigSchema,
+  commandConfigSchema,
   serviceConfigSchema,
   workspaceConfigSchema,
 } from "./config-schema.js";
@@ -8,3 +9,4 @@ import type {
 export type AppConfig = z.infer<typeof appConfigSchema>;
 export type WorkspaceConfig = z.infer<typeof workspaceConfigSchema>;
 export type ServiceConfig = z.infer<typeof serviceConfigSchema>;
+export type CommandConfig = z.infer<typeof commandConfigSchema>;

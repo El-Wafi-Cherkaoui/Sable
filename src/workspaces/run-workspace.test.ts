@@ -102,6 +102,39 @@ describe("runWorkspaceCommand", () => {
 });
 
 describe("runWorkspaceSession", () => {
+  it("adds a command through the dashboard add callback", async () => {
+    const controller = createFakeController(workspace);
+    const store = createStore(config);
+
+    await runWorkspaceSession({
+      workspace,
+      createController: () => controller,
+      keyInput: createKeyInput([
+        { sequence: "j" },
+        { name: "return" },
+        ...text("build"),
+        { name: "return" },
+        ...text("npm run build"),
+        { name: "return" },
+        { name: "return" },
+      ]),
+      store,
+      runDashboard: async ({ onAddService }) => {
+        await expect(onAddService?.()).resolves.toEqual({
+          type: "continue",
+          message: 'Added command "build" to workspace "ecommerce".',
+        });
+
+        return { type: "back" };
+      },
+    });
+
+    expect(controller.addCommand).toHaveBeenCalledWith(expect.objectContaining({
+      name: "build",
+      command: "npm run build",
+    }));
+  });
+
   it("deletes a stopped selected service through the dashboard callback", async () => {
     const controller = createFakeController(workspaceWithService);
     const store = createStore(configWithService);
@@ -215,7 +248,7 @@ function createStore(appConfig: AppConfig) {
   return {
     savedConfig: undefined as AppConfig | undefined,
     async load() {
-      return appConfig;
+      return this.savedConfig ?? appConfig;
     },
     async save(config: AppConfig) {
       this.savedConfig = config;
@@ -234,6 +267,7 @@ function createFakeController(workspaceConfig: WorkspaceConfig) {
     restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
     startService: vi.fn(async () => ({ status: "running" as const })),
     addService: vi.fn(() => createRuntimeState(workspaceConfig)),
+    addCommand: vi.fn(() => createRuntimeState(workspaceConfig)),
     updateService: vi.fn(() => createRuntimeState(workspaceConfig)),
     removeService: vi.fn(() => createRuntimeState(workspaceConfig)),
     moveService: vi.fn(() => createRuntimeState(workspaceConfig)),
@@ -247,6 +281,10 @@ function createKeyInput(keys: Array<{ sequence?: string; name?: string; ctrl?: b
     readKey: vi.fn(async () => keys.shift() ?? { sequence: "q" }),
     close: vi.fn(),
   };
+}
+
+function text(value: string): Array<{ sequence: string }> {
+  return [...value].map((sequence) => ({ sequence }));
 }
 
 function createSignalSource() {
@@ -293,6 +331,7 @@ const workspace: WorkspaceConfig = {
   name: "ecommerce",
   projectDirectory: process.cwd(),
   services: [],
+  commands: [],
 };
 
 const workspaceWithService: WorkspaceConfig = {

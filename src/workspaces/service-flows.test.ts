@@ -4,6 +4,8 @@ import type { AppConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import {
   runAddServiceFlow,
+  runAddWorkspaceItemFlow,
+  runAddCommandFlow,
   runDeleteServiceFlow,
   runEditServiceFlow,
   type ServiceFlowStore,
@@ -71,6 +73,84 @@ describe("runAddServiceFlow", () => {
       }),
     ).resolves.toEqual({ type: "exit" });
     expect(store.savedConfig).toBeUndefined();
+  });
+});
+
+describe("runAddWorkspaceItemFlow", () => {
+  it("asks whether to add a service or command before running the selected flow", async () => {
+    const store = createStore(config);
+
+    await expect(
+      runAddWorkspaceItemFlow({
+        store,
+        workspace,
+        keyInput: createKeyInput([
+          { sequence: "j" },
+          { name: "return" },
+          ...text("build"),
+          { name: "return" },
+          ...text("npm run build"),
+          { name: "return" },
+          { name: "return" },
+        ]),
+        screen: createScreen(),
+        generateId: vi.fn(() => "cmd_build"),
+        directoryExists: () => true,
+      }),
+    ).resolves.toEqual({
+      type: "completed",
+      message: 'Added command "build" to workspace "ecommerce".',
+      commandId: "cmd_build",
+    });
+    expect(store.savedConfig?.workspaces[0]?.commands[0]).toMatchObject({
+      id: "cmd_build",
+      name: "build",
+      command: "npm run build",
+      cwd: projectDirectory,
+      env: {},
+    });
+  });
+
+  it("goes back from the add-kind chooser without saving", async () => {
+    const store = createStore(config);
+
+    await expect(
+      runAddWorkspaceItemFlow({
+        store,
+        workspace,
+        keyInput: createKeyInput([{ name: "escape" }]),
+        screen: createScreen(),
+      }),
+    ).resolves.toEqual({ type: "back", message: "Add cancelled." });
+    expect(store.savedConfig).toBeUndefined();
+  });
+});
+
+describe("runAddCommandFlow", () => {
+  it("adds a command through native prompts", async () => {
+    const store = createStore(config);
+
+    await expect(
+      runAddCommandFlow({
+        store,
+        workspace,
+        keyInput: createKeyInput([
+          ...text("test"),
+          { name: "return" },
+          ...text("npm test"),
+          { name: "return" },
+          { name: "return" },
+        ]),
+        screen: createScreen(),
+        generateId: vi.fn(() => "cmd_test"),
+        directoryExists: () => true,
+      }),
+    ).resolves.toEqual({
+      type: "completed",
+      message: 'Added command "test" to workspace "ecommerce".',
+      commandId: "cmd_test",
+    });
+    expect(store.savedConfig?.workspaces[0]?.commands[0]?.command).toBe("npm test");
   });
 });
 
@@ -335,6 +415,10 @@ function backspaces(count: number): Array<{ name: "backspace" }> {
   return Array.from({ length: count }, () => ({ name: "backspace" as const }));
 }
 
+function text(value: string): Array<{ sequence: string }> {
+  return [...value].map((sequence) => ({ sequence }));
+}
+
 const projectDirectory = path.resolve("C:\\projects\\shop");
 const workspace = {
   id: "ws_ecommerce",
@@ -350,6 +434,7 @@ const workspace = {
       env: {},
     },
   ],
+  commands: [],
 };
 const config: AppConfig = {
   version: 1,

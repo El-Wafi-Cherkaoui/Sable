@@ -98,6 +98,7 @@ describe("runCreateWorkspaceCommand", () => {
           name: "ecommerce",
           projectDirectory,
           services: [],
+          commands: [],
         },
       ],
     });
@@ -110,6 +111,7 @@ describe("runCreateWorkspaceCommand", () => {
       name: "api",
       projectDirectory,
       services: [],
+      commands: [],
     };
     const store = createStore({
       version: 1,
@@ -131,6 +133,7 @@ describe("runCreateWorkspaceCommand", () => {
         name: "web",
         projectDirectory,
         services: [],
+        commands: [],
       },
     ]);
   });
@@ -158,6 +161,7 @@ describe("runCreateWorkspaceCommand", () => {
       id: "ws_efgh5678",
       name: "ecommerce",
       projectDirectory,
+      commands: [],
       services: [
         {
           id: "svc_abcd1234",

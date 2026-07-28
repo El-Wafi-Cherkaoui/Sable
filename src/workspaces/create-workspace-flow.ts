@@ -87,6 +87,7 @@ export async function runCreateWorkspaceFlow(
     name: nameResult.value.trim(),
     projectDirectory: path.resolve(projectDirectoryResult.value.trim()),
     services: [],
+    commands: [],
   };
 
   await options.store.save({

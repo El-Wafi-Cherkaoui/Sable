@@ -1,14 +1,19 @@
-import type { ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
+import type { CommandConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
 import {
   createRuntimeState,
   addServiceToRuntimeState,
+  addCommandToRuntimeState,
+  getSelectedCommand,
   getSelectedService,
   moveServiceInRuntimeState,
   removeServiceFromRuntimeState,
+  removeCommandFromRuntimeState,
   selectNextService,
   selectPreviousService,
+  updateCommandConfigInRuntimeState,
   updateServiceConfigInRuntimeState,
+  updateCommandProcessState,
   updateServiceProcessState,
   type RuntimeWorkspaceState,
 } from "../runtime/runtime-state.js";
@@ -16,10 +21,11 @@ import {
 type MaybePromise<T> = T | Promise<T>;
 
 export type WorkspaceProcessManager = {
-  start(service: ServiceConfig): MaybePromise<ManagedProcessState>;
+  start(service: ServiceConfig | CommandConfig): MaybePromise<ManagedProcessState>;
   stop(serviceId: string): Promise<ManagedProcessState>;
-  restart(service: ServiceConfig): Promise<ManagedProcessState>;
+  restart(service: ServiceConfig | CommandConfig): Promise<ManagedProcessState>;
   getLogs(serviceId: string): ServiceLogEntry[];
+  getState(serviceId: string): ManagedProcessState;
   stopAll(): Promise<void>;
 };
 
@@ -38,6 +44,8 @@ export class WorkspaceController {
   }
 
   getState(): RuntimeWorkspaceState {
+    this.syncProcessStates();
+
     return this.state;
   }
 
@@ -91,16 +99,39 @@ export class WorkspaceController {
 
   async startSelectedService(): Promise<ManagedProcessState> {
     const selectedService = getSelectedService(this.state);
+    const selectedCommand = getSelectedCommand(this.state);
 
-    if (selectedService === undefined) {
+    if (selectedService === undefined && selectedCommand === undefined) {
       return { status: "stopped" };
     }
 
-    return this.startService(selectedService.service.id);
+    if (selectedCommand !== undefined) {
+      return this.startCommand(selectedCommand.command.id);
+    }
+
+    return this.startService(selectedService!.service.id);
+  }
+
+  async startCommand(commandId: string): Promise<ManagedProcessState> {
+    const command = this.findCommand(commandId);
+
+    if (command === undefined) {
+      return { status: "stopped" };
+    }
+
+    return this.runCommandProcessAction(commandId, () =>
+      this.processManager.start(command),
+    );
   }
 
   addService(service: ServiceConfig): RuntimeWorkspaceState {
     this.state = addServiceToRuntimeState(this.state, service);
+
+    return this.state;
+  }
+
+  addCommand(command: CommandConfig): RuntimeWorkspaceState {
+    this.state = addCommandToRuntimeState(this.state, command);
 
     return this.state;
   }
@@ -111,8 +142,20 @@ export class WorkspaceController {
     return this.state;
   }
 
+  updateCommand(command: CommandConfig): RuntimeWorkspaceState {
+    this.state = updateCommandConfigInRuntimeState(this.state, command);
+
+    return this.state;
+  }
+
   removeService(serviceId: string): RuntimeWorkspaceState {
     this.state = removeServiceFromRuntimeState(this.state, serviceId);
+
+    return this.state;
+  }
+
+  removeCommand(commandId: string): RuntimeWorkspaceState {
+    this.state = removeCommandFromRuntimeState(this.state, commandId);
 
     return this.state;
   }
@@ -125,22 +168,42 @@ export class WorkspaceController {
 
   async stopSelectedService(): Promise<ManagedProcessState> {
     const selectedService = getSelectedService(this.state);
+    const selectedCommand = getSelectedCommand(this.state);
 
-    if (selectedService === undefined) {
+    if (selectedService === undefined && selectedCommand === undefined) {
       return { status: "stopped" };
     }
 
-    return this.stopService(selectedService.service.id);
+    if (selectedCommand !== undefined) {
+      return this.stopCommand(selectedCommand.command.id);
+    }
+
+    return this.stopService(selectedService!.service.id);
+  }
+
+  async stopCommand(commandId: string): Promise<ManagedProcessState> {
+    if (this.findCommand(commandId) === undefined) {
+      return { status: "stopped" };
+    }
+
+    return this.runCommandProcessAction(commandId, () =>
+      this.processManager.stop(commandId),
+    );
   }
 
   async restartSelectedService(): Promise<ManagedProcessState> {
     const selectedService = getSelectedService(this.state);
+    const selectedCommand = getSelectedCommand(this.state);
 
-    if (selectedService === undefined) {
+    if (selectedService === undefined && selectedCommand === undefined) {
       return { status: "stopped" };
     }
 
-    return this.restartService(selectedService.service.id);
+    if (selectedCommand !== undefined) {
+      return this.startCommand(selectedCommand.command.id);
+    }
+
+    return this.restartService(selectedService!.service.id);
   }
 
   selectNextService(): RuntimeWorkspaceState {
@@ -165,12 +228,25 @@ export class WorkspaceController {
 
   getSelectedServiceLogs(): ServiceLogEntry[] {
     const selectedService = getSelectedService(this.state);
+    const selectedCommand = getSelectedCommand(this.state);
 
-    if (selectedService === undefined) {
+    if (selectedService === undefined && selectedCommand === undefined) {
       return [];
     }
 
-    return this.getServiceLogs(selectedService.service.id);
+    if (selectedCommand !== undefined) {
+      return this.getCommandLogs(selectedCommand.command.id);
+    }
+
+    return this.getServiceLogs(selectedService!.service.id);
+  }
+
+  getCommandLogs(commandId: string): ServiceLogEntry[] {
+    if (this.findCommand(commandId) === undefined) {
+      return [];
+    }
+
+    return this.processManager.getLogs(commandId);
   }
 
   async shutdown(): Promise<void> {
@@ -185,6 +261,34 @@ export class WorkspaceController {
     }
 
     return this.state.services[index]?.service;
+  }
+
+  private syncProcessStates(): void {
+    for (const serviceState of this.state.services) {
+      this.state = updateServiceProcessState(
+        this.state,
+        serviceState.service.id,
+        this.processManager.getState(serviceState.service.id),
+      );
+    }
+
+    for (const commandState of this.state.commands) {
+      this.state = updateCommandProcessState(
+        this.state,
+        commandState.command.id,
+        this.processManager.getState(commandState.command.id),
+      );
+    }
+  }
+
+  private findCommand(commandId: string): CommandConfig | undefined {
+    const index = this.state.commandIndexById[commandId];
+
+    if (index === undefined) {
+      return undefined;
+    }
+
+    return this.state.commands[index]?.command;
   }
 
   private async runProcessAction(
@@ -202,6 +306,26 @@ export class WorkspaceController {
         error: error instanceof Error ? error : new Error(String(error)),
       };
       this.state = updateServiceProcessState(this.state, serviceId, processState);
+
+      return processState;
+    }
+  }
+
+  private async runCommandProcessAction(
+    commandId: string,
+    action: () => MaybePromise<ManagedProcessState>,
+  ): Promise<ManagedProcessState> {
+    try {
+      const processState = await action();
+      this.state = updateCommandProcessState(this.state, commandId, processState);
+
+      return processState;
+    } catch (error) {
+      const processState: ManagedProcessState = {
+        status: "failed",
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+      this.state = updateCommandProcessState(this.state, commandId, processState);
 
       return processState;
     }

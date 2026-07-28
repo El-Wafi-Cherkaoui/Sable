@@ -70,6 +70,7 @@ export async function runCreateWorkspaceCommand(
         name: workspaceName,
         projectDirectory,
         services,
+        commands: [],
       },
     ],
   };

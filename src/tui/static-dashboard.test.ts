@@ -15,7 +15,7 @@ describe("renderStaticDashboard", () => {
         "  frontend  stopped",
         "  worker    failed: failed",
         "",
-        "",
+        "Status: Service stays running; use S start, s stop, r restart, Enter for logs.",
         "j/k select  ? help  q quit",
       ].join("\n"),
     );
@@ -26,18 +26,22 @@ describe("renderStaticDashboard", () => {
       renderStaticDashboard({
         workspace: { id: "ws_empty", name: "empty" },
         services: [],
+        commands: [],
         serviceIndexById: {},
+        commandIndexById: {},
         selectedServiceIndex: undefined,
+        selectedCommandIndex: undefined,
+        selectedItem: undefined,
       }),
     ).toBe(
       [
         "Workspace: empty",
         "",
-        "No services yet.",
+        "No services or commands yet.",
         "",
         "Press a to add a service to this workspace.",
         "",
-        "",
+        "Status: Add services for long-running processes or commands for one-shot work.",
         "j/k select  ? help  q quit",
       ].join("\n"),
     );
@@ -74,7 +78,7 @@ describe("renderStaticDashboard", () => {
 
     expect(lines).toHaveLength(17);
     expect(lines.at(-1)).toBe("j/k select  ? help  q quit");
-    expect(lines.at(-2)).toBe("");
+    expect(lines.at(-2)).toBe("Status: Service stays running; use S start, s stop, r restart, Enter for logs.");
   });
 
   it("can render process states with restrained color", () => {
@@ -94,12 +98,34 @@ describe("renderStaticDashboard", () => {
     expect(stripAnsi(selectedLine ?? "")).toBe("  backend   running       ");
   });
 
+  it("renders workspace commands in a separate dashboard section", () => {
+    const rendered = renderStaticDashboard({
+      ...createState(),
+      selectedServiceIndex: undefined,
+      selectedCommandIndex: 0,
+      selectedItem: { type: "command", index: 0 },
+      commands: [
+        {
+          command: createCommand("cmd_build", "build"),
+          process: { status: "exited", exitCode: 0, signal: null },
+        },
+      ],
+      commandIndexById: { cmd_build: 0 },
+    });
+
+    expect(rendered).toContain(["  Command  Status", "  build    success"].join("\n"));
+    expect(rendered).toContain("Status: Command runs once; use r to run, s to stop while running, Enter for output.");
+  });
+
   it("renders exited status details", () => {
     expect(
       renderStaticDashboard({
         workspace: { id: "ws_ecommerce", name: "ecommerce" },
         selectedServiceIndex: 0,
+        selectedCommandIndex: undefined,
+        selectedItem: { type: "service", index: 0 },
         serviceIndexById: { svc_api: 0, svc_worker: 1 },
+        commandIndexById: {},
         services: [
           {
             service: createService("svc_api", "api"),
@@ -110,6 +136,7 @@ describe("renderStaticDashboard", () => {
             process: { status: "exited", exitCode: null, signal: "SIGTERM" },
           },
         ],
+        commands: [],
       }),
     ).toContain(["  api      exited code 7", "  worker   exited signal SIGTERM"].join("\n"));
   });
@@ -119,7 +146,10 @@ describe("renderStaticDashboard", () => {
       renderStaticDashboard({
         workspace: { id: "ws_ecommerce", name: "ecommerce" },
         selectedServiceIndex: 0,
+        selectedCommandIndex: undefined,
+        selectedItem: { type: "service", index: 0 },
         serviceIndexById: { svc_api: 0 },
+        commandIndexById: {},
         services: [
           {
             service: createService("svc_api", "api"),
@@ -129,6 +159,7 @@ describe("renderStaticDashboard", () => {
             },
           },
         ],
+        commands: [],
       }),
     ).toContain("failed: this is a very long failure message that should be shorte...");
   });
@@ -148,6 +179,52 @@ describe("renderStaticDashboard", () => {
     expect(rendered).toContain("┌");
     expect(rendered).toContain("stdout server listening");
     expect(rendered).toContain("stderr warning from backend");
+  });
+
+  it("keeps the wide log preview when commands exist", () => {
+    const rendered = renderStaticDashboard({
+      ...createState(),
+      commands: [
+        {
+          command: createCommand("cmd_build", "build"),
+          process: { status: "stopped" },
+        },
+      ],
+      commandIndexById: { cmd_build: 0 },
+    }, {
+      columns: 120,
+      rows: 18,
+      selectedServiceLogs: [createLog("stdout", "server listening")],
+    });
+
+    expect(rendered).toContain("Services 1/3");
+    expect(rendered).toContain("Commands");
+    expect(rendered).toContain("Logs · backend");
+    expect(rendered).toContain("stdout server listening");
+  });
+
+  it("shows selected command output in the wide preview", () => {
+    const rendered = renderStaticDashboard({
+      ...createState(),
+      selectedServiceIndex: undefined,
+      selectedCommandIndex: 0,
+      selectedItem: { type: "command", index: 0 },
+      commands: [
+        {
+          command: createCommand("cmd_build", "build"),
+          process: { status: "exited", exitCode: 0, signal: null },
+        },
+      ],
+      commandIndexById: { cmd_build: 0 },
+    }, {
+      columns: 120,
+      rows: 18,
+      selectedServiceLogs: [createLog("stdout", "build complete")],
+    });
+
+    expect(rendered).toContain("Commands 1/1");
+    expect(rendered).toContain("Logs · build");
+    expect(rendered).toContain("stdout build complete");
   });
 
   it("keeps the existing dashboard layout below the wide threshold", () => {
@@ -193,7 +270,10 @@ describe("renderStaticDashboard", () => {
     const rendered = renderStaticDashboard({
       workspace: { id: "ws_long", name: "long" },
       selectedServiceIndex: 0,
+      selectedCommandIndex: undefined,
+      selectedItem: { type: "service", index: 0 },
       serviceIndexById: { svc_long: 0 },
+      commandIndexById: {},
       services: [
         {
           service: createService("svc_long", "very-long-service-name-that-would-wrap"),
@@ -203,6 +283,7 @@ describe("renderStaticDashboard", () => {
           },
         },
       ],
+      commands: [],
     }, {
       columns: 100,
       rows: 12,
@@ -245,11 +326,14 @@ function createState(): RuntimeWorkspaceState {
   return {
     workspace: { id: "ws_ecommerce", name: "ecommerce" },
     selectedServiceIndex: 0,
+    selectedCommandIndex: undefined,
+    selectedItem: { type: "service", index: 0 },
     serviceIndexById: {
       svc_backend: 0,
       svc_frontend: 1,
       svc_worker: 2,
     },
+    commandIndexById: {},
     services: [
       {
         service: createService("svc_backend", "backend"),
@@ -264,6 +348,17 @@ function createState(): RuntimeWorkspaceState {
         process: { status: "failed", error: new Error("failed") },
       },
     ],
+    commands: [],
+  };
+}
+
+function createCommand(id: string, name: string) {
+  return {
+    id,
+    name,
+    command: "npm run build",
+    cwd: ".",
+    env: {},
   };
 }
 
@@ -295,9 +390,13 @@ function createManyServiceState(serviceCount: number, selectedServiceIndex: numb
   return {
     workspace: { id: "ws_many", name: "many" },
     selectedServiceIndex,
+    selectedCommandIndex: undefined,
+    selectedItem: { type: "service", index: selectedServiceIndex },
     serviceIndexById: Object.fromEntries(
       services.map((serviceState, index) => [serviceState.service.id, index]),
     ),
+    commandIndexById: {},
     services,
+    commands: [],
   };
 }

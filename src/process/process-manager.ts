@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import treeKill from "tree-kill";
-import type { ServiceConfig } from "../config/config-types.js";
+import type { CommandConfig, ServiceConfig } from "../config/config-types.js";
 
 export type ProcessStatus = "stopped" | "running" | "exited" | "failed";
 
@@ -17,6 +17,8 @@ export type ServiceLogEntry = {
   line: string;
   timestamp: Date;
 };
+
+export type RunnableConfig = Pick<ServiceConfig | CommandConfig, "id" | "name" | "command" | "cwd" | "env">;
 
 export type ProcessManagerOptions = {
   gracefulStopTimeoutMs?: number;
@@ -58,7 +60,7 @@ export class ProcessManager {
     this.processTreeKiller = options.processTreeKiller ?? killProcessTree;
   }
 
-  start(service: ServiceConfig): ManagedProcessState {
+  start(service: RunnableConfig): ManagedProcessState {
     const currentEntry = this.processes.get(service.id);
 
     if (currentEntry !== undefined && isActive(currentEntry)) {
@@ -195,7 +197,7 @@ export class ProcessManager {
     return entry.state;
   }
 
-  async restart(service: ServiceConfig): Promise<ManagedProcessState> {
+  async restart(service: RunnableConfig): Promise<ManagedProcessState> {
     this.appendSystemLog(service.id, "service restart requested");
     await this.stop(service.id);
 

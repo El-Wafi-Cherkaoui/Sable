@@ -43,6 +43,31 @@ describe("config validation", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts one-shot workspace commands", () => {
+    const result = safeValidateAppConfig({
+      version: 1,
+      workspaces: [
+        {
+          id: "workspace-1",
+          name: "ecommerce",
+          projectDirectory: "/projects/app",
+          services: [],
+          commands: [
+            {
+              id: "cmd-build",
+              name: "build",
+              command: "npm run build",
+              cwd: "/projects/app",
+              env: {},
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it("rejects an invalid config version", () => {
     const result = safeValidateAppConfig({
       version: 2,
@@ -141,6 +166,30 @@ describe("config validation", () => {
               id: "service-2",
             },
           ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects duplicate command names within one workspace", () => {
+    const command = {
+      id: "cmd-build",
+      name: "build",
+      command: "npm run build",
+      cwd: "/projects/app",
+      env: {},
+    };
+    const result = safeValidateAppConfig({
+      version: 1,
+      workspaces: [
+        {
+          id: "workspace-1",
+          name: "ecommerce",
+          projectDirectory: "/projects/app",
+          services: [],
+          commands: [command, { ...command, id: "cmd-build-2" }],
         },
       ],
     });

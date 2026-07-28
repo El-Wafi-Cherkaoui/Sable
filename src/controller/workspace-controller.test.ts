@@ -69,14 +69,16 @@ describe("WorkspaceController", () => {
   });
 
   it("isolates auto-start failures from other services", async () => {
-    const processManager = createFakeProcessManager({
-      start: vi.fn((service: ServiceConfig) => {
-        if (service.id === "svc_backend") {
-          throw new Error("backend failed");
-        }
+    const processManager = createFakeProcessManager();
+    processManager.start = vi.fn((service: ServiceConfig) => {
+      if (service.id === "svc_backend") {
+        throw new Error("backend failed");
+      }
 
-        return { status: "running", pid: 1234 };
-      }),
+      const state: ManagedProcessState = { status: "running", pid: 1234 };
+      processManager.states.set(service.id, state);
+
+      return state;
     });
     const controller = new WorkspaceController({
       workspace: createWorkspace(),
@@ -201,6 +203,18 @@ describe("WorkspaceController", () => {
     expect(controller.getState().selectedServiceIndex).toBe(0);
   });
 
+  it("adds a command to runtime state", () => {
+    const controller = new WorkspaceController({
+      workspace: { id: "ws_empty", name: "empty", projectDirectory: process.cwd(), services: [], commands: [] },
+      processManager: createFakeProcessManager(),
+    });
+
+    controller.addCommand(createCommand());
+
+    expect(controller.getState().commands.map((commandState) => commandState.command.id)).toEqual(["cmd_build"]);
+    expect(controller.getState().selectedCommandIndex).toBe(0);
+  });
+
   it("updates and removes services in runtime state", () => {
     const controller = new WorkspaceController({
       workspace: createWorkspace(),
@@ -244,6 +258,31 @@ describe("WorkspaceController", () => {
     expect(controller.getServiceLogs("missing")).toEqual([]);
   });
 
+  it("runs selected commands and reads their output logs", async () => {
+    const processManager = createFakeProcessManager({
+      getLogs: vi.fn((id: string) => [
+        { stream: "stdout" as const, line: `${id} output`, timestamp: new Date() },
+      ]),
+    });
+    const controller = new WorkspaceController({
+      workspace: {
+        id: "ws_scripts",
+        name: "scripts",
+        projectDirectory: process.cwd(),
+        services: [],
+        commands: [createCommand()],
+      },
+      processManager,
+    });
+
+    await controller.restartSelectedService();
+
+    expect(processManager.startedServiceIds).toEqual(["cmd_build"]);
+    expect(controller.getState().commands[0]?.process.status).toBe("running");
+    expect(controller.getSelectedServiceLogs().map((entry) => entry.line)).toEqual(["cmd_build output"]);
+  });
+
+
   it("moves services while preserving process state", () => {
     const processManager = createFakeProcessManager();
     const controller = new WorkspaceController({
@@ -278,6 +317,7 @@ type FakeProcessManager = WorkspaceProcessManager & {
   startedServiceIds: string[];
   stoppedServiceIds: string[];
   restartedServiceIds: string[];
+  states: Map<string, ManagedProcessState>;
   stopAll: ReturnType<typeof vi.fn>;
 };
 
@@ -288,20 +328,30 @@ function createFakeProcessManager(
     startedServiceIds: [],
     stoppedServiceIds: [],
     restartedServiceIds: [],
+    states: new Map<string, ManagedProcessState>(),
     start(service) {
       this.startedServiceIds.push(service.id);
+      const state: ManagedProcessState = { status: "running", pid: this.startedServiceIds.length };
+      this.states.set(service.id, state);
 
-      return { status: "running", pid: this.startedServiceIds.length };
+      return state;
     },
     async stop(serviceId) {
       this.stoppedServiceIds.push(serviceId);
+      const state: ManagedProcessState = { status: "stopped" };
+      this.states.set(serviceId, state);
 
-      return { status: "stopped" };
+      return state;
     },
     async restart(service) {
       this.restartedServiceIds.push(service.id);
+      const state: ManagedProcessState = { status: "running", pid: this.restartedServiceIds.length };
+      this.states.set(service.id, state);
 
-      return { status: "running", pid: this.restartedServiceIds.length };
+      return state;
+    },
+    getState(serviceId) {
+      return this.states.get(serviceId) ?? { status: "stopped" };
     },
     getLogs: vi.fn(() => []),
     stopAll: vi.fn(async () => undefined),
@@ -331,6 +381,17 @@ function createWorkspace(): WorkspaceConfig {
       createService({ id: "svc_frontend", name: "frontend", autoStart: true }),
       createService({ id: "svc_worker", name: "worker", autoStart: false }),
     ],
+    commands: [],
+  };
+}
+
+function createCommand() {
+  return {
+    id: "cmd_build",
+    name: "build",
+    command: "npm run build",
+    cwd: ".",
+    env: {},
   };
 }
 

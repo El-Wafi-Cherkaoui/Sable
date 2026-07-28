@@ -12,7 +12,7 @@ import {
   type RunInteractiveDashboardOptions,
 } from "../tui/interactive-dashboard.js";
 import { requireWorkspaceByName } from "./find-workspace.js";
-import { runAddServiceFlow, runDeleteServiceFlow, runEditServiceFlow } from "./service-flows.js";
+import { runAddWorkspaceItemFlow, runDeleteCommandFlow, runDeleteServiceFlow, runEditCommandFlow, runEditServiceFlow } from "./service-flows.js";
 
 export type WorkspaceConfigReader = {
   load(): Promise<AppConfig>;
@@ -33,8 +33,11 @@ export type RunWorkspaceController = {
   restartSelectedService(): Promise<ManagedProcessState>;
   startService(serviceId: string): Promise<ManagedProcessState>;
   addService(service: WorkspaceConfig["services"][number]): ReturnType<WorkspaceController["addService"]>;
+  addCommand(command: WorkspaceConfig["commands"][number]): ReturnType<WorkspaceController["addCommand"]>;
   updateService(service: WorkspaceConfig["services"][number]): ReturnType<WorkspaceController["updateService"]>;
+  updateCommand(command: WorkspaceConfig["commands"][number]): ReturnType<WorkspaceController["updateCommand"]>;
   removeService(serviceId: string): ReturnType<WorkspaceController["removeService"]>;
+  removeCommand(commandId: string): ReturnType<WorkspaceController["removeCommand"]>;
   moveService(serviceId: string, direction: "up" | "down"): ReturnType<WorkspaceController["moveService"]>;
   getSelectedServiceLogs(): ServiceLogEntry[];
   shutdown(): Promise<void>;
@@ -118,7 +121,7 @@ export async function runWorkspaceSession(
       onAddService: options.store === undefined
         ? undefined
         : async () => {
-          const flowResult = await runAddServiceFlow({
+          const flowResult = await runAddWorkspaceItemFlow({
             store: options.store!,
             workspace: options.workspace,
             keyInput: options.keyInput,
@@ -142,18 +145,63 @@ export async function runWorkspaceSession(
             }
           }
 
+          if (flowResult.type === "completed" && flowResult.commandId !== undefined) {
+            const config = await options.store!.load();
+            const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
+            const command = workspace?.commands.find((candidate) => candidate.id === flowResult.commandId);
+
+            if (command !== undefined) {
+              controller.addCommand(command);
+            }
+          }
+
           return { type: "continue", message: flowResult.type === "completed" ? flowResult.message : flowResult.message };
         },
       onEditService: options.store === undefined
         ? undefined
         : async () => {
-          const selectedServiceState = getSelectedServiceState(controller.getState());
+          const state = controller.getState();
+          const selectedServiceState = getSelectedServiceState(state);
+          const selectedCommandState = getSelectedCommandState(state);
 
-          if (selectedServiceState === undefined) {
-            return { type: "continue", message: "Add a service first." };
+          if (selectedServiceState === undefined && selectedCommandState === undefined) {
+            return { type: "continue", message: "Add a service or command first." };
           }
 
-          if (selectedServiceState.process.status === "running") {
+          if (selectedCommandState !== undefined) {
+            if (selectedCommandState.process.status === "running") {
+              return { type: "continue", message: "Stop command before editing." };
+            }
+
+            const flowResult = await runEditCommandFlow({
+              store: options.store!,
+              workspace: options.workspace,
+              keyInput: options.keyInput,
+              commandId: selectedCommandState.command.id,
+            });
+
+            if (flowResult.type === "exit") {
+              return { type: "exit" };
+            }
+
+            if (flowResult.type === "completed") {
+              if (flowResult.removedCommandId !== undefined) {
+                controller.removeCommand(flowResult.removedCommandId);
+              } else if (flowResult.commandId !== undefined) {
+                const config = await options.store!.load();
+                const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
+                const command = workspace?.commands.find((candidate) => candidate.id === flowResult.commandId);
+
+                if (command !== undefined) {
+                  controller.updateCommand(command);
+                }
+              }
+            }
+
+            return { type: "continue", message: flowResult.message };
+          }
+
+          if (selectedServiceState!.process.status === "running") {
             return { type: "continue", message: "Stop service before editing." };
           }
 
@@ -161,7 +209,7 @@ export async function runWorkspaceSession(
             store: options.store!,
             workspace: options.workspace,
             keyInput: options.keyInput,
-            serviceId: selectedServiceState.service.id,
+            serviceId: selectedServiceState!.service.id,
           });
 
           if (flowResult.type === "exit") {
@@ -187,13 +235,38 @@ export async function runWorkspaceSession(
       onDeleteService: options.store === undefined
         ? undefined
         : async () => {
-          const selectedServiceState = getSelectedServiceState(controller.getState());
+          const state = controller.getState();
+          const selectedServiceState = getSelectedServiceState(state);
+          const selectedCommandState = getSelectedCommandState(state);
 
-          if (selectedServiceState === undefined) {
-            return { type: "continue", message: "Add a service first." };
+          if (selectedServiceState === undefined && selectedCommandState === undefined) {
+            return { type: "continue", message: "Add a service or command first." };
           }
 
-          if (selectedServiceState.process.status === "running") {
+          if (selectedCommandState !== undefined) {
+            if (selectedCommandState.process.status === "running") {
+              return { type: "continue", message: "Stop command before deleting." };
+            }
+
+            const flowResult = await runDeleteCommandFlow({
+              store: options.store!,
+              workspace: options.workspace,
+              keyInput: options.keyInput,
+              commandId: selectedCommandState.command.id,
+            });
+
+            if (flowResult.type === "exit") {
+              return { type: "exit" };
+            }
+
+            if (flowResult.type === "completed" && flowResult.removedCommandId !== undefined) {
+              controller.removeCommand(flowResult.removedCommandId);
+            }
+
+            return { type: "continue", message: flowResult.message };
+          }
+
+          if (selectedServiceState!.process.status === "running") {
             return { type: "continue", message: "Stop service before deleting." };
           }
 
@@ -201,7 +274,7 @@ export async function runWorkspaceSession(
             store: options.store!,
             workspace: options.workspace,
             keyInput: options.keyInput,
-            serviceId: selectedServiceState.service.id,
+            serviceId: selectedServiceState!.service.id,
           });
 
           if (flowResult.type === "exit") {
@@ -242,6 +315,14 @@ function getSelectedServiceState(state: ReturnType<RunWorkspaceController["getSt
   }
 
   return state.services[state.selectedServiceIndex];
+}
+
+function getSelectedCommandState(state: ReturnType<RunWorkspaceController["getState"]>) {
+  if (state.selectedCommandIndex === undefined) {
+    return undefined;
+  }
+
+  return state.commands[state.selectedCommandIndex];
 }
 
 

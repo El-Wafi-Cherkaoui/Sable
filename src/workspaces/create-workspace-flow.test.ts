@@ -35,6 +35,7 @@ describe("runCreateWorkspaceFlow", () => {
         name: "shop",
         projectDirectory,
         services: [],
+        commands: [],
       },
     ]);
   });

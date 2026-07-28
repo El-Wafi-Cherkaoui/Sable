@@ -11,6 +11,14 @@ export const serviceConfigSchema = z.object({
   env: z.record(z.string(), z.string()),
 });
 
+export const commandConfigSchema = z.object({
+  id: z.string().trim().min(1, "Command id is required."),
+  name: z.string().trim().min(1, "Command name is required."),
+  command: z.string().trim().min(1, "Command is required."),
+  cwd: z.string().trim().min(1, "Command working directory is required."),
+  env: z.record(z.string(), z.string()),
+});
+
 export const workspaceConfigSchema = z
   .object({
     id: z.string().trim().min(1, "Workspace id is required."),
@@ -24,9 +32,11 @@ export const workspaceConfigSchema = z
       ),
     projectDirectory: z.string().trim().min(1, "Workspace project directory is required."),
     services: z.array(serviceConfigSchema),
+    commands: z.array(commandConfigSchema).default([]),
   })
   .superRefine((workspace, context) => {
     const seenServiceNames = new Set<string>();
+    const seenCommandNames = new Set<string>();
 
     for (const [index, service] of workspace.services.entries()) {
       if (seenServiceNames.has(service.name)) {
@@ -38,6 +48,18 @@ export const workspaceConfigSchema = z
       }
 
       seenServiceNames.add(service.name);
+    }
+
+    for (const [index, command] of workspace.commands.entries()) {
+      if (seenCommandNames.has(command.name)) {
+        context.addIssue({
+          code: "custom",
+          message: `Duplicate command name "${command.name}" in workspace "${workspace.name}".`,
+          path: ["commands", index, "name"],
+        });
+      }
+
+      seenCommandNames.add(command.name);
     }
   });
 

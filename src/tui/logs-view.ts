@@ -1,5 +1,5 @@
 import type { ServiceLogEntry } from "../process/process-manager.js";
-import { getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import { createTuiStyle, type TuiStyle } from "./style.js";
 
 export type RenderLogsViewOptions = {
@@ -20,7 +20,9 @@ const maximumLogBoxWidth = 100;
 export function renderLogsView(options: RenderLogsViewOptions): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
   const selectedService = getSelectedService(options.state);
-  const serviceName = selectedService?.service.name ?? "No service selected";
+  const selectedCommand = getSelectedCommand(options.state);
+  const subjectLabel = selectedCommand !== undefined ? "command" : "service";
+  const serviceName = selectedCommand?.command.name ?? selectedService?.service.name ?? "No service selected";
   const visibleLineCount = options.visibleLineCount ?? defaultVisibleLineCount;
   const normalizedScrollOffset = clampScrollOffset(
     options.scrollOffset,
@@ -36,13 +38,13 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
     style.title("Logs"),
     "",
     `${style.muted("workspace".padEnd(labelWidth))} ${options.state.workspace.name}`,
-    `${style.muted("service".padEnd(labelWidth))} ${serviceName}`,
+    `${style.muted(subjectLabel.padEnd(labelWidth))} ${serviceName}`,
     `${style.muted("range".padEnd(labelWidth))} ${formatLogRange(normalizedScrollOffset, visibleLogs.length, options.logs.length)}`,
     "",
   ];
 
-  const contentLines = selectedService === undefined
-    ? ["No service selected."]
+  const contentLines = selectedService === undefined && selectedCommand === undefined
+    ? ["No item selected."]
     : options.logs.length === 0
       ? ["No logs yet.", "", "Start the service or wait for output."]
       : visibleLogs.map((entry) => formatLogEntry(entry, style));
