@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { WorkspaceConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
+import { stripAnsi, visibleLength } from "./logs-view.js";
 import {
   createWorkspacePickerState,
   getSelectedWorkspace,
@@ -97,6 +98,15 @@ describe("renderWorkspacePicker", () => {
 
     expect(rendered).toContain("\x1b[1mWorkspaces\x1b[22m");
     expect(rendered).toContain("\x1b[2m2\x1b[22m");
+  });
+
+  it("extends the selected workspace highlight across the table width", () => {
+    const rendered = renderWorkspacePicker(createWorkspacePickerState(workspaces), { color: true });
+    const selectedLine = rendered.split("\n").find((line) => line.startsWith("\x1b[48;5;236m"));
+
+    expect(selectedLine).toBeDefined();
+    expect(stripAnsi(selectedLine ?? "")).toHaveLength(visibleLength("  Workspace  Services"));
+    expect(stripAnsi(selectedLine ?? "")).toBe("  ecommerce  2       ");
   });
 
   it("renders selected workspace details", () => {

@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { ServiceLogEntry } from "../process/process-manager.js";
 import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
-import { visibleLength } from "./logs-view.js";
+import { stripAnsi, visibleLength } from "./logs-view.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
 
 describe("renderStaticDashboard", () => {
   it("renders workspace name and ordered service statuses", () => {
     expect(renderStaticDashboard(createState())).toBe(
       [
-        "Workspace",
-        "ecommerce",
+        "Workspace: ecommerce",
         "",
         "  Service   Status",
         "  backend   running",
@@ -32,8 +31,7 @@ describe("renderStaticDashboard", () => {
       }),
     ).toBe(
       [
-        "Workspace",
-        "empty",
+        "Workspace: empty",
         "",
         "No services yet.",
         "",
@@ -48,8 +46,7 @@ describe("renderStaticDashboard", () => {
   it("renders dashboard messages in a reserved footer status slot", () => {
     expect(renderStaticDashboard(createState(), { statusMessage: "Cannot edit while running." })).toBe(
       [
-        "Workspace",
-        "ecommerce",
+        "Workspace: ecommerce",
         "",
         "  Service   Status",
         "  backend   running",
@@ -83,9 +80,18 @@ describe("renderStaticDashboard", () => {
   it("can render process states with restrained color", () => {
     const rendered = renderStaticDashboard(createState(), { color: true });
 
-    expect(rendered).toContain("\x1b[1mecommerce\x1b[22m");
+    expect(rendered).toContain("\x1b[2mWorkspace:\x1b[22m \x1b[1mecommerce\x1b[22m");
     expect(rendered).toContain("\x1b[32mrunning\x1b[39m");
     expect(rendered).toContain("\x1b[31mfailed: failed\x1b[39m");
+  });
+
+  it("extends the selected service highlight across the compact table width", () => {
+    const rendered = renderStaticDashboard(createState(), { color: true });
+    const selectedLine = rendered.split("\n").find((line) => line.startsWith("\x1b[48;5;236m"));
+
+    expect(selectedLine).toBeDefined();
+    expect(stripAnsi(selectedLine ?? "")).toHaveLength(visibleLength("  worker    failed: failed"));
+    expect(stripAnsi(selectedLine ?? "")).toBe("  backend   running       ");
   });
 
   it("renders exited status details", () => {

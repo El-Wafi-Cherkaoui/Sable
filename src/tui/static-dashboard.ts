@@ -24,11 +24,12 @@ export function renderStaticDashboard(
   options: RenderStaticDashboardOptions = {},
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
+  const shouldPadSelectedRows = options.color === true;
   const dashboardFooter = style.muted(`j/k select  ? help  q ${
     options.quitLabel ?? "quit"
   }`);
   const statusLine = formatDashboardStatusLine(options.statusMessage, style);
-  const lines = [style.muted("Workspace"), style.title(state.workspace.name), ""];
+  const lines = [`${style.muted("Workspace:")} ${style.title(state.workspace.name)}`, ""];
 
   if (state.services.length === 0) {
     lines.push("No services yet.");
@@ -39,7 +40,7 @@ export function renderStaticDashboard(
   }
 
   if (shouldRenderWideDashboard(options.columns)) {
-    return renderWideDashboard(state, lines, statusLine, dashboardFooter, options, style);
+    return renderWideDashboard(state, lines, statusLine, dashboardFooter, options, style, shouldPadSelectedRows);
   }
 
   const nameColumnWidth = Math.max(
@@ -47,15 +48,21 @@ export function renderStaticDashboard(
     ...state.services.map((serviceState) => serviceState.service.name.length),
   );
 
+  const serviceLines = state.services.map((serviceState) => `  ${serviceState.service.name.padEnd(nameColumnWidth)}  ${formatProcessState(
+    serviceState.process,
+    style,
+  )}`);
+  const tableWidth = Math.max(
+    visibleLength(`  ${"Service".padEnd(nameColumnWidth)}  Status`),
+    ...serviceLines.map((line) => visibleLength(line)),
+  );
+
   lines.push(style.muted(`  ${"Service".padEnd(nameColumnWidth)}  Status`));
 
-  for (const [index, serviceState] of state.services.entries()) {
-    const line = `  ${serviceState.service.name.padEnd(nameColumnWidth)}  ${formatProcessState(
-      serviceState.process,
-      style,
-    )}`;
-
-    lines.push(index === state.selectedServiceIndex ? style.selected(line) : line);
+  for (const [index, line] of serviceLines.entries()) {
+    lines.push(index === state.selectedServiceIndex ? style.selected(
+      shouldPadSelectedRows ? padVisibleEnd(line, tableWidth) : line,
+    ) : line);
   }
 
   appendAnchoredFooter(lines, ["", statusLine, dashboardFooter], options.rows);
@@ -87,6 +94,7 @@ function renderWideDashboard(
   dashboardFooter: string,
   options: RenderStaticDashboardOptions,
   style: TuiStyle,
+  shouldPadSelectedRows: boolean,
 ): string {
   const columns = options.columns ?? wideDashboardColumns;
   const previewBoxWidth = columns - serviceColumnWidth - dashboardColumnGap - 5;
@@ -109,6 +117,7 @@ function renderWideDashboard(
     serviceViewportStart,
     serviceViewportSize,
     style,
+    shouldPadSelectedRows,
   );
   const selectedServiceName = state.services[selectedIndex]?.service.name ?? "No service selected";
   const previewRows = renderPreviewRows(
@@ -173,6 +182,7 @@ function renderServiceRows(
   viewportStart: number,
   viewportSize: number,
   style: TuiStyle,
+  shouldPadSelectedRows: boolean,
 ): string[] {
   const visibleServices = state.services.slice(viewportStart, viewportStart + viewportSize);
   const nameWidth = 14;
@@ -185,8 +195,14 @@ function renderServiceRows(
       style,
     )}`, serviceColumnWidth);
 
-    return index === state.selectedServiceIndex ? style.selected(line) : line;
+    return index === state.selectedServiceIndex ? style.selected(
+      shouldPadSelectedRows ? padVisibleEnd(line, serviceColumnWidth) : line,
+    ) : line;
   });
+}
+
+function padVisibleEnd(value: string, width: number): string {
+  return `${value}${" ".repeat(Math.max(0, width - visibleLength(value)))}`;
 }
 
 function renderPreviewRows(

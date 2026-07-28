@@ -2,6 +2,7 @@ import type { WorkspaceConfig } from "../config/config-types.js";
 import { mapWorkspacePickerKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { appendAnchoredFooter } from "./layout.js";
+import { visibleLength } from "./logs-view.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
 
 export type WorkspacePickerState = {
@@ -235,6 +236,7 @@ export function renderWorkspacePicker(
   options: RenderWorkspacePickerOptions = {},
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
+  const shouldPadSelectedRows = options.color === true;
   const statusLine = formatPickerStatusLine(state.statusMessage, style);
   const footer = style.muted("j/k select  ? help  q quit");
   const lines = [style.title("Workspaces"), ""];
@@ -252,17 +254,25 @@ export function renderWorkspacePicker(
     ...state.workspaces.map((workspace) => workspace.name.length),
   );
 
+  const tableWidth = visibleLength(`  ${"Workspace".padEnd(nameColumnWidth)}  Services`);
+
   lines.push(style.muted(`  ${"Workspace".padEnd(nameColumnWidth)}  Services`));
 
   for (const [index, workspace] of state.workspaces.entries()) {
     const line = `  ${workspace.name.padEnd(nameColumnWidth)}  ${style.muted(String(workspace.services.length))}`;
 
-    lines.push(index === state.selectedWorkspaceIndex ? style.selected(line) : line);
+    lines.push(index === state.selectedWorkspaceIndex ? style.selected(
+      shouldPadSelectedRows ? padVisibleEnd(line, tableWidth) : line,
+    ) : line);
   }
 
   appendAnchoredFooter(lines, ["", statusLine, footer], options.rows);
 
   return lines.join("\n");
+}
+
+function padVisibleEnd(value: string, width: number): string {
+  return `${value}${" ".repeat(Math.max(0, width - visibleLength(value)))}`;
 }
 
 function formatPickerStatusLine(
