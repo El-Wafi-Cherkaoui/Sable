@@ -26,22 +26,19 @@ export function renderStaticDashboard(
   const dashboardFooter = style.muted(`j/k select  ? help  q ${
     options.quitLabel ?? "quit"
   }`);
+  const statusLine = formatDashboardStatusLine(options.statusMessage, style);
   const lines = [style.muted("Workspace"), style.title(state.workspace.name), ""];
-
-  if (options.statusMessage !== undefined) {
-    lines.push(`${style.statusLabel("Status:")} ${options.statusMessage}`, "");
-  }
 
   if (state.services.length === 0) {
     lines.push("No services yet.");
     lines.push("");
     lines.push("Press a to add a service to this workspace.");
-    lines.push("", dashboardFooter);
+    lines.push("", statusLine, dashboardFooter);
     return lines.join("\n");
   }
 
   if (shouldRenderWideDashboard(options.columns)) {
-    return renderWideDashboard(state, lines, dashboardFooter, options, style);
+    return renderWideDashboard(state, lines, statusLine, dashboardFooter, options, style);
   }
 
   const nameColumnWidth = Math.max(
@@ -60,7 +57,7 @@ export function renderStaticDashboard(
     lines.push(index === state.selectedServiceIndex ? style.selected(line) : line);
   }
 
-  lines.push("", dashboardFooter);
+  lines.push("", statusLine, dashboardFooter);
 
   return lines.join("\n");
 }
@@ -85,6 +82,7 @@ function formatProcessState(process: ManagedProcessState, style: TuiStyle): stri
 function renderWideDashboard(
   state: RuntimeWorkspaceState,
   lines: string[],
+  statusLine: string,
   dashboardFooter: string,
   options: RenderStaticDashboardOptions,
   style: TuiStyle,
@@ -126,7 +124,7 @@ function renderWideDashboard(
     ...joinColumnRows(serviceRows, previewRows, serviceColumnWidth),
   ];
 
-  lines.push(...bodyRows, "", dashboardFooter);
+  lines.push(...bodyRows, "", statusLine, dashboardFooter);
 
   return lines.join("\n");
 }
@@ -140,7 +138,18 @@ function resolveBodyAvailableRows(currentLineCount: number, rows: number | undef
     return 12;
   }
 
-  return Math.max(5, rows - currentLineCount - 3);
+  return Math.max(5, rows - currentLineCount - 4);
+}
+
+function formatDashboardStatusLine(
+  statusMessage: string | undefined,
+  style: TuiStyle,
+): string {
+  if (statusMessage === undefined) {
+    return "";
+  }
+
+  return `${style.statusLabel("Status:")} ${statusMessage}`;
 }
 
 function resolveServiceViewportStart(

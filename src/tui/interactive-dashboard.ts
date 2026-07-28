@@ -238,22 +238,27 @@ export async function runInteractiveDashboard(
 
     switch (action) {
       case "selectNext":
+        clearDashboardMessage();
         options.controller.selectNextService();
         renderDashboardFrame();
         break;
       case "selectPrevious":
+        clearDashboardMessage();
         options.controller.selectPreviousService();
         renderDashboardFrame();
         break;
       case "start":
+        clearDashboardMessage();
         await options.controller.startSelectedService();
         renderDashboardFrame();
         break;
       case "stop":
+        clearDashboardMessage();
         await options.controller.stopSelectedService();
         renderDashboardFrame();
         break;
       case "restart":
+        clearDashboardMessage();
         await options.controller.restartSelectedService();
         renderDashboardFrame();
         break;
@@ -328,6 +333,7 @@ export async function runInteractiveDashboard(
         break;
       }
       case "openLogs":
+        clearDashboardMessage();
         mode = "logs";
         followLogTail = true;
         logScrollOffset = maxScrollOffset(
@@ -337,11 +343,13 @@ export async function runInteractiveDashboard(
         renderLogsFrame();
         break;
       case "openHelp":
+        clearDashboardMessage();
         helpReturnMode = "dashboard";
         mode = "help";
         renderHelpFrame("dashboard");
         break;
       case "openCommand":
+        clearDashboardMessage();
         openCommandMode("dashboard", "dashboard");
         break;
       case "quit":
@@ -439,6 +447,10 @@ export async function runInteractiveDashboard(
 
   function shouldRefreshDashboardPreview(): boolean {
     return mode === "dashboard" && process.stdout.columns !== undefined && process.stdout.columns >= 100;
+  }
+
+  function clearDashboardMessage(): void {
+    dashboardMessage = undefined;
   }
 
   function openCommandMode(

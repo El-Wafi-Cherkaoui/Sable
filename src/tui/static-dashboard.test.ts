@@ -16,6 +16,7 @@ describe("renderStaticDashboard", () => {
         "  frontend  stopped",
         "  worker    failed: failed",
         "",
+        "",
         "j/k select  ? help  q quit",
       ].join("\n"),
     );
@@ -38,9 +39,36 @@ describe("renderStaticDashboard", () => {
         "",
         "Press a to add a service to this workspace.",
         "",
+        "",
         "j/k select  ? help  q quit",
       ].join("\n"),
     );
+  });
+
+  it("renders dashboard messages in a reserved footer status slot", () => {
+    expect(renderStaticDashboard(createState(), { statusMessage: "Cannot edit while running." })).toBe(
+      [
+        "Workspace",
+        "ecommerce",
+        "",
+        "  Service   Status",
+        "  backend   running",
+        "  frontend  stopped",
+        "  worker    failed: failed",
+        "",
+        "Status: Cannot edit while running.",
+        "j/k select  ? help  q quit",
+      ].join("\n"),
+    );
+  });
+
+  it("keeps dashboard frame height stable when status messages appear", () => {
+    const withoutMessage = renderStaticDashboard(createState());
+    const withMessage = renderStaticDashboard(createState(), {
+      statusMessage: "Cannot edit while running.",
+    });
+
+    expect(withMessage.split("\n")).toHaveLength(withoutMessage.split("\n").length);
   });
 
   it("can render process states with restrained color", () => {

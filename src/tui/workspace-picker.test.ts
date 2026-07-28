@@ -21,6 +21,13 @@ describe("workspace picker state", () => {
     expect(getSelectedWorkspace(selectPreviousWorkspace(state))?.name).toBe("portfolio");
   });
 
+  it("clears transient status messages when selection changes", () => {
+    const state = createWorkspacePickerState(workspaces, "Created workspace.");
+
+    expect(selectNextWorkspace(state).statusMessage).toBeUndefined();
+    expect(selectPreviousWorkspace(state).statusMessage).toBeUndefined();
+  });
+
   it("has no selected workspace when empty", () => {
     const state = createWorkspacePickerState([]);
 
@@ -46,17 +53,34 @@ describe("renderWorkspacePicker", () => {
         "  ecommerce  2",
         "  portfolio  1",
         "",
+        "",
         "j/k select  ? help  q quit",
       ].join("\n"),
     );
   });
 
-
-
-  it("renders a status message", () => {
-    expect(renderWorkspacePicker(createWorkspacePickerState(workspaces, 'Auto-start disabled for "api".'))).toContain(
-      'Status: Auto-start disabled for "api".',
+  it("renders status messages in a reserved footer slot", () => {
+    expect(renderWorkspacePicker(createWorkspacePickerState(workspaces, 'Auto-start disabled for "api".'))).toBe(
+      [
+        "Workspaces",
+        "",
+        "  Workspace  Services",
+        "  ecommerce  2",
+        "  portfolio  1",
+        "",
+        'Status: Auto-start disabled for "api".',
+        "j/k select  ? help  q quit",
+      ].join("\n"),
     );
+  });
+
+  it("keeps picker frame height stable when status messages appear", () => {
+    const withoutMessage = renderWorkspacePicker(createWorkspacePickerState(workspaces));
+    const withMessage = renderWorkspacePicker(
+      createWorkspacePickerState(workspaces, 'Auto-start disabled for "api".'),
+    );
+
+    expect(withMessage.split("\n")).toHaveLength(withoutMessage.split("\n").length);
   });
 
   it("can render with restrained color", () => {

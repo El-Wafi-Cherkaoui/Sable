@@ -192,6 +192,7 @@ export function selectNextWorkspace(state: WorkspacePickerState): WorkspacePicke
 
   return {
     ...state,
+    statusMessage: undefined,
     selectedWorkspaceIndex:
       ((state.selectedWorkspaceIndex ?? 0) + 1) % state.workspaces.length,
   };
@@ -208,6 +209,7 @@ export function selectPreviousWorkspace(
 
   return {
     ...state,
+    statusMessage: undefined,
     selectedWorkspaceIndex:
       (selectedWorkspaceIndex - 1 + state.workspaces.length) % state.workspaces.length,
   };
@@ -228,17 +230,15 @@ export function renderWorkspacePicker(
   options: RenderWorkspacePickerOptions = {},
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
+  const statusLine = formatPickerStatusLine(state.statusMessage, style);
+  const footer = style.muted("j/k select  ? help  q quit");
   const lines = [style.title("Workspaces"), ""];
-
-  if (state.statusMessage !== undefined) {
-    lines.push(`${style.statusLabel("Status:")} ${state.statusMessage}`, "");
-  }
 
   if (state.workspaces.length === 0) {
     lines.push("No workspaces yet.");
     lines.push("");
     lines.push("Press c to create your first workspace.");
-    lines.push("", style.muted("j/k select  ? help  q quit"));
+    lines.push("", statusLine, footer);
     return lines.join("\n");
   }
 
@@ -255,9 +255,20 @@ export function renderWorkspacePicker(
     lines.push(index === state.selectedWorkspaceIndex ? style.selected(line) : line);
   }
 
-  lines.push("", style.muted("j/k select  ? help  q quit"));
+  lines.push("", statusLine, footer);
 
   return lines.join("\n");
+}
+
+function formatPickerStatusLine(
+  statusMessage: string | undefined,
+  style: TuiStyle,
+): string {
+  if (statusMessage === undefined) {
+    return "";
+  }
+
+  return `${style.statusLabel("Status:")} ${statusMessage}`;
 }
 
 export function renderWorkspacePickerHelp(): string {

@@ -40,6 +40,38 @@ describe("runWorkspaceHome", () => {
     expect(keyInput.close).toHaveBeenCalledOnce();
   });
 
+  it("clears picker status after returning from a workspace session", async () => {
+    const keyInput = createKeyInput();
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "createWorkspace" })
+      .mockResolvedValueOnce({ type: "run", workspace })
+      .mockResolvedValueOnce({ type: "exit" });
+    const runCreateWorkspace = vi.fn(async () => ({
+      type: "completed" as const,
+      workspaceId: workspace.id,
+      message: "Created workspace.",
+    }));
+    const runSession = vi.fn(async () => ({ type: "back" as const }));
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput,
+      runPicker,
+      runCreateWorkspace,
+      runSession,
+    });
+
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      statusMessage: "Created workspace.",
+      selectedWorkspaceId: workspace.id,
+    }));
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      statusMessage: undefined,
+      selectedWorkspaceId: workspace.id,
+    }));
+  });
+
   it("exits the app when the workspace session exits", async () => {
     const runPicker = vi.fn(async () => ({ type: "run" as const, workspace }));
     const runSession = vi.fn(async () => ({ type: "exit" as const }));

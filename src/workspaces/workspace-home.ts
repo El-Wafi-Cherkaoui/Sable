@@ -158,6 +158,9 @@ export async function runWorkspaceHome(
         store: options.store,
       });
 
+      statusMessage = undefined;
+      selectedWorkspaceId = pickerResult.workspace.id;
+
       if (sessionResult.type === "exit") {
         return;
       }

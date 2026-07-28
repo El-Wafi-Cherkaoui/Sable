@@ -322,6 +322,24 @@ describe("runInteractiveDashboard", () => {
     expect(writes.join("\n")).toContain("Edited.");
   });
 
+  it("clears transient dashboard messages when the user navigates", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const onEditService = vi.fn(async () => ({ type: "continue" as const, message: "Cannot edit while running." }));
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "e" }, { sequence: "j" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write },
+      render: (_state, renderOptions) => `status:${renderOptions?.statusMessage ?? ""}`,
+      onEditService,
+    });
+
+    expect(write).toHaveBeenNthCalledWith(2, "status:Cannot edit while running.\n");
+    expect(write).toHaveBeenNthCalledWith(3, "status:\n");
+  });
+
   it("runs the delete service callback from the dashboard", async () => {
     const state = createState();
     const controller = createController(state, () => []);

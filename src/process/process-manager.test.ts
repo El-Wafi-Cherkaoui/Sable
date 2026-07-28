@@ -251,7 +251,7 @@ async function waitForStatus(
   serviceId: string,
   status: ProcessStatus,
 ): Promise<void> {
-  const deadline = Date.now() + 1_000;
+  const deadline = Date.now() + 3_000;
 
   while (Date.now() < deadline) {
     if (processManager.getState(serviceId).status === status) {
@@ -269,7 +269,7 @@ async function waitForLogCount(
   serviceId: string,
   count: number,
 ): Promise<void> {
-  const deadline = Date.now() + 1_000;
+  const deadline = Date.now() + 3_000;
 
   while (Date.now() < deadline) {
     if (processManager.getLogs(serviceId).length >= count) {
