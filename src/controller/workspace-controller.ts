@@ -265,19 +265,26 @@ export class WorkspaceController {
 
   private syncProcessStates(): void {
     for (const serviceState of this.state.services) {
-      this.state = updateServiceProcessState(
-        this.state,
-        serviceState.service.id,
-        this.processManager.getState(serviceState.service.id),
-      );
+      const managerState = this.processManager.getState(serviceState.service.id);
+
+      // Don't overwrite a known failure with the manager's default "stopped".
+      // The runtime state knows the start/restart attempt failed; the manager
+      // only knows it never started a process for this id.
+      if (serviceState.process.status === "failed" && managerState.status === "stopped") {
+        continue;
+      }
+
+      this.state = updateServiceProcessState(this.state, serviceState.service.id, managerState);
     }
 
     for (const commandState of this.state.commands) {
-      this.state = updateCommandProcessState(
-        this.state,
-        commandState.command.id,
-        this.processManager.getState(commandState.command.id),
-      );
+      const managerState = this.processManager.getState(commandState.command.id);
+
+      if (commandState.process.status === "failed" && managerState.status === "stopped") {
+        continue;
+      }
+
+      this.state = updateCommandProcessState(this.state, commandState.command.id, managerState);
     }
   }
 
