@@ -26,6 +26,7 @@ Current capabilities:
 - edit non-running services from the running workspace dashboard
 - delete non-running services from the running workspace dashboard
 - reorder services directly from the running workspace dashboard
+- preview recent selected-service logs from the dashboard on wide terminals
 - start, stop, and restart selected services
 - show concise failed/exited details in the service dashboard
 - capture stdout, stderr, and lifecycle logs in memory

@@ -75,7 +75,7 @@ function formatLogEntry(entry: ServiceLogEntry, style: TuiStyle): string {
   return `${style.stream(entry.stream)} ${entry.line}`;
 }
 
-function renderLogBox(
+export function renderLogBox(
   contentLines: string[],
   visibleLineCount: number,
   width: number,
@@ -108,7 +108,7 @@ function resolveLogBoxWidth(viewportColumns: number): number {
   return Math.max(minimumLogBoxWidth, Math.min(maximumLogBoxWidth, viewportColumns - 8));
 }
 
-function truncateVisible(value: string, maxLength: number): string {
+export function truncateVisible(value: string, maxLength: number): string {
   if (visibleLength(value) <= maxLength) {
     return value;
   }
@@ -116,11 +116,11 @@ function truncateVisible(value: string, maxLength: number): string {
   return `${stripAnsi(value).slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
-function visibleLength(value: string): number {
+export function visibleLength(value: string): number {
   return stripAnsi(value).length;
 }
 
-function stripAnsi(value: string): string {
+export function stripAnsi(value: string): string {
   return value.replace(/\x1b\[[0-9;]*m/g, "");
 }
 

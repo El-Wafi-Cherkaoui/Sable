@@ -48,6 +48,92 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenNthCalledWith(3, "selected:0\n");
   });
 
+  it("passes selected service logs and terminal size to the dashboard renderer", async () => {
+    const state = createState();
+    const selectedLogs = [
+      { stream: "stdout" as const, line: "ready", timestamp: new Date("2026-01-01T00:00:00.000Z") },
+    ];
+    const controller = createController(state, () => selectedLogs);
+    const render = vi.fn(() => "dashboard");
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render,
+    });
+
+    expect(render).toHaveBeenCalledWith(
+      state,
+      expect.objectContaining({
+        selectedServiceLogs: selectedLogs,
+        columns: process.stdout.columns,
+        rows: process.stdout.rows,
+      }),
+    );
+  });
+
+  it("refreshes the wide dashboard log preview while waiting for input", async () => {
+    const originalColumns = process.stdout.columns;
+    process.stdout.columns = 120;
+
+    try {
+      const state = createState();
+      let logs = [
+        { stream: "stdout" as const, line: "one", timestamp: new Date() },
+      ];
+      const controller = createController(state, () => logs);
+      const keyInput = createControlledKeyInput([]);
+      const write = vi.fn();
+      const runPromise = runInteractiveDashboard({
+        controller,
+        keyInput,
+        screen: { clear: vi.fn(), write },
+        render: (_state, renderOptions) =>
+          `dashboard:${renderOptions?.selectedServiceLogs?.map((entry) => entry.line).join(",") ?? ""}`,
+        logsRefreshIntervalMs: 1,
+      });
+
+      await waitForWrite(write, "dashboard:one\n");
+      logs = [...logs, { stream: "stdout", line: "two", timestamp: new Date() }];
+      await waitForWrite(write, "dashboard:one,two\n");
+      keyInput.resolveNext({ sequence: "q" });
+      await runPromise;
+    } finally {
+      process.stdout.columns = originalColumns;
+    }
+  });
+
+  it("does not redraw the wide dashboard when preview contents are unchanged", async () => {
+    const originalColumns = process.stdout.columns;
+    process.stdout.columns = 120;
+
+    try {
+      const state = createState();
+      const controller = createController(state, () => [
+        { stream: "stdout", line: "one", timestamp: new Date() },
+      ]);
+      const keyInput = createControlledKeyInput([]);
+      const write = vi.fn();
+      const runPromise = runInteractiveDashboard({
+        controller,
+        keyInput,
+        screen: { clear: vi.fn(), write },
+        render: () => "dashboard:one",
+        logsRefreshIntervalMs: 1,
+      });
+
+      await waitForWrite(write, "dashboard:one\n");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      keyInput.resolveNext({ sequence: "q" });
+      await runPromise;
+
+      expect(write).toHaveBeenCalledTimes(1);
+    } finally {
+      process.stdout.columns = originalColumns;
+    }
+  });
+
   it("quits on Ctrl+C keypress", async () => {
     const state = createState();
     const controller = createController(state, () => []);

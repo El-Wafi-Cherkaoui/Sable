@@ -66,14 +66,7 @@ export async function runInteractiveDashboard(
   const screen = options.screen ?? terminalScreen;
   const color = shouldUseColor();
   let dashboardMessage: string | undefined;
-  const render =
-    options.render ??
-    ((state: RuntimeWorkspaceState) =>
-      renderStaticDashboard(state, {
-        quitLabel: options.dashboardQuitLabel,
-        statusMessage: dashboardMessage,
-        color,
-      }));
+  const render = options.render ?? renderStaticDashboard;
   const renderLogs = options.renderLogs ?? renderLogsView;
   const renderHelp = options.renderHelp ?? renderHelpView;
   const renderCommand = options.renderCommand ?? renderCommandView;
@@ -89,13 +82,14 @@ export async function runInteractiveDashboard(
   let logScrollOffset = 0;
   let followLogTail = true;
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
+  let lastDashboardContents: string | undefined;
 
-  renderFrame(screen, render(options.controller.getState()));
+  renderDashboardFrame();
 
   while (!shouldQuit) {
     const currentMode: ViewMode = mode;
     const event =
-      currentMode === "logs"
+      currentMode === "logs" || shouldRefreshDashboardPreview()
         ? await readKeyOrRefresh(logsRefreshIntervalMs)
         : await readKeyOrAbort();
 
@@ -223,7 +217,7 @@ export async function runInteractiveDashboard(
           break;
         case "back":
           mode = "dashboard";
-          renderFrame(screen, render(options.controller.getState()));
+          renderDashboardFrame();
           break;
         case "quit":
           shouldQuit = true;
@@ -236,6 +230,7 @@ export async function runInteractiveDashboard(
     }
 
     if (event.type === "refresh") {
+      renderDashboardFrame({ skipUnchanged: true });
       continue;
     }
 
@@ -244,23 +239,23 @@ export async function runInteractiveDashboard(
     switch (action) {
       case "selectNext":
         options.controller.selectNextService();
-        renderFrame(screen, render(options.controller.getState()));
+        renderDashboardFrame();
         break;
       case "selectPrevious":
         options.controller.selectPreviousService();
-        renderFrame(screen, render(options.controller.getState()));
+        renderDashboardFrame();
         break;
       case "start":
         await options.controller.startSelectedService();
-        renderFrame(screen, render(options.controller.getState()));
+        renderDashboardFrame();
         break;
       case "stop":
         await options.controller.stopSelectedService();
-        renderFrame(screen, render(options.controller.getState()));
+        renderDashboardFrame();
         break;
       case "restart":
         await options.controller.restartSelectedService();
-        renderFrame(screen, render(options.controller.getState()));
+        renderDashboardFrame();
         break;
       case "addService": {
         if (options.onAddService !== undefined) {
@@ -273,7 +268,7 @@ export async function runInteractiveDashboard(
           dashboardMessage = result.message;
         }
 
-        renderFrame(screen, render(options.controller.getState()));
+        renderDashboardFrame();
         break;
       }
       case "editService": {
@@ -287,7 +282,7 @@ export async function runInteractiveDashboard(
           dashboardMessage = result.message;
         }
 
-        renderFrame(screen, render(options.controller.getState()));
+        renderDashboardFrame();
         break;
       }
       case "deleteService": {
@@ -301,7 +296,7 @@ export async function runInteractiveDashboard(
           dashboardMessage = result.message;
         }
 
-        renderFrame(screen, render(options.controller.getState()));
+        renderDashboardFrame();
         break;
       }
       case "moveServiceUp": {
@@ -315,7 +310,7 @@ export async function runInteractiveDashboard(
           dashboardMessage = result.message;
         }
 
-        renderFrame(screen, render(options.controller.getState()));
+        renderDashboardFrame();
         break;
       }
       case "moveServiceDown": {
@@ -329,7 +324,7 @@ export async function runInteractiveDashboard(
           dashboardMessage = result.message;
         }
 
-        renderFrame(screen, render(options.controller.getState()));
+        renderDashboardFrame();
         break;
       }
       case "openLogs":
@@ -367,6 +362,7 @@ export async function runInteractiveDashboard(
       logs.length,
         getLogVisibleLineCount(),
     );
+    lastDashboardContents = undefined;
     renderFrame(
       screen,
       renderLogs({
@@ -395,10 +391,12 @@ export async function runInteractiveDashboard(
   }
 
   function renderHelpFrame(context: HelpContext): void {
+    lastDashboardContents = undefined;
     renderFrame(screen, renderHelp(context));
   }
 
   function renderCommandFrame(): void {
+    lastDashboardContents = undefined;
     renderFrame(screen, renderCommand({ input: commandInput, error: commandError }));
   }
 
@@ -418,7 +416,29 @@ export async function runInteractiveDashboard(
       return;
     }
 
-    renderFrame(screen, render(options.controller.getState()));
+    renderDashboardFrame();
+  }
+
+  function renderDashboardFrame(renderOptions: { skipUnchanged?: boolean } = {}): void {
+    const contents = render(options.controller.getState(), {
+      quitLabel: options.dashboardQuitLabel,
+      statusMessage: dashboardMessage,
+      selectedServiceLogs: options.controller.getSelectedServiceLogs(),
+      columns: process.stdout.columns,
+      rows: process.stdout.rows,
+      color,
+    });
+
+    if (renderOptions.skipUnchanged === true && contents === lastDashboardContents) {
+      return;
+    }
+
+    lastDashboardContents = contents;
+    renderFrame(screen, contents);
+  }
+
+  function shouldRefreshDashboardPreview(): boolean {
+    return mode === "dashboard" && process.stdout.columns !== undefined && process.stdout.columns >= 100;
   }
 
   function openCommandMode(
@@ -548,9 +568,13 @@ function renderFrame(screen: InteractiveDashboardScreen, contents: string): void
 
 const terminalScreen: InteractiveDashboardScreen = {
   clear() {
-    process.stdout.write("\x1b[2J\x1b[H");
+    process.stdout.write("\x1b[H");
   },
   write(contents) {
-    process.stdout.write(contents);
+    process.stdout.write(`${clearLineEnds(contents)}\x1b[J`);
   },
 };
+
+function clearLineEnds(contents: string): string {
+  return contents.replace(/\n/g, "\x1b[K\n");
+}

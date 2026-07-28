@@ -9,6 +9,7 @@
 - Service rename from the dashboard edit flow.
 - Service deletion from the dashboard with typed-name confirmation.
 - Service reorder from the dashboard with `K` / `J`.
+- Wide dashboard log preview for the selected service, with a scrollable services viewport.
 
 ## 0.1.0 - MVP release candidate
 

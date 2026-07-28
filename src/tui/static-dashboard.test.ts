@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { ServiceLogEntry } from "../process/process-manager.js";
 import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import { visibleLength } from "./logs-view.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
 
 describe("renderStaticDashboard", () => {
@@ -87,6 +89,113 @@ describe("renderStaticDashboard", () => {
       }),
     ).toContain("failed: this is a very long failure message that should be shorte...");
   });
+
+  it("renders a boxed selected-service log preview on wide dashboards", () => {
+    const rendered = renderStaticDashboard(createState(), {
+      columns: 120,
+      rows: 18,
+      selectedServiceLogs: [
+        createLog("stdout", "server listening"),
+        createLog("stderr", "warning from backend"),
+      ],
+    });
+
+    expect(rendered).toContain("Services 1/3");
+    expect(rendered).toContain("Logs · backend");
+    expect(rendered).toContain("┌");
+    expect(rendered).toContain("stdout server listening");
+    expect(rendered).toContain("stderr warning from backend");
+  });
+
+  it("keeps the existing dashboard layout below the wide threshold", () => {
+    const rendered = renderStaticDashboard(createState(), {
+      columns: 99,
+      rows: 18,
+      selectedServiceLogs: [createLog("stdout", "server listening")],
+    });
+
+    expect(rendered).toContain("  Service   Status");
+    expect(rendered).not.toContain("Logs · backend");
+    expect(rendered).not.toContain("server listening");
+  });
+
+  it("scrolls the services viewport around the selected service on wide dashboards", () => {
+    const state = createManyServiceState(8, 6);
+    const rendered = renderStaticDashboard(state, { columns: 120, rows: 11 });
+
+    expect(rendered).toContain("Services 7/8");
+    expect(rendered).not.toContain("  service-1");
+    expect(rendered).toContain("  service-5");
+    expect(rendered).toContain("  service-8");
+  });
+
+  it("shows only the latest logs in the wide dashboard preview", () => {
+    const rendered = renderStaticDashboard(createState(), {
+      columns: 120,
+      rows: 11,
+      selectedServiceLogs: [
+        createLog("stdout", "old line"),
+        createLog("stdout", "recent one"),
+        createLog("stdout", "recent two"),
+        createLog("stdout", "recent three"),
+      ],
+    });
+
+    expect(rendered).not.toContain("old line");
+    expect(rendered).toContain("recent one");
+    expect(rendered).toContain("recent three");
+  });
+
+  it("keeps wide dashboard rows within the terminal width", () => {
+    const rendered = renderStaticDashboard({
+      workspace: { id: "ws_long", name: "long" },
+      selectedServiceIndex: 0,
+      serviceIndexById: { svc_long: 0 },
+      services: [
+        {
+          service: createService("svc_long", "very-long-service-name-that-would-wrap"),
+          process: {
+            status: "failed",
+            error: new Error("this failure detail is long enough to overflow the compact service column"),
+          },
+        },
+      ],
+    }, {
+      columns: 100,
+      rows: 12,
+      selectedServiceLogs: [createLog("stdout", "this log line should fit inside the preview box")],
+    });
+
+    for (const line of rendered.split("\n")) {
+      expect(visibleLength(line)).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it("leaves a trailing-column margin in wide dashboard rows to avoid terminal auto-wrap", () => {
+    const rendered = renderStaticDashboard(createState(), {
+      columns: 100,
+      rows: 12,
+      selectedServiceLogs: [
+        createLog("stdout", "a long log line that fills most of the available preview width"),
+      ],
+    });
+
+    for (const line of rendered.split("\n")) {
+      expect(visibleLength(line)).toBeLessThanOrEqual(99);
+    }
+  });
+
+  it("keeps wide dashboard frames below terminal height to avoid redraw scrolling", () => {
+    const rendered = renderStaticDashboard(createState(), {
+      columns: 120,
+      rows: 24,
+      selectedServiceLogs: Array.from({ length: 40 }, (_, index) =>
+        createLog("stdout", `line ${index + 1}`),
+      ),
+    });
+
+    expect(rendered.split("\n")).toHaveLength(23);
+  });
 });
 
 function createState(): RuntimeWorkspaceState {
@@ -123,5 +232,29 @@ function createService(id: string, name: string) {
     cwd: ".",
     autoStart: true,
     env: {},
+  };
+}
+
+function createLog(stream: ServiceLogEntry["stream"], line: string): ServiceLogEntry {
+  return {
+    stream,
+    line,
+    timestamp: new Date("2026-01-01T00:00:00.000Z"),
+  };
+}
+
+function createManyServiceState(serviceCount: number, selectedServiceIndex: number): RuntimeWorkspaceState {
+  const services = Array.from({ length: serviceCount }, (_, index) => ({
+    service: createService(`svc_${index + 1}`, `service-${index + 1}`),
+    process: { status: "stopped" as const },
+  }));
+
+  return {
+    workspace: { id: "ws_many", name: "many" },
+    selectedServiceIndex,
+    serviceIndexById: Object.fromEntries(
+      services.map((serviceState, index) => [serviceState.service.id, index]),
+    ),
+    services,
   };
 }
