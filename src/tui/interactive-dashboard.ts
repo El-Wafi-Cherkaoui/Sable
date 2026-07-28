@@ -263,18 +263,24 @@ export async function runInteractiveDashboard(
         clearDashboardMessage();
         clearPulse();
         await options.controller.startSelectedService();
+        pulseItem = getPulseItem(options.controller.getState());
+        schedulePulseClear();
         renderDashboardFrame();
         break;
       case "stop":
         clearDashboardMessage();
         clearPulse();
         await options.controller.stopSelectedService();
+        pulseItem = getPulseItem(options.controller.getState());
+        schedulePulseClear();
         renderDashboardFrame();
         break;
       case "restart":
         clearDashboardMessage();
         clearPulse();
         await options.controller.restartSelectedService();
+        pulseItem = getPulseItem(options.controller.getState());
+        schedulePulseClear();
         renderDashboardFrame();
         break;
       case "addService": {

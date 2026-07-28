@@ -307,6 +307,35 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenCalledTimes(4);
   });
 
+  it("briefly pulses the selected row after service actions", async () => {
+    const state = createState();
+    const controller = {
+      getState: vi.fn(() => state),
+      selectNextService: vi.fn(() => state),
+      selectPreviousService: vi.fn(() => state),
+      startSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+      restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      getSelectedServiceLogs: vi.fn(() => []),
+    };
+    const keyInput = createControlledKeyInput([{ sequence: "S" }]);
+    const write = vi.fn();
+    const runPromise = runInteractiveDashboard({
+      controller,
+      keyInput,
+      screen: { clear: vi.fn(), write },
+      render: (runtimeState, renderOptions) =>
+        `selected:${runtimeState.selectedServiceIndex}:pulse:${renderOptions?.pulseServiceIndex ?? "none"}`,
+    });
+
+    await waitForWrite(write, "selected:0:pulse:0\n");
+    await waitForWrite(write, "selected:0:pulse:none\n");
+    keyInput.resolveNext({ sequence: "q" });
+    await runPromise;
+
+    expect(controller.startSelectedService).toHaveBeenCalledOnce();
+  });
+
   it("runs the add service callback from the dashboard", async () => {
     const state = createState();
     const controller = createController(state, () => []);
