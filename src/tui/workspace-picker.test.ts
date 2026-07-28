@@ -83,6 +83,15 @@ describe("renderWorkspacePicker", () => {
     expect(withMessage.split("\n")).toHaveLength(withoutMessage.split("\n").length);
   });
 
+  it("anchors the picker footer near the bottom when terminal rows are known", () => {
+    const rendered = renderWorkspacePicker(createWorkspacePickerState(workspaces), { rows: 18 });
+    const lines = rendered.split("\n");
+
+    expect(lines).toHaveLength(17);
+    expect(lines.at(-1)).toBe("j/k select  ? help  q quit");
+    expect(lines.at(-2)).toBe("");
+  });
+
   it("can render with restrained color", () => {
     const rendered = renderWorkspacePicker(createWorkspacePickerState(workspaces), { color: true });
 

@@ -566,6 +566,32 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenNthCalledWith(6, "dashboard\n");
   });
 
+  it("sizes logs so the footer uses the same terminal safety margin as dashboard pages", async () => {
+    const rowsDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "rows");
+    Object.defineProperty(process.stdout, "rows", { configurable: true, value: 18 });
+    const state = createState();
+    const controller = createController(state, () => []);
+    const write = vi.fn();
+
+    try {
+      await runInteractiveDashboard({
+        controller,
+        keyInput: createKeyInput([{ name: "return" }, { sequence: "q" }]),
+        screen: { clear: vi.fn(), write },
+        render: () => "dashboard",
+        renderLogs: ({ visibleLineCount }) => `logs:${visibleLineCount}`,
+      });
+    } finally {
+      if (rowsDescriptor === undefined) {
+        delete (process.stdout as { rows?: number }).rows;
+      } else {
+        Object.defineProperty(process.stdout, "rows", rowsDescriptor);
+      }
+    }
+
+    expect(write).toHaveBeenNthCalledWith(2, "logs:7\n");
+  });
+
   it("opens help from logs and returns to logs", async () => {
     const state = createState();
     const controller = createController(state, () => [

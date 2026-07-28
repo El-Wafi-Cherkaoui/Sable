@@ -1,6 +1,7 @@
 import type { WorkspaceConfig } from "../config/config-types.js";
 import { mapWorkspacePickerKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
+import { appendAnchoredFooter } from "./layout.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
 
 export type WorkspacePickerState = {
@@ -26,6 +27,7 @@ export type WorkspacePickerScreen = {
 export type RenderWorkspacePickerOptions = {
   color?: boolean;
   style?: TuiStyle;
+  rows?: number;
 };
 
 export type RunWorkspacePickerOptions = {
@@ -50,7 +52,10 @@ export async function runWorkspacePicker(
 ): Promise<WorkspacePickerResult> {
   const screen = options.screen ?? terminalScreen;
   const color = shouldUseColor();
-  const render = options.render ?? ((state: WorkspacePickerState) => renderWorkspacePicker(state, { color }));
+  const render = options.render ?? ((state: WorkspacePickerState) => renderWorkspacePicker(state, {
+    color,
+    rows: process.stdout.rows,
+  }));
   const renderHelp = options.renderHelp ?? renderWorkspacePickerHelp;
   const renderDetails = options.renderDetails ?? renderWorkspaceDetails;
   let state = createWorkspacePickerState(
@@ -238,7 +243,7 @@ export function renderWorkspacePicker(
     lines.push("No workspaces yet.");
     lines.push("");
     lines.push("Press c to create your first workspace.");
-    lines.push("", statusLine, footer);
+    appendAnchoredFooter(lines, ["", statusLine, footer], options.rows);
     return lines.join("\n");
   }
 
@@ -255,7 +260,7 @@ export function renderWorkspacePicker(
     lines.push(index === state.selectedWorkspaceIndex ? style.selected(line) : line);
   }
 
-  lines.push("", statusLine, footer);
+  appendAnchoredFooter(lines, ["", statusLine, footer], options.rows);
 
   return lines.join("\n");
 }

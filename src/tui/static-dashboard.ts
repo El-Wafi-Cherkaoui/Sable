@@ -1,5 +1,6 @@
 import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
+import { appendAnchoredFooter } from "./layout.js";
 import { renderLogBox, truncateVisible, visibleLength } from "./logs-view.js";
 import { createTuiStyle, type TuiStyle } from "./style.js";
 
@@ -33,7 +34,7 @@ export function renderStaticDashboard(
     lines.push("No services yet.");
     lines.push("");
     lines.push("Press a to add a service to this workspace.");
-    lines.push("", statusLine, dashboardFooter);
+    appendAnchoredFooter(lines, ["", statusLine, dashboardFooter], options.rows);
     return lines.join("\n");
   }
 
@@ -57,7 +58,7 @@ export function renderStaticDashboard(
     lines.push(index === state.selectedServiceIndex ? style.selected(line) : line);
   }
 
-  lines.push("", statusLine, dashboardFooter);
+  appendAnchoredFooter(lines, ["", statusLine, dashboardFooter], options.rows);
 
   return lines.join("\n");
 }

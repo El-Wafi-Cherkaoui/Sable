@@ -395,7 +395,7 @@ export async function runInteractiveDashboard(
       return 12;
     }
 
-    return Math.max(3, rows - 12);
+    return Math.max(3, rows - 11);
   }
 
   function renderHelpFrame(context: HelpContext): void {

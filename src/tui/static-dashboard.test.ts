@@ -71,6 +71,15 @@ describe("renderStaticDashboard", () => {
     expect(withMessage.split("\n")).toHaveLength(withoutMessage.split("\n").length);
   });
 
+  it("anchors the compact dashboard footer near the bottom when terminal rows are known", () => {
+    const rendered = renderStaticDashboard(createState(), { columns: 80, rows: 18 });
+    const lines = rendered.split("\n");
+
+    expect(lines).toHaveLength(17);
+    expect(lines.at(-1)).toBe("j/k select  ? help  q quit");
+    expect(lines.at(-2)).toBe("");
+  });
+
   it("can render process states with restrained color", () => {
     const rendered = renderStaticDashboard(createState(), { color: true });
 
