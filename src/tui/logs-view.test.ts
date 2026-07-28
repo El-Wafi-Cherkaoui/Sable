@@ -83,6 +83,21 @@ describe("renderLogsView", () => {
     ).toContain("lines 2-3 of 3");
   });
 
+  it("can reveal only part of the visible log slice while preserving the box height", () => {
+    const rendered = renderLogsView({
+      state: createState(),
+      logs: [createLog("stdout", "one"), createLog("stdout", "two"), createLog("stdout", "three")],
+      scrollOffset: 0,
+      visibleLineCount: 3,
+      revealLineCount: 2,
+    });
+
+    expect(rendered).toContain("stdout one");
+    expect(rendered).toContain("stdout two");
+    expect(rendered).not.toContain("stdout three");
+    expect(rendered.split("\n").filter((line) => line.startsWith("│ "))).toHaveLength(3);
+  });
+
   it("renders an empty state", () => {
     expect(
       renderLogsView({

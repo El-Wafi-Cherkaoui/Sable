@@ -39,6 +39,7 @@ export type RunInteractiveDashboardOptions = {
   dashboardQuitLabel?: string;
   logVisibleLineCount?: number;
   logsRefreshIntervalMs?: number;
+  logsRevealIntervalMs?: number;
   onAddService?: () => Promise<DashboardCallbackResult>;
   onEditService?: () => Promise<DashboardCallbackResult>;
   onDeleteService?: () => Promise<DashboardCallbackResult>;
@@ -72,6 +73,7 @@ export async function runInteractiveDashboard(
   const renderCommand = options.renderCommand ?? renderCommandView;
   const configuredLogVisibleLineCount = options.logVisibleLineCount;
   const logsRefreshIntervalMs = options.logsRefreshIntervalMs ?? 250;
+  const logsRevealIntervalMs = options.logsRevealIntervalMs ?? 28;
   let shouldQuit = false;
   let pulseItem: { type: "service"; index: number } | { type: "command"; index: number } | undefined;
   let pulseTimer: ReturnType<typeof setTimeout> | undefined;
@@ -83,6 +85,7 @@ export async function runInteractiveDashboard(
   let commandError: string | undefined;
   let logScrollOffset = 0;
   let followLogTail = true;
+  let logRevealLineCount: number | undefined;
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
   let lastDashboardContents: string | undefined;
 
@@ -90,9 +93,12 @@ export async function runInteractiveDashboard(
 
   while (!shouldQuit) {
     const currentMode: ViewMode = mode;
+    const refreshIntervalMs = currentMode === "logs" && isLogRevealActive()
+      ? logsRevealIntervalMs
+      : logsRefreshIntervalMs;
     const event =
       currentMode === "logs" || shouldRefreshDashboardPreview()
-        ? await readKeyOrRefresh(logsRefreshIntervalMs)
+        ? await readKeyOrRefresh(refreshIntervalMs)
         : await readKeyOrAbort();
 
     if (event.type === "abort") {
@@ -174,6 +180,7 @@ export async function runInteractiveDashboard(
         logScrollOffset = followLogTail
           ? maxScrollOffset(logs.length, getLogVisibleLineCount())
           : clampScrollOffset(logScrollOffset, logs.length, getLogVisibleLineCount());
+        advanceLogReveal(logs.length);
         renderLogsFrame();
         continue;
       }
@@ -184,6 +191,7 @@ export async function runInteractiveDashboard(
 
       switch (action) {
         case "scrollDown":
+          clearLogReveal();
           logScrollOffset = clampScrollOffset(
             logScrollOffset + 1,
             logs.length,
@@ -193,6 +201,7 @@ export async function runInteractiveDashboard(
           renderLogsFrame();
           break;
         case "scrollUp":
+          clearLogReveal();
           logScrollOffset = clampScrollOffset(
             logScrollOffset - 1,
             logs.length,
@@ -202,29 +211,35 @@ export async function runInteractiveDashboard(
           renderLogsFrame();
           break;
         case "scrollTop":
+          clearLogReveal();
           logScrollOffset = 0;
           followLogTail = false;
           renderLogsFrame();
           break;
         case "scrollBottom":
+          clearLogReveal();
           logScrollOffset = maxScrollOffset(logs.length, getLogVisibleLineCount());
           followLogTail = true;
           renderLogsFrame();
           break;
         case "openHelp":
+          clearLogReveal();
           helpReturnMode = "logs";
           mode = "help";
           renderHelpFrame("logs");
           break;
         case "openCommand":
+          clearLogReveal();
           openCommandMode("logs", "logs");
           break;
         case "back":
           clearPulse();
+          clearLogReveal();
           mode = "dashboard";
           renderDashboardFrame();
           break;
         case "quit":
+          clearLogReveal();
           shouldQuit = true;
           break;
         case "none":
@@ -368,6 +383,10 @@ export async function runInteractiveDashboard(
         clearPulse();
         mode = "logs";
         followLogTail = true;
+        logRevealLineCount = resolveInitialLogRevealLineCount(
+          options.controller.getSelectedServiceLogs().length,
+          getLogVisibleLineCount(),
+        );
         logScrollOffset = maxScrollOffset(
           options.controller.getSelectedServiceLogs().length,
           getLogVisibleLineCount(),
@@ -413,6 +432,7 @@ export async function runInteractiveDashboard(
         logs,
         scrollOffset: logScrollOffset,
         visibleLineCount: getLogVisibleLineCount(),
+        revealLineCount: logRevealLineCount,
         viewportColumns: process.stdout.columns,
         color,
       }),
@@ -431,6 +451,27 @@ export async function runInteractiveDashboard(
     }
 
     return Math.max(3, rows - 11);
+  }
+
+  function isLogRevealActive(): boolean {
+    return logRevealLineCount !== undefined;
+  }
+
+  function clearLogReveal(): void {
+    logRevealLineCount = undefined;
+  }
+
+  function advanceLogReveal(logLineCount: number): void {
+    if (logRevealLineCount === undefined) {
+      return;
+    }
+
+    const visibleLogCount = resolveVisibleLogCount(logLineCount, getLogVisibleLineCount());
+    const nextRevealLineCount = logRevealLineCount + resolveLogRevealStep(visibleLogCount);
+
+    logRevealLineCount = nextRevealLineCount >= visibleLogCount
+      ? undefined
+      : nextRevealLineCount;
   }
 
   function renderHelpFrame(context: HelpContext): void {
@@ -641,6 +682,27 @@ function getPulseItem(
   }
 
   return undefined;
+}
+
+function resolveInitialLogRevealLineCount(
+  logLineCount: number,
+  visibleLineCount: number,
+): number | undefined {
+  const visibleLogCount = resolveVisibleLogCount(logLineCount, visibleLineCount);
+
+  if (visibleLogCount <= 3) {
+    return undefined;
+  }
+
+  return Math.max(1, Math.ceil(visibleLogCount / 3));
+}
+
+function resolveVisibleLogCount(logLineCount: number, visibleLineCount: number): number {
+  return Math.min(logLineCount, visibleLineCount);
+}
+
+function resolveLogRevealStep(visibleLogCount: number): number {
+  return Math.max(1, Math.ceil(visibleLogCount / 3));
 }
 
 function wait(milliseconds: number): Promise<void> {

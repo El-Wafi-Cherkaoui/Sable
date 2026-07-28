@@ -7,6 +7,7 @@ export type RenderLogsViewOptions = {
   logs: ServiceLogEntry[];
   scrollOffset: number;
   visibleLineCount?: number;
+  revealLineCount?: number;
   viewportColumns?: number;
   color?: boolean;
   style?: TuiStyle;
@@ -33,6 +34,9 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
     normalizedScrollOffset,
     normalizedScrollOffset + visibleLineCount,
   );
+  const revealedLogs = options.revealLineCount === undefined
+    ? visibleLogs
+    : visibleLogs.slice(0, Math.max(0, options.revealLineCount));
   const labelWidth = 9;
   const lines = [
     style.title("Logs"),
@@ -47,7 +51,7 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
     ? ["No item selected."]
     : options.logs.length === 0
       ? ["No logs yet.", "", "Start the service or wait for output."]
-      : visibleLogs.map((entry) => formatLogEntry(entry, style));
+      : revealedLogs.map((entry) => formatLogEntry(entry, style));
 
   lines.push(...renderLogBox(
     contentLines,

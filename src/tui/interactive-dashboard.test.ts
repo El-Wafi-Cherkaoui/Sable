@@ -631,6 +631,36 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenNthCalledWith(6, "dashboard\n");
   });
 
+  it("reveals logs in quick batches when opening the logs view", async () => {
+    const state = createState();
+    const logs = [
+      { stream: "stdout" as const, line: "one", timestamp: new Date() },
+      { stream: "stdout" as const, line: "two", timestamp: new Date() },
+      { stream: "stdout" as const, line: "three", timestamp: new Date() },
+      { stream: "stdout" as const, line: "four", timestamp: new Date() },
+      { stream: "stdout" as const, line: "five", timestamp: new Date() },
+      { stream: "stdout" as const, line: "six", timestamp: new Date() },
+    ];
+    const controller = createController(state, () => logs);
+    const keyInput = createControlledKeyInput([{ name: "return" }]);
+    const write = vi.fn();
+    const runPromise = runInteractiveDashboard({
+      controller,
+      keyInput,
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderLogs: ({ revealLineCount }) => `logs:${revealLineCount ?? "all"}`,
+      logVisibleLineCount: 6,
+      logsRevealIntervalMs: 1,
+    });
+
+    await waitForWrite(write, "logs:2\n");
+    await waitForWrite(write, "logs:4\n");
+    await waitForWrite(write, "logs:all\n");
+    keyInput.resolveNext({ sequence: "q" });
+    await runPromise;
+  });
+
   it("sizes logs so the footer uses the same terminal safety margin as dashboard pages", async () => {
     const rowsDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "rows");
     Object.defineProperty(process.stdout, "rows", { configurable: true, value: 18 });
