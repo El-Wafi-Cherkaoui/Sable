@@ -27,8 +27,12 @@ describe("runWorkspaceHome", () => {
       abortSignal: expect.any(AbortSignal),
       statusMessage: undefined,
       selectedWorkspaceId: undefined,
+      startupMomentMs: 180,
       screen: undefined,
     });
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      startupMomentMs: 0,
+    }));
     expect(runSession).toHaveBeenCalledWith({
       workspace,
       createController: undefined,

@@ -8,6 +8,7 @@ import {
   renderWorkspacePicker,
   renderWorkspaceDetails,
   renderWorkspacePickerHelp,
+  renderWorkspaceStartupMoment,
   runWorkspacePicker,
   selectNextWorkspace,
   selectPreviousWorkspace,
@@ -100,6 +101,18 @@ describe("renderWorkspacePicker", () => {
     expect(rendered).toContain("\x1b[2m2\x1b[22m");
   });
 
+  it("renders a restrained startup moment", () => {
+    const rendered = renderWorkspaceStartupMoment({ columns: 20, rows: 7 });
+
+    expect(rendered.split("\n")).toEqual([
+      "",
+      "",
+      "     · sable ·",
+      "",
+      "  workspace ready",
+    ]);
+  });
+
   it("extends the selected workspace highlight across the table width", () => {
     const rendered = renderWorkspacePicker(createWorkspacePickerState(workspaces), { color: true });
     const selectedLine = rendered.split("\n").find((line) => line.startsWith("\x1b[48;5;236m"));
@@ -180,6 +193,23 @@ describe("runWorkspacePicker", () => {
 
     expect(result).toEqual({ type: "run", workspace: workspaces[1] });
     expect(write).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows an interruptible startup moment before the picker", async () => {
+    const write = vi.fn();
+
+    const result = await runWorkspacePicker({
+      workspaces,
+      keyInput: createKeyInput([{ sequence: "q" }]),
+      screen: { clear: vi.fn(), write },
+      render: () => "picker",
+      renderStartupMoment: () => "intro",
+      startupMomentMs: 1_000,
+    });
+
+    expect(result).toEqual({ type: "exit" });
+    expect(write).toHaveBeenNthCalledWith(1, "intro\n");
+    expect(write).toHaveBeenNthCalledWith(2, "picker\n");
   });
 
   it("opens help and returns to the picker", async () => {

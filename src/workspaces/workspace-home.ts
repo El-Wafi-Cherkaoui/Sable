@@ -62,6 +62,7 @@ export async function runWorkspaceHome(
   const signalSource = options.signalSource ?? process;
   let statusMessage: string | undefined;
   let selectedWorkspaceId: string | undefined;
+  let shouldShowStartupMoment = true;
   const abortShutdown = () => shutdownAbortController.abort();
 
   signalSource.once("SIGINT", abortShutdown);
@@ -76,8 +77,11 @@ export async function runWorkspaceHome(
         abortSignal: shutdownAbortController.signal,
         statusMessage,
         selectedWorkspaceId,
+        startupMomentMs: shouldShowStartupMoment ? 180 : 0,
         screen: options.screen,
       });
+
+      shouldShowStartupMoment = false;
 
       if (pickerResult.type === "exit") {
         return;
