@@ -24,6 +24,7 @@ describe("createTuiStyle", () => {
     const style = createTuiStyle(false);
 
     expect(style.title("Sable")).toBe("Sable");
+    expect(style.pulse("api")).toBe("\x1b[1mapi\x1b[22m");
     expect(style.running("running")).toBe("running");
   });
 
@@ -32,6 +33,7 @@ describe("createTuiStyle", () => {
 
     expect(style.title("Sable")).toBe("\x1b[1mSable\x1b[22m");
     expect(style.selected("api")).toBe("\x1b[48;5;236mapi\x1b[49m");
+    expect(style.pulse("api")).toBe("\x1b[48;5;239m\x1b[1mapi\x1b[22m\x1b[49m");
     expect(style.running("running")).toBe("\x1b[32mrunning\x1b[39m");
     expect(style.failed("failed")).toBe("\x1b[31mfailed\x1b[39m");
     expect(style.stream("stderr")).toBe("\x1b[31mstderr\x1b[39m");

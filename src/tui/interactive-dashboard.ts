@@ -73,6 +73,8 @@ export async function runInteractiveDashboard(
   const configuredLogVisibleLineCount = options.logVisibleLineCount;
   const logsRefreshIntervalMs = options.logsRefreshIntervalMs ?? 250;
   let shouldQuit = false;
+  let pulseItem: { type: "service"; index: number } | { type: "command"; index: number } | undefined;
+  let pulseTimer: ReturnType<typeof setTimeout> | undefined;
   let mode = "dashboard" as ViewMode;
   let helpReturnMode: HelpReturnMode = "dashboard";
   let commandReturnMode: CommandReturnMode = "dashboard";
@@ -110,6 +112,7 @@ export async function runInteractiveDashboard(
 
       switch (commandAction) {
         case "cancel":
+          clearPulse();
           mode = commandReturnMode;
           renderCurrentMode();
           break;
@@ -147,6 +150,7 @@ export async function runInteractiveDashboard(
 
       switch (action) {
         case "back":
+          clearPulse();
           mode = helpReturnMode;
           renderCurrentMode();
           break;
@@ -216,6 +220,7 @@ export async function runInteractiveDashboard(
           openCommandMode("logs", "logs");
           break;
         case "back":
+          clearPulse();
           mode = "dashboard";
           renderDashboardFrame();
           break;
@@ -230,6 +235,7 @@ export async function runInteractiveDashboard(
     }
 
     if (event.type === "refresh") {
+      clearPulse();
       renderDashboardFrame({ skipUnchanged: true });
       continue;
     }
@@ -239,30 +245,41 @@ export async function runInteractiveDashboard(
     switch (action) {
       case "selectNext":
         clearDashboardMessage();
+        clearPulse();
         options.controller.selectNextService();
+        pulseItem = getPulseItem(options.controller.getState());
+        schedulePulseClear();
         renderDashboardFrame();
         break;
       case "selectPrevious":
         clearDashboardMessage();
+        clearPulse();
         options.controller.selectPreviousService();
+        pulseItem = getPulseItem(options.controller.getState());
+        schedulePulseClear();
         renderDashboardFrame();
         break;
       case "start":
         clearDashboardMessage();
+        clearPulse();
         await options.controller.startSelectedService();
         renderDashboardFrame();
         break;
       case "stop":
         clearDashboardMessage();
+        clearPulse();
         await options.controller.stopSelectedService();
         renderDashboardFrame();
         break;
       case "restart":
         clearDashboardMessage();
+        clearPulse();
         await options.controller.restartSelectedService();
         renderDashboardFrame();
         break;
       case "addService": {
+        clearPulse();
+
         if (options.onAddService !== undefined) {
           const result = await options.onAddService();
 
@@ -277,6 +294,8 @@ export async function runInteractiveDashboard(
         break;
       }
       case "editService": {
+        clearPulse();
+
         if (options.onEditService !== undefined) {
           const result = await options.onEditService();
 
@@ -291,6 +310,8 @@ export async function runInteractiveDashboard(
         break;
       }
       case "deleteService": {
+        clearPulse();
+
         if (options.onDeleteService !== undefined) {
           const result = await options.onDeleteService();
 
@@ -305,6 +326,8 @@ export async function runInteractiveDashboard(
         break;
       }
       case "moveServiceUp": {
+        clearPulse();
+
         if (options.onMoveServiceUp !== undefined) {
           const result = await options.onMoveServiceUp();
 
@@ -319,6 +342,8 @@ export async function runInteractiveDashboard(
         break;
       }
       case "moveServiceDown": {
+        clearPulse();
+
         if (options.onMoveServiceDown !== undefined) {
           const result = await options.onMoveServiceDown();
 
@@ -334,6 +359,7 @@ export async function runInteractiveDashboard(
       }
       case "openLogs":
         clearDashboardMessage();
+        clearPulse();
         mode = "logs";
         followLogTail = true;
         logScrollOffset = maxScrollOffset(
@@ -344,15 +370,18 @@ export async function runInteractiveDashboard(
         break;
       case "openHelp":
         clearDashboardMessage();
+        clearPulse();
         helpReturnMode = "dashboard";
         mode = "help";
         renderHelpFrame("dashboard");
         break;
       case "openCommand":
         clearDashboardMessage();
+        clearPulse();
         openCommandMode("dashboard", "dashboard");
         break;
       case "quit":
+        clearPulse();
         shouldQuit = true;
         break;
       case "none":
@@ -431,6 +460,8 @@ export async function runInteractiveDashboard(
     const contents = render(options.controller.getState(), {
       quitLabel: options.dashboardQuitLabel,
       statusMessage: dashboardMessage,
+      pulseServiceIndex: pulseItem?.type === "service" ? pulseItem.index : undefined,
+      pulseCommandIndex: pulseItem?.type === "command" ? pulseItem.index : undefined,
       selectedServiceLogs: options.controller.getSelectedServiceLogs(),
       columns: process.stdout.columns,
       rows: process.stdout.rows,
@@ -451,6 +482,29 @@ export async function runInteractiveDashboard(
 
   function clearDashboardMessage(): void {
     dashboardMessage = undefined;
+  }
+
+  function clearPulse(): void {
+    if (pulseTimer !== undefined) {
+      clearTimeout(pulseTimer);
+      pulseTimer = undefined;
+    }
+
+    pulseItem = undefined;
+  }
+
+  function schedulePulseClear(): void {
+    if (pulseTimer !== undefined) {
+      clearTimeout(pulseTimer);
+      pulseTimer = undefined;
+    }
+
+    pulseTimer = setTimeout(() => {
+      if (mode === "dashboard") {
+        pulseItem = undefined;
+        renderDashboardFrame();
+      }
+    }, 60);
   }
 
   function openCommandMode(
@@ -567,6 +621,20 @@ function createAbortWait(signal: AbortSignal | undefined): AbortWait {
 
 function isPrintableCommandCharacter(sequence: string): boolean {
   return sequence.length === 1 && sequence >= " " && sequence !== "\x7f";
+}
+
+function getPulseItem(
+  state: RuntimeWorkspaceState,
+): { type: "service"; index: number } | { type: "command"; index: number } | undefined {
+  if (state.selectedItem?.type === "service") {
+    return { type: "service", index: state.selectedItem.index };
+  }
+
+  if (state.selectedItem?.type === "command") {
+    return { type: "command", index: state.selectedItem.index };
+  }
+
+  return undefined;
 }
 
 function wait(milliseconds: number): Promise<void> {

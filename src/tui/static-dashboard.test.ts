@@ -98,6 +98,17 @@ describe("renderStaticDashboard", () => {
     expect(stripAnsi(selectedLine ?? "")).toBe("  backend   running       ");
   });
 
+  it("can pulse the selected service row for selection feedback", () => {
+    const rendered = renderStaticDashboard(createState(), {
+      color: true,
+      pulseServiceIndex: 0,
+    });
+    const pulsedLine = rendered.split("\n").find((line) => line.startsWith("\x1b[48;5;239m\x1b[1m"));
+
+    expect(pulsedLine).toBeDefined();
+    expect(stripAnsi(pulsedLine ?? "")).toBe("  backend   running       ");
+  });
+
   it("renders workspace commands in a separate dashboard section", () => {
     const rendered = renderStaticDashboard({
       ...createState(),

@@ -48,6 +48,42 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenNthCalledWith(3, "selected:0\n");
   });
 
+  it("briefly pulses the selected row after selection", async () => {
+    let state = createState();
+    const controller = {
+      getState: vi.fn(() => state),
+      selectNextService: vi.fn(() => {
+        state = {
+          ...state,
+          selectedServiceIndex: 1,
+          selectedCommandIndex: undefined,
+          selectedItem: { type: "service", index: 1 },
+        };
+
+        return state;
+      }),
+      selectPreviousService: vi.fn(() => state),
+      startSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+      restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      getSelectedServiceLogs: vi.fn(() => []),
+    };
+    const keyInput = createControlledKeyInput([{ sequence: "j" }]);
+    const write = vi.fn();
+    const runPromise = runInteractiveDashboard({
+      controller,
+      keyInput,
+      screen: { clear: vi.fn(), write },
+      render: (runtimeState, renderOptions) =>
+        `selected:${runtimeState.selectedServiceIndex}:pulse:${renderOptions?.pulseServiceIndex ?? "none"}`,
+    });
+
+    await waitForWrite(write, "selected:1:pulse:1\n");
+    await waitForWrite(write, "selected:1:pulse:none\n");
+    keyInput.resolveNext({ sequence: "q" });
+    await runPromise;
+  });
+
   it("passes selected service logs and terminal size to the dashboard renderer", async () => {
     const state = createState();
     const selectedLogs = [

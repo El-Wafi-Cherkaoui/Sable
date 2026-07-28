@@ -9,6 +9,8 @@ export type RenderStaticDashboardOptions = {
   statusMessage?: string;
   color?: boolean;
   style?: TuiStyle;
+  pulseServiceIndex?: number;
+  pulseCommandIndex?: number;
   selectedServiceLogs?: ServiceLogEntry[];
   columns?: number;
   rows?: number;
@@ -47,7 +49,7 @@ export function renderStaticDashboard(
   }
 
   if (state.services.length > 0) {
-    appendServiceSection(lines, state, style, shouldPadSelectedRows);
+    appendServiceSection(lines, state, style, shouldPadSelectedRows, options.pulseServiceIndex);
   }
 
   if (state.commands.length > 0) {
@@ -55,7 +57,7 @@ export function renderStaticDashboard(
       lines.push("");
     }
 
-    appendCommandSection(lines, state, style, shouldPadSelectedRows);
+    appendCommandSection(lines, state, style, shouldPadSelectedRows, options.pulseCommandIndex);
   }
 
   appendAnchoredFooter(lines, ["", statusLine, dashboardFooter], options.rows);
@@ -68,6 +70,7 @@ function appendServiceSection(
   state: RuntimeWorkspaceState,
   style: TuiStyle,
   shouldPadSelectedRows: boolean,
+  pulseServiceIndex?: number,
 ): void {
   const nameColumnWidth = Math.max(
     "Service".length,
@@ -86,9 +89,17 @@ function appendServiceSection(
   lines.push(style.muted(`  ${"Service".padEnd(nameColumnWidth)}  Status`));
 
   for (const [index, line] of serviceLines.entries()) {
-    lines.push(index === state.selectedServiceIndex ? style.selected(
-      shouldPadSelectedRows ? padVisibleEnd(line, tableWidth) : line,
-    ) : line);
+    if (index === pulseServiceIndex) {
+      lines.push(style.pulse(
+        shouldPadSelectedRows ? padVisibleEnd(line, tableWidth) : line,
+      ));
+    } else if (index === state.selectedServiceIndex) {
+      lines.push(style.selected(
+        shouldPadSelectedRows ? padVisibleEnd(line, tableWidth) : line,
+      ));
+    } else {
+      lines.push(line);
+    }
   }
 }
 
@@ -97,6 +108,7 @@ function appendCommandSection(
   state: RuntimeWorkspaceState,
   style: TuiStyle,
   shouldPadSelectedRows: boolean,
+  pulseCommandIndex?: number,
 ): void {
   const nameColumnWidth = Math.max(
     "Command".length,
@@ -114,9 +126,17 @@ function appendCommandSection(
   lines.push(style.muted(`  ${"Command".padEnd(nameColumnWidth)}  Status`));
 
   for (const [index, line] of commandLines.entries()) {
-    lines.push(index === state.selectedCommandIndex ? style.selected(
-      shouldPadSelectedRows ? padVisibleEnd(line, tableWidth) : line,
-    ) : line);
+    if (index === pulseCommandIndex) {
+      lines.push(style.pulse(
+        shouldPadSelectedRows ? padVisibleEnd(line, tableWidth) : line,
+      ));
+    } else if (index === state.selectedCommandIndex) {
+      lines.push(style.selected(
+        shouldPadSelectedRows ? padVisibleEnd(line, tableWidth) : line,
+      ));
+    } else {
+      lines.push(line);
+    }
   }
 }
 
@@ -173,6 +193,8 @@ function renderWideDashboard(
     itemViewportSize,
     style,
     shouldPadSelectedRows,
+    options.pulseServiceIndex,
+    options.pulseCommandIndex,
   );
   const selectedItemName = getSelectedItemName(state);
   const previewRows = renderPreviewRows(
@@ -254,6 +276,8 @@ function renderWideItemRows(
   viewportSize: number,
   style: TuiStyle,
   shouldPadSelectedRows: boolean,
+  pulseServiceIndex?: number,
+  pulseCommandIndex?: number,
 ): string[] {
   const rows = createWideItemRows(state, style);
   const selectedRowIndex = Math.max(0, rows.findIndex((row) =>
@@ -268,9 +292,18 @@ function renderWideItemRows(
       return style.muted(row.line);
     }
 
+    const isPulsed = row.type === "service"
+      ? row.index === pulseServiceIndex
+      : row.index === pulseCommandIndex;
     const isSelected = row.type === "service"
       ? row.index === state.selectedServiceIndex
       : row.index === state.selectedCommandIndex;
+
+    if (isPulsed) {
+      return style.pulse(
+        shouldPadSelectedRows ? padVisibleEnd(row.line, serviceColumnWidth) : row.line,
+      );
+    }
 
     return isSelected ? style.selected(
       shouldPadSelectedRows ? padVisibleEnd(row.line, serviceColumnWidth) : row.line,
