@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- No changes yet.
+
+## 0.2.0 - Daily-use checkpoint
+
 ### Added
 
 - Workspace rename from the home picker.
@@ -10,6 +14,17 @@
 - Service deletion from the dashboard with typed-name confirmation.
 - Service reorder from the dashboard with `K` / `J`.
 - Wide dashboard log preview for the selected service, with a scrollable services viewport.
+- One-shot workspace commands as dashboard items alongside services.
+- Dashboard add, edit, delete, run, stop, output, and help behavior for commands.
+- Horizontal logs/output scrolling for long lines with `h` / Left, `l` / Right, and `0` reset.
+- Display-width-aware terminal layout for Unicode and wide characters.
+- Subtle startup, selection, action, and logs reveal animations.
+
+### Hardened
+
+- Buffered split stdout/stderr chunks so partial process output is logged as complete lines when possible.
+- Preserved failed service state when process synchronization observes an already-exited process.
+- Validated package tarball installation from an isolated project before release.
 
 ## 0.1.0 - MVP release candidate
 
