@@ -2,13 +2,13 @@
 
 Sable is a keyboard-first terminal workspace manager for developers.
 
-It helps you save a workspace made of local services, run those services, switch between them, control their lifecycle, and inspect recent logs from one terminal UI.
+It helps you save a workspace made of local services and one-shot commands, switch between them, control their lifecycle, and inspect recent logs or command output from one terminal UI.
 
 Sable is not a task runner, tmux replacement, IDE, Docker manager, Kubernetes tool, SSH tool, plugin platform, file explorer, editor, or AI tool.
 
 ## Status
 
-Sable 0.1.0 is complete. Current work is focused on Phase 2 daily-use improvements while keeping the product small and local-first.
+Sable 0.2.0 is a working pre-release checkpoint. Current work is focused on daily-use improvements while keeping the product small and local-first.
 
 Requirements: Node.js 20+ and npm. Sable is intended to work on Windows, macOS, and Linux, with early smoke testing on Windows and Linux.
 
@@ -21,16 +21,15 @@ Current capabilities:
 - reorder workspaces directly from the picker
 - delete workspaces from the picker with typed-name confirmation
 - view workspace details from the picker
-- add services from the running workspace dashboard
-- rename services through the dashboard edit flow
-- edit non-running services from the running workspace dashboard
-- delete non-running services from the running workspace dashboard
+- add services or one-shot commands from the running workspace dashboard
+- edit non-running services or commands from the running workspace dashboard
+- delete non-running services or commands from the running workspace dashboard
 - reorder services directly from the running workspace dashboard
 - preview recent selected-service logs from the dashboard on wide terminals
-- start, stop, and restart selected services
+- start, stop, and restart selected services; run selected commands
 - show concise failed/exited details in the service dashboard
 - capture stdout, stderr, and lifecycle logs in memory
-- view and scroll logs
+- view logs/output, including vertical scroll and horizontal scroll for long lines
 - help overlay
 - minimal command mode
 - graceful shutdown on quit or Ctrl+C
@@ -125,24 +124,24 @@ Ctrl+C      quit Sable from anywhere
 
 Deleting a workspace from the picker requires typing the workspace name exactly.
 
-Only one workspace is active at a time. When a workspace is launched from the picker, `q` / `:quit` in the service dashboard stops that workspace and returns to the picker.
+Only one workspace is active at a time. When a workspace is launched from the picker, `q` / `:quit` in the dashboard stops that workspace and returns to the picker.
 
-## Service dashboard keys
+## Dashboard keys
 
 In `sable run`, or after opening a workspace from the picker:
 
 ```text
-j / Down    select next service
-k / Up      select previous service
-a           add service
-e           edit selected non-running service
-d           delete selected non-running service
+j / Down    select next item
+k / Up      select previous item
+a           add service or command
+e           edit selected non-running item
+d           delete selected non-running item
 K           move selected service up
 J           move selected service down
 S           start selected service
-s           stop selected service
-r           restart selected service
-Enter       show selected service logs
+s           stop selected item
+r           restart service or run command
+Enter       show selected logs/output
 ?           show help
 :           command mode
 q           quit, or return to picker when launched from picker
@@ -156,6 +155,9 @@ j / Down    scroll down
 k / Up      scroll up
 g           jump to top
 G           jump to bottom
+h / Left    scroll long lines left
+l / Right   scroll long lines right
+0           reset horizontal scroll
 Esc         return to dashboard
 ?           show help
 :           command mode
@@ -163,7 +165,7 @@ q           quit, or return to picker when launched from picker
 Ctrl+C      quit Sable cleanly
 ```
 
-Logs are kept in memory and bounded per service. They are not persisted to disk.
+Logs/output are kept in memory and bounded per service or command. They are not persisted to disk.
 
 ## Command mode
 
@@ -190,7 +192,7 @@ Workspace commands are treated as trusted local configuration.
 
 Sable runs workspace service commands through the user's shell. Treat workspace configuration as trusted local configuration, not as safe input from untrusted sources.
 
-The primary interactive flow is the no-argument `sable` home picker. Common service actions are direct keys on the selected service; less common global actions belong in command mode.
+The primary interactive flow is the no-argument `sable` home picker. Common dashboard actions are direct keys on the selected service or command; less common global actions belong in command mode.
 
 ## MVP limitations
 
