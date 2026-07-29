@@ -90,9 +90,14 @@ describe("mapLogsKey", () => {
     expect(mapLogsKey({ sequence: "k" })).toBe("scrollUp");
   });
 
-  it("maps jump, help, command, back, and quit keys", () => {
+  it("maps jump, horizontal scroll, help, command, back, and quit keys", () => {
     expect(mapLogsKey({ sequence: "g" })).toBe("scrollTop");
     expect(mapLogsKey({ sequence: "G" })).toBe("scrollBottom");
+    expect(mapLogsKey({ sequence: "h" })).toBe("scrollLeft");
+    expect(mapLogsKey({ name: "left" })).toBe("scrollLeft");
+    expect(mapLogsKey({ sequence: "l" })).toBe("scrollRight");
+    expect(mapLogsKey({ name: "right" })).toBe("scrollRight");
+    expect(mapLogsKey({ sequence: "0" })).toBe("resetHorizontalScroll");
     expect(mapLogsKey({ sequence: "?" })).toBe("openHelp");
     expect(mapLogsKey({ sequence: ":" })).toBe("openCommand");
     expect(mapLogsKey({ name: "escape" })).toBe("back");

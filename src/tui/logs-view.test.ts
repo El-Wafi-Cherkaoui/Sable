@@ -19,11 +19,11 @@ describe("renderLogsView", () => {
     expect(rendered).toContain("Logs");
     expect(rendered).toContain("workspace ecommerce");
     expect(rendered).toContain("range     lines 1-2 of 2");
-    expect(rendered).toContain(`┌${"─".repeat(54)}┐`);
-    expect(rendered).toContain("│ stdout server ready");
-    expect(rendered).toContain("│ stderr warning");
-    expect(rendered).toContain(`└${"─".repeat(54)}┘`);
-    expect(rendered).toContain("j/k scroll  Esc back  ? help  q quit");
+    expect(rendered).toContain(`${"\u250c"}${"\u2500".repeat(54)}${"\u2510"}`);
+    expect(rendered).toContain("\u2502 stdout server ready");
+    expect(rendered).toContain("\u2502 stderr warning");
+    expect(rendered).toContain(`${"\u2514"}${"\u2500".repeat(54)}${"\u2518"}`);
+    expect(rendered).toContain("j/k scroll  h/l sideways  0 reset  Esc back  ? help  q quit");
   });
 
   it("keeps the log box width stable and truncates long lines", () => {
@@ -35,8 +35,23 @@ describe("renderLogsView", () => {
       viewportColumns: 52,
     });
 
-    expect(rendered).toContain(`┌${"─".repeat(46)}┐`);
+    expect(rendered).toContain(`${"\u250c"}${"\u2500".repeat(46)}${"\u2510"}`);
     expect(rendered).toContain("stdout this is a very long log line that ...");
+  });
+
+  it("horizontally scrolls long log lines", () => {
+    const rendered = renderLogsView({
+      state: createState(),
+      logs: [createLog("stdout", "abcdefghijklmnopqrstuvwxyz")],
+      scrollOffset: 0,
+      horizontalScrollOffset: 8,
+      visibleLineCount: 1,
+      viewportColumns: 32,
+    });
+
+    expect(rendered).toContain("stdout ijkl");
+    expect(rendered).not.toContain("stdout abc");
+    expect(rendered).toContain("h/l sideways  0 reset");
   });
 
   it("renders system lifecycle entries with logs", () => {
@@ -95,7 +110,7 @@ describe("renderLogsView", () => {
     expect(rendered).toContain("stdout one");
     expect(rendered).toContain("stdout two");
     expect(rendered).not.toContain("stdout three");
-    expect(rendered.split("\n").filter((line) => line.startsWith("│ "))).toHaveLength(3);
+    expect(rendered.split("\n").filter((line) => line.startsWith("\u2502 "))).toHaveLength(3);
   });
 
   it("renders an empty state", () => {

@@ -21,6 +21,7 @@
     "@inquirer/prompts": "^8.5.2",
     "commander": "^14.0.0",
     "env-paths": "^4.0.0",
+    "string-width": "^7.2.0",
     "tree-kill": "^1.2.2",
     "zod": "^4.4.3"
   },

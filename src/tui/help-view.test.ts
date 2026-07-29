@@ -21,6 +21,9 @@ describe("renderHelpView", () => {
     expect(rendered).toContain("Logs");
     expect(rendered).toContain("g           jump to top");
     expect(rendered).toContain("G           jump to bottom");
+    expect(rendered).toContain("h / Left    scroll long lines left");
+    expect(rendered).toContain("l / Right   scroll long lines right");
+    expect(rendered).toContain("0           reset horizontal scroll");
     expect(rendered).toContain("Esc         return to dashboard");
     expect(rendered).toContain(":           command mode");
   });

@@ -26,6 +26,9 @@ export type LogsAction =
   | "scrollUp"
   | "scrollTop"
   | "scrollBottom"
+  | "scrollLeft"
+  | "scrollRight"
+  | "resetHorizontalScroll"
   | "openHelp"
   | "openCommand"
   | "back"
@@ -171,6 +174,18 @@ export function mapLogsKey(keypress: Keypress): LogsAction {
 
   if (keypress.sequence === "G") {
     return "scrollBottom";
+  }
+
+  if (keypress.name === "left" || keypress.sequence === "h") {
+    return "scrollLeft";
+  }
+
+  if (keypress.name === "right" || keypress.sequence === "l") {
+    return "scrollRight";
+  }
+
+  if (keypress.sequence === "0") {
+    return "resetHorizontalScroll";
   }
 
   if (keypress.name === "escape") {

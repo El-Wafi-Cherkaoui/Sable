@@ -1,6 +1,8 @@
 import type { ServiceLogEntry } from "../process/process-manager.js";
 import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import { createTuiStyle, type TuiStyle } from "./style.js";
+import { sliceVisibleStart, truncateVisible, visibleLength } from "./width.js";
+export { stripAnsi, truncateVisible, visibleLength } from "./width.js";
 
 export type RenderLogsViewOptions = {
   state: RuntimeWorkspaceState;
@@ -8,6 +10,7 @@ export type RenderLogsViewOptions = {
   scrollOffset: number;
   visibleLineCount?: number;
   revealLineCount?: number;
+  horizontalScrollOffset?: number;
   viewportColumns?: number;
   color?: boolean;
   style?: TuiStyle;
@@ -51,7 +54,7 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
     ? ["No item selected."]
     : options.logs.length === 0
       ? ["No logs yet.", "", "Start the service or wait for output."]
-      : revealedLogs.map((entry) => formatLogEntry(entry, style));
+      : revealedLogs.map((entry) => formatLogEntry(entry, style, options.horizontalScrollOffset ?? 0));
 
   lines.push(...renderLogBox(
     contentLines,
@@ -60,7 +63,7 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
     style,
   ));
 
-  lines.push("", style.muted("j/k scroll  Esc back  ? help  q quit"));
+  lines.push("", style.muted("j/k scroll  h/l sideways  0 reset  Esc back  ? help  q quit"));
 
   return lines.join("\n");
 }
@@ -77,8 +80,10 @@ export function maxScrollOffset(logLineCount: number, visibleLineCount: number):
   return Math.max(0, logLineCount - visibleLineCount);
 }
 
-function formatLogEntry(entry: ServiceLogEntry, style: TuiStyle): string {
-  return `${style.stream(entry.stream)} ${entry.line}`;
+function formatLogEntry(entry: ServiceLogEntry, style: TuiStyle, horizontalScrollOffset: number): string {
+  const line = horizontalScrollOffset > 0 ? sliceVisibleStart(entry.line, horizontalScrollOffset) : entry.line;
+
+  return `${style.stream(entry.stream)} ${line}`;
 }
 
 export function renderLogBox(
@@ -86,24 +91,26 @@ export function renderLogBox(
   visibleLineCount: number,
   width: number,
   style: TuiStyle,
+  horizontalScrollOffset = 0,
 ): string[] {
   const paddedLines = [
     ...contentLines.slice(0, visibleLineCount),
     ...Array.from({ length: Math.max(0, visibleLineCount - contentLines.length) }, () => ""),
   ];
-  const top = style.border(`┌${"─".repeat(width + 2)}┐`);
-  const bottom = style.border(`└${"─".repeat(width + 2)}┘`);
+  const top = style.border(`${"\u250c"}${"\u2500".repeat(width + 2)}${"\u2510"}`);
+  const bottom = style.border(`${"\u2514"}${"\u2500".repeat(width + 2)}${"\u2518"}`);
   const body = paddedLines.map((line) =>
-    formatLogBoxLine(line, width, style),
+    formatLogBoxLine(line, width, style, horizontalScrollOffset),
   );
 
   return [top, ...body, bottom];
 }
 
-function formatLogBoxLine(line: string, width: number, style: TuiStyle): string {
-  const truncatedLine = truncateVisible(line, width);
+function formatLogBoxLine(line: string, width: number, style: TuiStyle, horizontalScrollOffset: number): string {
+  const shiftedLine = horizontalScrollOffset > 0 ? sliceVisibleStart(line, horizontalScrollOffset) : line;
+  const truncatedLine = truncateVisible(shiftedLine, width);
 
-  return `${style.border("│")} ${truncatedLine}${" ".repeat(width - visibleLength(truncatedLine))} ${style.border("│")}`;
+  return `${style.border("\u2502")} ${truncatedLine}${" ".repeat(width - visibleLength(truncatedLine))} ${style.border("\u2502")}`;
 }
 
 function resolveLogBoxWidth(viewportColumns: number): number {
@@ -112,22 +119,6 @@ function resolveLogBoxWidth(viewportColumns: number): number {
   }
 
   return Math.max(minimumLogBoxWidth, Math.min(maximumLogBoxWidth, viewportColumns - 8));
-}
-
-export function truncateVisible(value: string, maxLength: number): string {
-  if (visibleLength(value) <= maxLength) {
-    return value;
-  }
-
-  return `${stripAnsi(value).slice(0, Math.max(0, maxLength - 3))}...`;
-}
-
-export function visibleLength(value: string): number {
-  return stripAnsi(value).length;
-}
-
-export function stripAnsi(value: string): string {
-  return value.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
 function formatLogRange(

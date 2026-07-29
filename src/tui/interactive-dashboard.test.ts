@@ -631,6 +631,33 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenNthCalledWith(6, "dashboard\n");
   });
 
+  it("horizontally scrolls logs and resets the offset", async () => {
+    const state = createState();
+    const controller = createController(state, () => [
+      { stream: "stdout", line: "abcdefghijklmnopqrstuvwxyz", timestamp: new Date() },
+    ]);
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([
+        { name: "return" },
+        { sequence: "l" },
+        { sequence: "h" },
+        { sequence: "0" },
+        { sequence: "q" },
+      ]),
+      screen: { clear: vi.fn(), write },
+      render: () => "dashboard",
+      renderLogs: ({ horizontalScrollOffset }) => `logs:${horizontalScrollOffset ?? 0}`,
+      logVisibleLineCount: 1,
+    });
+
+    expect(write).toHaveBeenNthCalledWith(2, "logs:0\n");
+    expect(write).toHaveBeenNthCalledWith(3, "logs:8\n");
+    expect(write).toHaveBeenNthCalledWith(4, "logs:0\n");
+    expect(write).toHaveBeenNthCalledWith(5, "logs:0\n");
+  });
   it("reveals logs in quick batches when opening the logs view", async () => {
     const state = createState();
     const logs = [

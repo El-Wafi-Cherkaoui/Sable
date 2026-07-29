@@ -84,6 +84,7 @@ export async function runInteractiveDashboard(
   let commandInput = "";
   let commandError: string | undefined;
   let logScrollOffset = 0;
+  let logHorizontalScrollOffset = 0;
   let followLogTail = true;
   let logRevealLineCount: number | undefined;
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
@@ -220,6 +221,21 @@ export async function runInteractiveDashboard(
           clearLogReveal();
           logScrollOffset = maxScrollOffset(logs.length, getLogVisibleLineCount());
           followLogTail = true;
+          renderLogsFrame();
+          break;
+        case "scrollLeft":
+          clearLogReveal();
+          logHorizontalScrollOffset = Math.max(0, logHorizontalScrollOffset - 8);
+          renderLogsFrame();
+          break;
+        case "scrollRight":
+          clearLogReveal();
+          logHorizontalScrollOffset += 8;
+          renderLogsFrame();
+          break;
+        case "resetHorizontalScroll":
+          clearLogReveal();
+          logHorizontalScrollOffset = 0;
           renderLogsFrame();
           break;
         case "openHelp":
@@ -383,6 +399,7 @@ export async function runInteractiveDashboard(
         clearPulse();
         mode = "logs";
         followLogTail = true;
+        logHorizontalScrollOffset = 0;
         logRevealLineCount = resolveInitialLogRevealLineCount(
           options.controller.getSelectedServiceLogs().length,
           getLogVisibleLineCount(),
@@ -433,6 +450,7 @@ export async function runInteractiveDashboard(
         scrollOffset: logScrollOffset,
         visibleLineCount: getLogVisibleLineCount(),
         revealLineCount: logRevealLineCount,
+        horizontalScrollOffset: logHorizontalScrollOffset,
         viewportColumns: process.stdout.columns,
         color,
       }),

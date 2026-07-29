@@ -1,6 +1,7 @@
 import type { Keypress } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
+import { padVisibleEnd, visibleLength } from "./width.js";
 
 export type PromptResult<T> =
   | { type: "submit"; value: T }
@@ -255,17 +256,6 @@ function formatSelectChoice(
   return selected ? style.selected(padVisibleEnd(line, selectedLineWidth)) : line;
 }
 
-function padVisibleEnd(value: string, width: number): string {
-  return `${value}${" ".repeat(Math.max(0, width - visibleLength(value)))}`;
-}
-
-function visibleLength(value: string): number {
-  return stripAnsi(value).length;
-}
-
-function stripAnsi(value: string): string {
-  return value.replace(/\x1b\[[0-9;]*m/g, "");
-}
 
 function renderConfirmPrompt(
   options: ConfirmPromptOptions,
