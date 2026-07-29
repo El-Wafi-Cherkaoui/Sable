@@ -11,6 +11,7 @@ export type ManagedProcessState =
   | { status: "failed"; error: Error };
 
 export type ServiceLogStream = "stdout" | "stderr" | "system";
+type ProcessOutputStream = Exclude<ServiceLogStream, "system">;
 
 export type ServiceLogEntry = {
   stream: ServiceLogStream;
@@ -37,6 +38,7 @@ type ManagedProcessEntry = {
   state: ManagedProcessState;
   stopRequested: boolean;
 };
+type PendingLogChunks = Partial<Record<ProcessOutputStream, string>>;
 
 const defaultGracefulStopTimeoutMs = 3_000;
 const defaultForceStopTimeoutMs = 1_000;
@@ -45,6 +47,7 @@ const defaultMaxLogLinesPerService = 200;
 export class ProcessManager {
   private readonly processes = new Map<string, ManagedProcessEntry>();
   private readonly logs = new Map<string, ServiceLogEntry[]>();
+  private readonly pendingLogChunks = new Map<string, PendingLogChunks>();
   private readonly gracefulStopTimeoutMs: number;
   private readonly forceStopTimeoutMs: number;
   private readonly maxLogLinesPerService: number;
@@ -124,6 +127,7 @@ export class ProcessManager {
         status: "failed",
         error,
       };
+      this.flushPendingLogs(service.id);
       this.appendSystemLog(service.id, `process error: ${error.message}`);
     });
 
@@ -131,6 +135,7 @@ export class ProcessManager {
       entry.state = entry.stopRequested
         ? { status: "stopped" }
         : { status: "exited", exitCode, signal };
+      this.flushPendingLogs(service.id);
       this.appendSystemLog(
         service.id,
         entry.stopRequested
@@ -160,6 +165,7 @@ export class ProcessManager {
       await this.stopProcessTree(entry.child, "SIGTERM");
     } catch (error) {
       entry.state = { status: "failed", error: toError(error) };
+      this.flushPendingLogs(serviceId);
       this.appendSystemLog(
         serviceId,
         `failed to stop service: ${entry.state.error.message}`,
@@ -177,6 +183,7 @@ export class ProcessManager {
         await this.stopProcessTree(entry.child, "SIGKILL");
       } catch (error) {
         entry.state = { status: "failed", error: toError(error) };
+        this.flushPendingLogs(serviceId);
         this.appendSystemLog(
           serviceId,
           `failed to force stop service: ${entry.state.error.message}`,
@@ -189,6 +196,7 @@ export class ProcessManager {
 
     if (isActive(entry)) {
       entry.state = { status: "failed", error: new Error("Process did not stop.") };
+      this.flushPendingLogs(serviceId);
       this.appendSystemLog(serviceId, "failed to stop service: Process did not stop.");
       return entry.state;
     }
@@ -218,30 +226,72 @@ export class ProcessManager {
 
   private appendLogChunk(
     serviceId: string,
-    stream: ServiceLogStream,
+    stream: ProcessOutputStream,
     chunk: Buffer | string,
   ): void {
-    const lines = splitLogLines(chunk.toString());
+    const pendingChunk = this.pendingLogChunks.get(serviceId)?.[stream] ?? "";
+    const contents = normalizeLogContents(`${pendingChunk}${chunk.toString()}`);
+    const lines = contents.split("\n");
+
+    if (contents.endsWith("\n")) {
+      lines.pop();
+      this.setPendingLogChunk(serviceId, stream, undefined);
+    } else {
+      this.setPendingLogChunk(serviceId, stream, lines.pop() ?? "");
+    }
 
     if (lines.length === 0) {
       return;
     }
 
-    const serviceLogs = this.logs.get(serviceId) ?? [];
-
-    serviceLogs.push(
-      ...lines.map((line) => ({
+    this.appendLogEntries(
+      serviceId,
+      lines.map((line) => ({
         stream,
         line,
         timestamp: new Date(),
       })),
     );
+  }
 
-    if (serviceLogs.length > this.maxLogLinesPerService) {
-      serviceLogs.splice(0, serviceLogs.length - this.maxLogLinesPerService);
+  private setPendingLogChunk(
+    serviceId: string,
+    stream: ProcessOutputStream,
+    value: string | undefined,
+  ): void {
+    const pendingChunks = this.pendingLogChunks.get(serviceId) ?? {};
+
+    if (value === undefined || value.length === 0) {
+      delete pendingChunks[stream];
+    } else {
+      pendingChunks[stream] = value;
     }
 
-    this.logs.set(serviceId, serviceLogs);
+    if (pendingChunks.stdout === undefined && pendingChunks.stderr === undefined) {
+      this.pendingLogChunks.delete(serviceId);
+      return;
+    }
+
+    this.pendingLogChunks.set(serviceId, pendingChunks);
+  }
+
+  private flushPendingLogs(serviceId: string): void {
+    const pendingChunks = this.pendingLogChunks.get(serviceId);
+
+    if (pendingChunks === undefined) {
+      return;
+    }
+
+    this.pendingLogChunks.delete(serviceId);
+    this.appendLogEntries(
+      serviceId,
+      (["stdout", "stderr"] as const)
+        .flatMap((stream) => {
+          const line = pendingChunks[stream];
+
+          return line === undefined ? [] : [{ stream, line, timestamp: new Date() }];
+        }),
+    );
   }
 
   private appendSystemLog(serviceId: string, line: string): void {
@@ -285,15 +335,8 @@ export class ProcessManager {
   }
 }
 
-function splitLogLines(contents: string): string[] {
-  const normalizedContents = contents.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const lines = normalizedContents.split("\n");
-
-  if (normalizedContents.endsWith("\n")) {
-    lines.pop();
-  }
-
-  return lines;
+function normalizeLogContents(contents: string): string {
+  return contents.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 function formatProcessExitMessage(

@@ -200,6 +200,44 @@ describe("ProcessManager", () => {
     ]);
   });
 
+  it("combines log lines split across output chunks", async () => {
+    manager = createManager();
+    const service = createService({
+      command: nodeCommand('process.stdout.write("hel"); setTimeout(() => process.stdout.write("lo" + String.fromCharCode(10)), 20);'),
+    });
+
+    manager.start(service);
+
+    await waitForStatus(manager, service.id, "exited");
+    await waitForLogCount(manager, service.id, 3);
+
+    expect(
+      manager
+        .getLogs(service.id)
+        .filter((entry) => entry.stream === "stdout")
+        .map((entry) => entry.line),
+    ).toEqual(["hello"]);
+  });
+
+  it("flushes unterminated log lines when a process exits", async () => {
+    manager = createManager();
+    const service = createService({
+      command: nodeCommand('process.stderr.write("unterminated error", () => process.exit(9));'),
+    });
+
+    manager.start(service);
+
+    await waitForStatus(manager, service.id, "exited");
+    await waitForLogCount(manager, service.id, 3);
+
+    const logLines = manager.getLogs(service.id).map((entry) => entry.line);
+
+    expect(logLines).toContain("unterminated error");
+    expect(logLines.indexOf("unterminated error")).toBeLessThan(
+      logLines.indexOf("process exited with code 9"),
+    );
+  });
+
   it("keeps a bounded log buffer per service", async () => {
     manager = createManager({ maxLogLinesPerService: 3 });
     const service = createService({
