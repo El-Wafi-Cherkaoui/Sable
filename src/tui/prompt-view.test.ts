@@ -68,6 +68,43 @@ describe("runSelectPrompt", () => {
     ).resolves.toEqual({ type: "submit", value: "web" });
   });
 
+  it("uses selected-row styling instead of > markers in color mode", async () => {
+    const screen = createScreen();
+
+    await runSelectPrompt({
+      title: "Edit service",
+      message: "Service",
+      keyInput: createKeyInput([{ name: "return" }]),
+      screen,
+      color: true,
+      choices: [
+        { label: "api", value: "api" },
+        { label: "web", value: "web" },
+      ],
+    });
+
+    expect(screen.write).toHaveBeenCalledWith(expect.stringContaining("\x1b[48;5;236m  api\x1b[49m"));
+    expect(screen.write).not.toHaveBeenCalledWith(expect.stringContaining("> api"));
+  });
+
+  it("pulses the newly selected choice in color mode", async () => {
+    const screen = createScreen();
+
+    await runSelectPrompt({
+      title: "Edit service",
+      message: "Service",
+      keyInput: createKeyInput([{ sequence: "j" }, { name: "return" }]),
+      screen,
+      color: true,
+      choices: [
+        { label: "api", value: "api" },
+        { label: "web", value: "web" },
+      ],
+    });
+
+    expect(screen.write).toHaveBeenCalledWith(expect.stringContaining("\x1b[48;5;239m\x1b[1m  web\x1b[22m\x1b[49m"));
+  });
+
   it("returns back on Esc", async () => {
     await expect(
       runSelectPrompt({

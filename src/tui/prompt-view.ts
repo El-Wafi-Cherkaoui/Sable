@@ -1,5 +1,6 @@
 import type { Keypress } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
+import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
 
 export type PromptResult<T> =
   | { type: "submit"; value: T }
@@ -25,6 +26,8 @@ export type SelectPromptOptions<T extends string> = {
   message: string;
   keyInput: KeyInput;
   screen?: PromptScreen;
+  color?: boolean;
+  style?: TuiStyle;
   choices: Array<{ label: string; value: T }>;
 };
 
@@ -88,34 +91,66 @@ export async function runSelectPrompt<T extends string>(
 ): Promise<PromptResult<T>> {
   const screen = options.screen ?? terminalScreen;
   let selectedIndex = 0;
+  let pulseIndex: number | undefined;
+  let pulseTimer: ReturnType<typeof setTimeout> | undefined;
 
-  renderFrame(screen, renderSelectPrompt(options, selectedIndex));
+  renderFrame(screen, renderSelectPrompt(options, selectedIndex, pulseIndex));
 
   while (true) {
     const keypress = await options.keyInput.readKey();
 
     if (isCtrlC(keypress)) {
+      clearPulse();
       return { type: "exit" };
     }
 
     if (keypress.name === "escape") {
+      clearPulse();
       return { type: "back" };
     }
 
     if (keypress.name === "return" || keypress.sequence === "\r") {
+      clearPulse();
       return { type: "submit", value: options.choices[selectedIndex].value };
     }
 
     if (keypress.name === "down" || keypress.sequence === "j") {
+      clearPulse();
       selectedIndex = (selectedIndex + 1) % options.choices.length;
-      renderFrame(screen, renderSelectPrompt(options, selectedIndex));
+      pulseIndex = selectedIndex;
+      schedulePulseClear();
+      renderFrame(screen, renderSelectPrompt(options, selectedIndex, pulseIndex));
       continue;
     }
 
     if (keypress.name === "up" || keypress.sequence === "k") {
+      clearPulse();
       selectedIndex = (selectedIndex - 1 + options.choices.length) % options.choices.length;
-      renderFrame(screen, renderSelectPrompt(options, selectedIndex));
+      pulseIndex = selectedIndex;
+      schedulePulseClear();
+      renderFrame(screen, renderSelectPrompt(options, selectedIndex, pulseIndex));
     }
+  }
+
+  function clearPulse(): void {
+    if (pulseTimer !== undefined) {
+      clearTimeout(pulseTimer);
+      pulseTimer = undefined;
+    }
+
+    pulseIndex = undefined;
+  }
+
+  function schedulePulseClear(): void {
+    if (pulseTimer !== undefined) {
+      clearTimeout(pulseTimer);
+      pulseTimer = undefined;
+    }
+
+    pulseTimer = setTimeout(() => {
+      pulseIndex = undefined;
+      renderFrame(screen, renderSelectPrompt(options, selectedIndex, pulseIndex));
+    }, 110);
   }
 }
 
@@ -171,18 +206,58 @@ function renderTextPrompt(
 function renderSelectPrompt<T extends string>(
   options: SelectPromptOptions<T>,
   selectedIndex: number,
+  pulseIndex?: number,
 ): string {
+  const color = options.color ?? shouldUseColor();
+  const style = options.style ?? createTuiStyle(color);
+  const selectedLineWidth = Math.max(
+    ...options.choices.map((choice) => visibleLength(`  ${choice.label}`)),
+  );
+
   return [
     options.title,
     "",
     options.message,
     "",
     ...options.choices.map((choice, index) =>
-      `${index === selectedIndex ? ">" : " "} ${choice.label}`,
+      formatSelectChoice(choice.label, index === selectedIndex, index === pulseIndex, color, style, selectedLineWidth),
     ),
     "",
     "j/k move  Esc back  Enter select  Ctrl+C quit",
   ].join("\n");
+}
+
+function formatSelectChoice(
+  label: string,
+  selected: boolean,
+  pulsed: boolean,
+  color: boolean,
+  style: TuiStyle,
+  selectedLineWidth: number,
+): string {
+  if (!color) {
+    return `${selected ? ">" : " "} ${label}`;
+  }
+
+  const line = `  ${label}`;
+
+  if (pulsed) {
+    return style.pulse(padVisibleEnd(line, selectedLineWidth));
+  }
+
+  return selected ? style.selected(padVisibleEnd(line, selectedLineWidth)) : line;
+}
+
+function padVisibleEnd(value: string, width: number): string {
+  return `${value}${" ".repeat(Math.max(0, width - visibleLength(value)))}`;
+}
+
+function visibleLength(value: string): number {
+  return stripAnsi(value).length;
+}
+
+function stripAnsi(value: string): string {
+  return value.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
 function renderConfirmPrompt(
