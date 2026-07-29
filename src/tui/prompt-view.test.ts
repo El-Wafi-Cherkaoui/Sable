@@ -14,6 +14,20 @@ describe("runTextPrompt", () => {
     ).resolves.toEqual({ type: "submit", value: "a" });
   });
 
+  it("renders typed input with a subtle underline instead of a > marker", async () => {
+    const screen = createScreen();
+
+    await runTextPrompt({
+      title: "Add service",
+      message: "Service name",
+      keyInput: createKeyInput([{ sequence: "a" }, { name: "return" }]),
+      screen,
+    });
+
+    expect(screen.write).toHaveBeenCalledWith(expect.stringContaining("  a\n  ─"));
+    expect(screen.write).not.toHaveBeenCalledWith(expect.stringContaining("> a"));
+  });
+
   it("returns back on Esc", async () => {
     await expect(
       runTextPrompt({
@@ -136,6 +150,21 @@ describe("runConfirmPrompt", () => {
         screen: createScreen(),
       }),
     ).resolves.toEqual({ type: "submit", value: false });
+  });
+
+  it("renders the default value with a subtle underline instead of a > marker", async () => {
+    const screen = createScreen();
+
+    await runConfirmPrompt({
+      title: "Edit service",
+      message: "Remove?",
+      keyInput: createKeyInput([{ name: "return" }]),
+      screen,
+      defaultValue: true,
+    });
+
+    expect(screen.write).toHaveBeenCalledWith(expect.stringContaining("  yes\n  ───"));
+    expect(screen.write).not.toHaveBeenCalledWith(expect.stringContaining("> yes"));
   });
 
   it("returns back on Esc", async () => {

@@ -17,6 +17,8 @@ export type TextPromptOptions = {
   message: string;
   keyInput: KeyInput;
   screen?: PromptScreen;
+  color?: boolean;
+  style?: TuiStyle;
   defaultValue?: string;
   validate?: (value: string) => boolean | string;
 };
@@ -36,6 +38,8 @@ export type ConfirmPromptOptions = {
   message: string;
   keyInput: KeyInput;
   screen?: PromptScreen;
+  color?: boolean;
+  style?: TuiStyle;
   defaultValue?: boolean;
 };
 
@@ -192,11 +196,14 @@ function renderTextPrompt(
   value: string,
   error: string | undefined,
 ): string {
+  const style = options.style ?? createTuiStyle(options.color ?? shouldUseColor());
+
   return [
     options.title,
     "",
     options.message,
-    `> ${value}`,
+    "",
+    ...renderInputValue(value, style),
     ...(error === undefined ? [] : ["", error]),
     "",
     "Esc back  Enter save  Ctrl+C quit",
@@ -264,14 +271,26 @@ function renderConfirmPrompt(
   options: ConfirmPromptOptions,
   defaultValue: boolean,
 ): string {
+  const style = options.style ?? createTuiStyle(options.color ?? shouldUseColor());
+
   return [
     options.title,
     "",
     options.message,
-    `> ${defaultValue ? "yes" : "no"}`,
+    "",
+    ...renderInputValue(defaultValue ? "yes" : "no", style),
     "",
     "y yes  n no  Enter default  Esc back  Ctrl+C quit",
   ].join("\n");
+}
+
+function renderInputValue(value: string, style: TuiStyle): string[] {
+  const underlineWidth = Math.max(1, visibleLength(value));
+
+  return [
+    `  ${value}`,
+    `  ${style.muted("─".repeat(underlineWidth))}`,
+  ];
 }
 
 function isCtrlC(keypress: Keypress): boolean {
