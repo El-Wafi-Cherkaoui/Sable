@@ -106,7 +106,16 @@ describe("renderWorkspacePicker", () => {
 
     expect(rendered).toContain("███████╗ █████╗ ██████╗ ██╗     ███████╗");
     expect(rendered).toContain("Keyboard-first Workspace Manager");
-    expect(rendered).toContain("─".repeat(56));
+    expect(rendered).toContain("─".repeat(40));
+  });
+
+  it("keeps startup banner rows aligned as one fixed-width block", () => {
+    const bannerRows = renderWorkspaceStartupMoment({ columns: 80, rows: 12 })
+      .split("\n")
+      .filter((line) => /[█╚]/.test(line));
+    const firstVisibleColumns = bannerRows.map((line) => stripAnsi(line).search(/\S/));
+
+    expect(new Set(firstVisibleColumns).size).toBe(1);
   });
 
   it("renders a compact startup moment on narrow terminals", () => {

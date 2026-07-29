@@ -356,7 +356,7 @@ function shouldRenderStartupBanner(columns: number | undefined): boolean {
 
 function renderStartupBanner(style: TuiStyle, columns: number | undefined): string[] {
   return [
-    ...startupBannerLines.map((line) => centerVisible(style.title(line), columns)),
+    ...startupBannerLines.map((line) => centerVisible(style.title(padVisibleEnd(line, startupBannerWidth)), columns)),
     "",
     centerVisible(style.muted("Keyboard-first Workspace Manager"), columns),
     centerVisible(style.muted("─".repeat(startupBannerWidth)), columns),
@@ -379,7 +379,7 @@ const startupBannerLines = [
   "███████║██║  ██║██████╔╝███████╗███████╗",
   "╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝",
 ];
-const startupBannerWidth = 56;
+const startupBannerWidth = Math.max(...startupBannerLines.map((line) => visibleLength(line)));
 
 function padVisibleEnd(value: string, width: number): string {
   return `${value}${" ".repeat(Math.max(0, width - visibleLength(value)))}`;
