@@ -73,7 +73,7 @@ export async function runInteractiveDashboard(
   const renderCommand = options.renderCommand ?? renderCommandView;
   const configuredLogVisibleLineCount = options.logVisibleLineCount;
   const logsRefreshIntervalMs = options.logsRefreshIntervalMs ?? 250;
-  const logsRevealIntervalMs = options.logsRevealIntervalMs ?? 28;
+  const logsRevealIntervalMs = options.logsRevealIntervalMs ?? 55;
   let shouldQuit = false;
   let pulseItem: { type: "service"; index: number } | { type: "command"; index: number } | undefined;
   let pulseTimer: ReturnType<typeof setTimeout> | undefined;
@@ -551,7 +551,7 @@ export async function runInteractiveDashboard(
         pulseItem = undefined;
         renderDashboardFrame();
       }
-    }, 60);
+    }, 110);
   }
 
   function openCommandMode(

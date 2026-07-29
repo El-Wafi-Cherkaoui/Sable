@@ -77,7 +77,7 @@ export async function runWorkspaceHome(
         abortSignal: shutdownAbortController.signal,
         statusMessage,
         selectedWorkspaceId,
-        startupMomentMs: shouldShowStartupMoment ? 180 : 0,
+        startupMomentMs: shouldShowStartupMoment ? 350 : 0,
         screen: options.screen,
       });
 
