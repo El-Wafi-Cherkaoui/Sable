@@ -337,9 +337,9 @@ export function renderWorkspaceStartupMoment(
   options: RenderWorkspacePickerOptions = {},
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
-  const title = style.title(`· ${product.binaryName} ·`);
-  const subtitle = style.muted("workspace ready");
-  const body = [centerVisible(title, options.columns), "", centerVisible(subtitle, options.columns)];
+  const body = shouldRenderStartupBanner(options.columns)
+    ? renderStartupBanner(style, options.columns)
+    : renderCompactStartupMoment(style, options.columns);
   const leadingBlankLines = options.rows === undefined || options.rows <= body.length
     ? 1
     : Math.max(1, Math.floor((options.rows - body.length) / 2));
@@ -349,6 +349,37 @@ export function renderWorkspaceStartupMoment(
     ...body,
   ].join("\n");
 }
+
+function shouldRenderStartupBanner(columns: number | undefined): boolean {
+  return columns === undefined || columns >= startupBannerWidth;
+}
+
+function renderStartupBanner(style: TuiStyle, columns: number | undefined): string[] {
+  return [
+    ...startupBannerLines.map((line) => centerVisible(style.title(line), columns)),
+    "",
+    centerVisible(style.muted("Keyboard-first Workspace Manager"), columns),
+    centerVisible(style.muted("─".repeat(startupBannerWidth)), columns),
+  ];
+}
+
+function renderCompactStartupMoment(style: TuiStyle, columns: number | undefined): string[] {
+  return [
+    centerVisible(style.title(`· ${product.binaryName} ·`), columns),
+    "",
+    centerVisible(style.muted("workspace ready"), columns),
+  ];
+}
+
+const startupBannerLines = [
+  "███████╗ █████╗ ██████╗ ██╗     ███████╗",
+  "██╔════╝██╔══██╗██╔══██╗██║     ██╔════╝",
+  "███████╗███████║██████╔╝██║     █████╗",
+  "╚════██║██╔══██║██╔══██╗██║     ██╔══╝",
+  "███████║██║  ██║██████╔╝███████╗███████╗",
+  "╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝",
+];
+const startupBannerWidth = 56;
 
 function padVisibleEnd(value: string, width: number): string {
   return `${value}${" ".repeat(Math.max(0, width - visibleLength(value)))}`;

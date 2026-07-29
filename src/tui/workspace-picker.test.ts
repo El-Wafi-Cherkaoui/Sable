@@ -101,7 +101,15 @@ describe("renderWorkspacePicker", () => {
     expect(rendered).toContain("\x1b[2m2\x1b[22m");
   });
 
-  it("renders a restrained startup moment", () => {
+  it("renders the Sable startup banner on wide terminals", () => {
+    const rendered = renderWorkspaceStartupMoment({ columns: 80, rows: 12 });
+
+    expect(rendered).toContain("███████╗ █████╗ ██████╗ ██╗     ███████╗");
+    expect(rendered).toContain("Keyboard-first Workspace Manager");
+    expect(rendered).toContain("─".repeat(56));
+  });
+
+  it("renders a compact startup moment on narrow terminals", () => {
     const rendered = renderWorkspaceStartupMoment({ columns: 20, rows: 7 });
 
     expect(rendered.split("\n")).toEqual([
