@@ -78,16 +78,21 @@ export class ConfigStore {
     );
     const contents = `${JSON.stringify(validatedConfig, null, 2)}\n`;
 
-    const fileHandle = await fs.open(tempFile, "w");
-
     try {
-      await fileHandle.writeFile(contents, "utf8");
-      await fileHandle.sync();
-    } finally {
-      await fileHandle.close();
-    }
+      const fileHandle = await fs.open(tempFile, "w");
 
-    await fs.rename(tempFile, this.paths.file);
+      try {
+        await fileHandle.writeFile(contents, "utf8");
+        await fileHandle.sync();
+      } finally {
+        await fileHandle.close();
+      }
+
+      await fs.rename(tempFile, this.paths.file);
+    } catch (error) {
+      await removeFileIfExists(tempFile);
+      throw error;
+    }
   }
 }
 
@@ -136,4 +141,14 @@ type NodeError = Error & {
 
 function isNodeError(error: unknown): error is NodeError {
   return error instanceof Error;
+}
+
+async function removeFileIfExists(filePath: string): Promise<void> {
+  try {
+    await fs.unlink(filePath);
+  } catch (error) {
+    if (!isNodeError(error) || error.code !== "ENOENT") {
+      // Cleanup is best-effort; preserve the original save error.
+    }
+  }
 }

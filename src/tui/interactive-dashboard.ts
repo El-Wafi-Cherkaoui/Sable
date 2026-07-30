@@ -92,7 +92,8 @@ export async function runInteractiveDashboard(
 
   renderDashboardFrame();
 
-  while (!shouldQuit) {
+  try {
+    while (!shouldQuit) {
     const currentMode: ViewMode = mode;
     const refreshIntervalMs = currentMode === "logs" && isLogRevealActive()
       ? logsRevealIntervalMs
@@ -429,9 +430,12 @@ export async function runInteractiveDashboard(
       case "none":
         break;
     }
-  }
+    }
 
-  return { type: "back" };
+    return { type: "back" };
+  } finally {
+    clearPulse();
+  }
 
   function renderLogsFrame(): void {
     const logs = options.controller.getSelectedServiceLogs();

@@ -66,7 +66,7 @@ export class ProcessManager {
   start(service: RunnableConfig): ManagedProcessState {
     const currentEntry = this.processes.get(service.id);
 
-    if (currentEntry !== undefined && isActive(currentEntry)) {
+    if (currentEntry !== undefined && hasLiveChild(currentEntry)) {
       this.appendSystemLog(service.id, "service already running");
       return currentEntry.state;
     }
@@ -132,13 +132,20 @@ export class ProcessManager {
     });
 
     child.once("exit", (exitCode, signal) => {
-      entry.state = entry.stopRequested
-        ? { status: "stopped" }
-        : { status: "exited", exitCode, signal };
+      const shouldPreserveFailedState = entry.state.status === "failed";
+
+      if (!shouldPreserveFailedState) {
+        entry.state = entry.stopRequested
+          ? { status: "stopped" }
+          : { status: "exited", exitCode, signal };
+      }
+
       this.flushPendingLogs(service.id);
       this.appendSystemLog(
         service.id,
-        entry.stopRequested
+        shouldPreserveFailedState
+          ? formatProcessExitMessage(exitCode, signal)
+          : entry.stopRequested
           ? "service stopped"
           : formatProcessExitMessage(exitCode, signal),
       );
@@ -154,7 +161,7 @@ export class ProcessManager {
       return { status: "stopped" };
     }
 
-    if (!isActive(entry)) {
+    if (!hasLiveChild(entry)) {
       this.appendSystemLog(serviceId, "service is not running");
       return entry.state;
     }
@@ -178,7 +185,7 @@ export class ProcessManager {
       this.gracefulStopTimeoutMs,
     );
 
-    if (!stoppedGracefully && isActive(entry)) {
+    if (!stoppedGracefully && hasLiveChild(entry)) {
       try {
         await this.stopProcessTree(entry.child, "SIGKILL");
       } catch (error) {
@@ -194,7 +201,7 @@ export class ProcessManager {
       await waitForExit(entry.child, this.forceStopTimeoutMs);
     }
 
-    if (isActive(entry)) {
+    if (hasLiveChild(entry)) {
       entry.state = { status: "failed", error: new Error("Process did not stop.") };
       this.flushPendingLogs(serviceId);
       this.appendSystemLog(serviceId, "failed to stop service: Process did not stop.");
@@ -207,7 +214,11 @@ export class ProcessManager {
 
   async restart(service: RunnableConfig): Promise<ManagedProcessState> {
     this.appendSystemLog(service.id, "service restart requested");
-    await this.stop(service.id);
+    const stoppedState = await this.stop(service.id);
+
+    if (stoppedState.status === "failed") {
+      return stoppedState;
+    }
 
     return this.start(service);
   }
@@ -351,7 +362,11 @@ function formatProcessExitMessage(
 }
 
 function isActive(entry: ManagedProcessEntry): boolean {
-  return entry.state.status === "running" && entry.child.exitCode === null;
+  return entry.state.status === "running" && hasLiveChild(entry);
+}
+
+function hasLiveChild(entry: ManagedProcessEntry): boolean {
+  return entry.child.exitCode === null && entry.child.signalCode === null;
 }
 
 function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {

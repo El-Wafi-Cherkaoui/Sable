@@ -84,6 +84,49 @@ describe("runInteractiveDashboard", () => {
     await runPromise;
   });
 
+  it("clears pending pulse timers when exiting", async () => {
+    let state = createState();
+    const controller = {
+      getState: vi.fn(() => state),
+      selectNextService: vi.fn(() => {
+        state = {
+          ...state,
+          selectedServiceIndex: 1,
+          selectedCommandIndex: undefined,
+          selectedItem: { type: "service", index: 1 },
+        };
+
+        return state;
+      }),
+      selectPreviousService: vi.fn(() => state),
+      startSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+      restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
+      getSelectedServiceLogs: vi.fn(() => []),
+    };
+    const keyInput = createControlledKeyInput([{ sequence: "j" }]);
+    const abortController = new AbortController();
+    const write = vi.fn();
+    const runPromise = runInteractiveDashboard({
+      controller,
+      keyInput,
+      abortSignal: abortController.signal,
+      screen: { clear: vi.fn(), write },
+      render: (runtimeState, renderOptions) =>
+        `selected:${runtimeState.selectedServiceIndex}:pulse:${renderOptions?.pulseServiceIndex ?? "none"}`,
+    });
+
+    await waitForWrite(write, "selected:1:pulse:1\n");
+    abortController.abort();
+    await runPromise;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    expect(write.mock.calls.map(([contents]) => contents)).toEqual([
+      "selected:0:pulse:none\n",
+      "selected:1:pulse:1\n",
+    ]);
+  });
+
   it("passes selected service logs and terminal size to the dashboard renderer", async () => {
     const state = createState();
     const selectedLogs = [

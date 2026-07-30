@@ -182,4 +182,16 @@ describe("ConfigStore", () => {
       `${JSON.stringify(defaultConfig, null, 2)}\n`,
     );
   });
+
+  it("cleans up the temp file when the atomic rename fails", async () => {
+    const store = new ConfigStore({ directory: tempDirectory });
+
+    await fs.mkdir(store.paths.file);
+
+    await expect(store.save(defaultConfig)).rejects.toThrow();
+
+    const entries = await fs.readdir(tempDirectory);
+
+    expect(entries).toEqual(["workspaces.json"]);
+  });
 });

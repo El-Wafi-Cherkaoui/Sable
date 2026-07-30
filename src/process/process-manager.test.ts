@@ -143,6 +143,56 @@ describe("ProcessManager", () => {
     );
   });
 
+  it("does not restart a service when stopping it fails", async () => {
+    const stopError = new Error("tree kill failed");
+    manager = createManager({
+      processTreeKiller: vi.fn(async () => {
+        throw stopError;
+      }),
+    });
+    const service = createService({ command: nodeCommand("setInterval(() => {}, 1000);") });
+
+    const firstState = manager.start(service);
+    const restartState = await manager.restart(service);
+
+    expect(firstState.status).toBe("running");
+    expect(restartState).toEqual({ status: "failed", error: stopError });
+    expect(manager.getState(service.id)).toEqual({ status: "failed", error: stopError });
+    expect(
+      manager.getLogs(service.id).filter((entry) => entry.line === "service started"),
+    ).toHaveLength(1);
+  });
+
+  it("preserves failed state when a process exits after stop failure", async () => {
+    const stopError = new Error("tree kill failed after termination");
+    let pidToKill: number | undefined;
+    manager = createManager({
+      processTreeKiller: vi.fn(async () => {
+        if (pidToKill !== undefined) {
+          await killTreeForTest(pidToKill);
+        }
+
+        throw stopError;
+      }),
+    });
+    const service = createService({ command: nodeCommand("setInterval(() => {}, 1000);") });
+    const state = manager.start(service);
+
+    if (state.status !== "running" || state.pid === undefined) {
+      throw new Error("Expected test service to be running.");
+    }
+
+    pidToKill = state.pid;
+
+    await expect(manager.stop(service.id)).resolves.toEqual({
+      status: "failed",
+      error: stopError,
+    });
+    await waitForStatus(manager, service.id, "failed");
+
+    expect(manager.getState(service.id)).toEqual({ status: "failed", error: stopError });
+  });
+
   it("restarts a running service", async () => {
     manager = createManager();
     const service = createService({ command: nodeCommand("setInterval(() => {}, 1000);") });
