@@ -4,6 +4,15 @@
 
 - No changes yet.
 
+## 0.2.1 - Stability patch
+
+### Hardened
+
+- Fixed restart behavior when stopping a service fails, avoiding duplicate replacement processes.
+- Preserved failed service state when a process exits after a failed stop attempt.
+- Cleaned up temporary config files when atomic config save fails.
+- Cleared pending dashboard pulse timers on exit to avoid delayed redraws.
+
 ## 0.2.0 - Daily-use checkpoint
 
 ### Added
