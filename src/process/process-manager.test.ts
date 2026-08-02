@@ -292,7 +292,7 @@ describe("ProcessManager", () => {
     manager = createManager({ maxLogLinesPerService: 3 });
     const service = createService({
       command: nodeCommand(
-        'for (let index = 1; index <= 5; index += 1) console.log(`line-${index}`);',
+        'for (let index = 1; index <= 5; index += 1) console.log("line-" + index);',
       ),
     });
 
