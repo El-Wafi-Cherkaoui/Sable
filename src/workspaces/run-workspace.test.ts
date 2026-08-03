@@ -102,6 +102,22 @@ describe("runWorkspaceCommand", () => {
 });
 
 describe("runWorkspaceSession", () => {
+  it("can keep a provided controller alive after dashboard back", async () => {
+    const controller = createFakeController(workspace);
+
+    await runWorkspaceSession({
+      workspace,
+      controller,
+      keyInput: createKeyInput(),
+      runDashboard: async () => ({ type: "back" }),
+      startAutoStartServices: false,
+      shutdownOnReturn: false,
+    });
+
+    expect(controller.startAutoStartServices).not.toHaveBeenCalled();
+    expect(controller.shutdown).not.toHaveBeenCalled();
+  });
+
   it("adds a command through the dashboard add callback", async () => {
     const controller = createFakeController(workspace);
     const store = createStore(config);
@@ -269,7 +285,9 @@ function createFakeController(workspaceConfig: WorkspaceConfig) {
     addService: vi.fn(() => createRuntimeState(workspaceConfig)),
     addCommand: vi.fn(() => createRuntimeState(workspaceConfig)),
     updateService: vi.fn(() => createRuntimeState(workspaceConfig)),
+    updateCommand: vi.fn(() => createRuntimeState(workspaceConfig)),
     removeService: vi.fn(() => createRuntimeState(workspaceConfig)),
+    removeCommand: vi.fn(() => createRuntimeState(workspaceConfig)),
     moveService: vi.fn(() => createRuntimeState(workspaceConfig)),
     getSelectedServiceLogs: vi.fn(() => []),
     shutdown: vi.fn(async () => undefined),

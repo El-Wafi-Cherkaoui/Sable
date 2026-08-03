@@ -124,7 +124,7 @@ Ctrl+C      quit Sable from anywhere
 
 Deleting a workspace from the picker requires typing the workspace name exactly.
 
-Only one workspace is active at a time. When a workspace is launched from the picker, `q` / `:quit` in the dashboard stops that workspace and returns to the picker.
+Only one workspace is active at a time. When a workspace is launched from the picker, `q` / `:quit` in the dashboard returns to the picker and keeps that workspace running. The picker marks the active workspace as `running`. Quitting Sable from the picker stops the active workspace; opening a different workspace stops the previous active workspace first.
 
 ## Dashboard keys
 

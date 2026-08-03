@@ -6,6 +6,7 @@ import {
   type WorkspacePickerResult,
 } from "../tui/workspace-picker.js";
 import {
+  createRunWorkspaceController,
   runWorkspaceSession,
   type RunWorkspaceController,
   type RunWorkspaceSessionOptions,
@@ -63,7 +64,9 @@ export async function runWorkspaceHome(
   let statusMessage: string | undefined;
   let selectedWorkspaceId: string | undefined;
   let shouldShowStartupMoment = true;
+  let activeSession: { workspaceId: string; controller: RunWorkspaceController } | undefined;
   const abortShutdown = () => shutdownAbortController.abort();
+  const createController = options.createController ?? createRunWorkspaceController;
 
   signalSource.once("SIGINT", abortShutdown);
   signalSource.once("SIGTERM", abortShutdown);
@@ -77,6 +80,7 @@ export async function runWorkspaceHome(
         abortSignal: shutdownAbortController.signal,
         statusMessage,
         selectedWorkspaceId,
+        activeWorkspaceId: activeSession?.workspaceId,
         startupMomentMs: shouldShowStartupMoment ? 700 : 0,
         screen: options.screen,
       });
@@ -153,13 +157,30 @@ export async function runWorkspaceHome(
         continue;
       }
 
+      let shouldStartAutoStartServices = false;
+
+      if (activeSession !== undefined && activeSession.workspaceId !== pickerResult.workspace.id) {
+        await activeSession.controller.shutdown();
+        activeSession = undefined;
+      }
+
+      if (activeSession === undefined) {
+        activeSession = {
+          workspaceId: pickerResult.workspace.id,
+          controller: createController(pickerResult.workspace),
+        };
+        shouldStartAutoStartServices = true;
+      }
+
       const sessionResult = await runSession({
         workspace: pickerResult.workspace,
-        createController: options.createController,
+        controller: activeSession.controller,
         keyInput,
         abortSignal: shutdownAbortController.signal,
         dashboardQuitLabel: "back",
         store: options.store,
+        startAutoStartServices: shouldStartAutoStartServices,
+        shutdownOnReturn: false,
       });
 
       statusMessage = undefined;
@@ -170,6 +191,7 @@ export async function runWorkspaceHome(
       }
     }
   } finally {
+    await activeSession?.controller.shutdown();
     signalSource.off("SIGINT", abortShutdown);
     signalSource.off("SIGTERM", abortShutdown);
     keyInput.close();

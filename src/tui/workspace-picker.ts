@@ -9,6 +9,7 @@ import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
 export type WorkspacePickerState = {
   workspaces: WorkspaceConfig[];
   selectedWorkspaceIndex: number | undefined;
+  activeWorkspaceId?: string;
   statusMessage?: string;
 };
 
@@ -44,6 +45,7 @@ export type RunWorkspacePickerOptions = {
   renderDetails?: typeof renderWorkspaceDetails;
   statusMessage?: string;
   selectedWorkspaceId?: string;
+  activeWorkspaceId?: string;
   startupMomentMs?: number;
 };
 
@@ -73,6 +75,7 @@ export async function runWorkspacePicker(
     options.workspaces,
     options.statusMessage,
     options.selectedWorkspaceId,
+    options.activeWorkspaceId,
   );
   let mode: PickerMode = "picker";
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
@@ -239,6 +242,7 @@ export function createWorkspacePickerState(
   workspaces: WorkspaceConfig[],
   statusMessage?: string,
   selectedWorkspaceId?: string,
+  activeWorkspaceId?: string,
 ): WorkspacePickerState {
   const selectedWorkspaceIndex = selectedWorkspaceId === undefined
     ? undefined
@@ -249,6 +253,7 @@ export function createWorkspacePickerState(
     selectedWorkspaceIndex: selectedWorkspaceIndex !== undefined && selectedWorkspaceIndex >= 0
       ? selectedWorkspaceIndex
       : workspaces.length > 0 ? 0 : undefined,
+    activeWorkspaceId,
     statusMessage,
   };
 }
@@ -316,12 +321,16 @@ export function renderWorkspacePicker(
     ...state.workspaces.map((workspace) => workspace.name.length),
   );
 
-  const tableWidth = visibleLength(`  ${"Workspace".padEnd(nameColumnWidth)}  Services`);
+  const stateColumnWidth = state.activeWorkspaceId === undefined ? 0 : "running".length;
+  const header = `  ${"Workspace".padEnd(nameColumnWidth)}  Services${stateColumnWidth > 0 ? `  ${"State".padEnd(stateColumnWidth)}` : ""}`;
+  const tableWidth = visibleLength(header);
 
-  lines.push(style.muted(`  ${"Workspace".padEnd(nameColumnWidth)}  Services`));
+  lines.push(style.muted(header));
 
   for (const [index, workspace] of state.workspaces.entries()) {
-    const line = `  ${workspace.name.padEnd(nameColumnWidth)}  ${style.muted(String(workspace.services.length))}`;
+    const activeState = workspace.id === state.activeWorkspaceId ? style.running("running") : "";
+    const stateSegment = stateColumnWidth > 0 ? `  ${padVisibleEnd(activeState, stateColumnWidth)}` : "";
+    const line = `  ${workspace.name.padEnd(nameColumnWidth)}  ${style.muted(String(workspace.services.length))}${stateSegment}`;
 
     lines.push(index === state.selectedWorkspaceIndex ? style.selected(
       shouldPadSelectedRows ? padVisibleEnd(line, tableWidth) : line,

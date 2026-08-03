@@ -60,6 +60,7 @@ export type RunWorkspaceSignalSource = {
 
 export type RunWorkspaceSessionOptions = {
   workspace: WorkspaceConfig;
+  controller?: RunWorkspaceController;
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   keyInput: KeyInput;
   runDashboard?: (
@@ -68,7 +69,16 @@ export type RunWorkspaceSessionOptions = {
   abortSignal?: AbortSignal;
   dashboardQuitLabel?: string;
   store?: WorkspaceConfigReader;
+  startAutoStartServices?: boolean;
+  shutdownOnReturn?: boolean;
 };
+
+export function createRunWorkspaceController(workspace: WorkspaceConfig): RunWorkspaceController {
+  return new WorkspaceController({
+    workspace,
+    processManager: new ProcessManager(),
+  });
+}
 
 export async function runWorkspaceCommand(
   rawWorkspaceName: string,
@@ -104,15 +114,18 @@ export async function runWorkspaceSession(
   options: RunWorkspaceSessionOptions,
 ): Promise<InteractiveDashboardResult> {
   const controller =
+    options.controller ??
     options.createController?.(options.workspace) ??
-    new WorkspaceController({
-      workspace: options.workspace,
-      processManager: new ProcessManager(),
-    });
+    createRunWorkspaceController(options.workspace);
   const runDashboard = options.runDashboard ?? runInteractiveDashboard;
+  const shouldStartAutoStartServices = options.startAutoStartServices ?? true;
+  const shouldShutdownOnReturn = options.shutdownOnReturn ?? true;
 
   try {
-    await controller.startAutoStartServices();
+    if (shouldStartAutoStartServices) {
+      await controller.startAutoStartServices();
+    }
+
     return await runDashboard({
       controller,
       keyInput: options.keyInput,
@@ -305,7 +318,9 @@ export async function runWorkspaceSession(
         }),
     });
   } finally {
-    await controller.shutdown();
+    if (shouldShutdownOnReturn) {
+      await controller.shutdown();
+    }
   }
 }
 

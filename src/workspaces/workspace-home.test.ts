@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
+import type { RunWorkspaceController } from "./run-workspace.js";
 import { runWorkspaceHome } from "./workspace-home.js";
 
 describe("runWorkspaceHome", () => {
@@ -11,6 +12,8 @@ describe("runWorkspaceHome", () => {
       .fn()
       .mockResolvedValueOnce({ type: "run", workspace })
       .mockResolvedValueOnce({ type: "exit" });
+    const controller = createFakeController();
+    const createController = vi.fn(() => controller);
     const runSession = vi.fn(async () => ({ type: "back" as const }));
 
     await runWorkspaceHome({
@@ -18,6 +21,7 @@ describe("runWorkspaceHome", () => {
       keyInput,
       runPicker,
       runSession,
+      createController,
     });
 
     expect(runPicker).toHaveBeenCalledTimes(2);
@@ -27,20 +31,27 @@ describe("runWorkspaceHome", () => {
       abortSignal: expect.any(AbortSignal),
       statusMessage: undefined,
       selectedWorkspaceId: undefined,
+      activeWorkspaceId: undefined,
       startupMomentMs: 700,
       screen: undefined,
     });
     expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      activeWorkspaceId: workspace.id,
       startupMomentMs: 0,
     }));
+    expect(createController).toHaveBeenCalledOnce();
+    expect(createController).toHaveBeenCalledWith(workspace);
     expect(runSession).toHaveBeenCalledWith({
       workspace,
-      createController: undefined,
+      controller,
       keyInput,
       abortSignal: expect.any(AbortSignal),
       dashboardQuitLabel: "back",
       store: expect.any(Object),
+      startAutoStartServices: true,
+      shutdownOnReturn: false,
     });
+    expect(controller.shutdown).toHaveBeenCalledOnce();
     expect(keyInput.close).toHaveBeenCalledOnce();
   });
 
@@ -71,6 +82,7 @@ describe("runWorkspaceHome", () => {
       selectedWorkspaceId: workspace.id,
     }));
     expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      activeWorkspaceId: workspace.id,
       statusMessage: undefined,
       selectedWorkspaceId: workspace.id,
     }));
@@ -79,15 +91,91 @@ describe("runWorkspaceHome", () => {
   it("exits the app when the workspace session exits", async () => {
     const runPicker = vi.fn(async () => ({ type: "run" as const, workspace }));
     const runSession = vi.fn(async () => ({ type: "exit" as const }));
+    const controller = createFakeController();
 
     await runWorkspaceHome({
       store: createStore(config),
       keyInput: createKeyInput(),
       runPicker,
       runSession,
+      createController: () => controller,
     });
 
     expect(runPicker).toHaveBeenCalledOnce();
+    expect(controller.shutdown).toHaveBeenCalledOnce();
+  });
+
+  it("reopens the active workspace without restarting auto-start services", async () => {
+    const controller = createFakeController();
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+    const runSession = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "back" as const })
+      .mockResolvedValueOnce({ type: "back" as const });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession,
+      createController: () => controller,
+    });
+
+    expect(runSession).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      controller,
+      startAutoStartServices: true,
+      shutdownOnReturn: false,
+    }));
+    expect(runSession).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      controller,
+      startAutoStartServices: false,
+      shutdownOnReturn: false,
+    }));
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      activeWorkspaceId: workspace.id,
+    }));
+    expect(controller.shutdown).toHaveBeenCalledOnce();
+  });
+
+  it("shuts down the active workspace before switching to another workspace", async () => {
+    const ecommerceController = createFakeController();
+    const portfolioController = createFakeController();
+    const createController = vi
+      .fn()
+      .mockReturnValueOnce(ecommerceController)
+      .mockReturnValueOnce(portfolioController);
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce({ type: "run" as const, workspace: portfolioWorkspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+    const runSession = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "back" as const })
+      .mockResolvedValueOnce({ type: "back" as const });
+
+    await runWorkspaceHome({
+      store: createStore(configWithTwoWorkspaces),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession,
+      createController,
+    });
+
+    expect(createController).toHaveBeenNthCalledWith(1, workspace);
+    expect(createController).toHaveBeenNthCalledWith(2, portfolioWorkspace);
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      activeWorkspaceId: workspace.id,
+    }));
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      activeWorkspaceId: portfolioWorkspace.id,
+    }));
+    expect(ecommerceController.shutdown).toHaveBeenCalledOnce();
+    expect(portfolioController.shutdown).toHaveBeenCalledOnce();
   });
 
   it("creates a workspace from the picker and reloads workspaces with the new selection", async () => {
@@ -445,6 +533,37 @@ function createQueuedKeyInput(keys: Array<Awaited<ReturnType<KeyInput["readKey"]
       return key;
     }),
     close: vi.fn(),
+  };
+}
+
+function createFakeController(): RunWorkspaceController {
+  return {
+    startAutoStartServices: vi.fn(async () => undefined),
+    getState: vi.fn(() => ({
+      workspace: { id: workspace.id, name: workspace.name },
+      services: [],
+      commands: [],
+      selectedServiceIndex: undefined,
+      selectedCommandIndex: undefined,
+      serviceIndexById: {},
+      commandIndexById: {},
+      selectedItem: undefined,
+    })),
+    selectNextService: vi.fn(),
+    selectPreviousService: vi.fn(),
+    startSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+    stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+    restartSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
+    startService: vi.fn(async () => ({ status: "stopped" as const })),
+    addService: vi.fn(),
+    addCommand: vi.fn(),
+    updateService: vi.fn(),
+    updateCommand: vi.fn(),
+    removeService: vi.fn(),
+    removeCommand: vi.fn(),
+    moveService: vi.fn(),
+    getSelectedServiceLogs: vi.fn(() => []),
+    shutdown: vi.fn(async () => undefined),
   };
 }
 

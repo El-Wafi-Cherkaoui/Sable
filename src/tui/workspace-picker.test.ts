@@ -43,6 +43,12 @@ describe("workspace picker state", () => {
 
     expect(getSelectedWorkspace(state)?.name).toBe("portfolio");
   });
+
+  it("tracks the active workspace id", () => {
+    const state = createWorkspacePickerState(workspaces, undefined, undefined, "ws_ecommerce");
+
+    expect(state.activeWorkspaceId).toBe("ws_ecommerce");
+  });
 });
 
 describe("renderWorkspacePicker", () => {
@@ -71,6 +77,21 @@ describe("renderWorkspacePicker", () => {
         "  portfolio  1",
         "",
         'Status: Auto-start disabled for "api".',
+        "j/k select  ? help  q quit",
+      ].join("\n"),
+    );
+  });
+
+  it("marks the active workspace as running", () => {
+    expect(renderWorkspacePicker(createWorkspacePickerState(workspaces, undefined, undefined, "ws_ecommerce"))).toBe(
+      [
+        "Workspaces",
+        "",
+        "  Workspace  Services  State  ",
+        "  ecommerce  2  running",
+        "  portfolio  1         ",
+        "",
+        "",
         "j/k select  ? help  q quit",
       ].join("\n"),
     );
