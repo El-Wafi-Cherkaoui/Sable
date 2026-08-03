@@ -49,9 +49,10 @@ export async function runTextPrompt(
 ): Promise<PromptResult<string>> {
   const screen = options.screen ?? terminalScreen;
   let value = options.defaultValue ?? "";
+  let cursorIndex = value.length;
   let error: string | undefined;
 
-  renderFrame(screen, renderTextPrompt(options, value, error));
+  renderFrame(screen, renderTextPrompt(options, value, cursorIndex, error));
 
   while (true) {
     const keypress = await options.keyInput.readKey();
@@ -69,24 +70,61 @@ export async function runTextPrompt(
 
       if (validationResult !== undefined && validationResult !== true) {
         error = validationResult === false ? "Invalid value." : validationResult;
-        renderFrame(screen, renderTextPrompt(options, value, error));
+        renderFrame(screen, renderTextPrompt(options, value, cursorIndex, error));
         continue;
       }
 
       return { type: "submit", value };
     }
 
+    if (keypress.name === "left") {
+      cursorIndex = Math.max(0, cursorIndex - 1);
+      renderFrame(screen, renderTextPrompt(options, value, cursorIndex, error));
+      continue;
+    }
+
+    if (keypress.name === "right") {
+      cursorIndex = Math.min(value.length, cursorIndex + 1);
+      renderFrame(screen, renderTextPrompt(options, value, cursorIndex, error));
+      continue;
+    }
+
+    if (keypress.name === "home") {
+      cursorIndex = 0;
+      renderFrame(screen, renderTextPrompt(options, value, cursorIndex, error));
+      continue;
+    }
+
+    if (keypress.name === "end") {
+      cursorIndex = value.length;
+      renderFrame(screen, renderTextPrompt(options, value, cursorIndex, error));
+      continue;
+    }
+
     if (keypress.name === "backspace") {
-      value = value.slice(0, -1);
+      if (cursorIndex > 0) {
+        value = `${value.slice(0, cursorIndex - 1)}${value.slice(cursorIndex)}`;
+        cursorIndex -= 1;
+      }
       error = undefined;
-      renderFrame(screen, renderTextPrompt(options, value, error));
+      renderFrame(screen, renderTextPrompt(options, value, cursorIndex, error));
+      continue;
+    }
+
+    if (keypress.name === "delete") {
+      if (cursorIndex < value.length) {
+        value = `${value.slice(0, cursorIndex)}${value.slice(cursorIndex + 1)}`;
+      }
+      error = undefined;
+      renderFrame(screen, renderTextPrompt(options, value, cursorIndex, error));
       continue;
     }
 
     if (keypress.sequence !== undefined && isPrintable(keypress.sequence)) {
-      value += keypress.sequence;
+      value = `${value.slice(0, cursorIndex)}${keypress.sequence}${value.slice(cursorIndex)}`;
+      cursorIndex += keypress.sequence.length;
       error = undefined;
-      renderFrame(screen, renderTextPrompt(options, value, error));
+      renderFrame(screen, renderTextPrompt(options, value, cursorIndex, error));
     }
   }
 }
@@ -195,6 +233,7 @@ export async function runConfirmPrompt(
 function renderTextPrompt(
   options: TextPromptOptions,
   value: string,
+  cursorIndex: number,
   error: string | undefined,
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? shouldUseColor());
@@ -204,10 +243,10 @@ function renderTextPrompt(
     "",
     options.message,
     "",
-    ...renderInputValue(value, style),
+    ...renderInputValue(value, style, cursorIndex),
     ...(error === undefined ? [] : ["", error]),
     "",
-    "Esc back  Enter save  Ctrl+C quit",
+    "Left/Right edit  Esc back  Enter save  Ctrl+C quit",
   ].join("\n");
 }
 
@@ -274,13 +313,19 @@ function renderConfirmPrompt(
   ].join("\n");
 }
 
-function renderInputValue(value: string, style: TuiStyle): string[] {
+function renderInputValue(value: string, style: TuiStyle, cursorIndex?: number): string[] {
   const underlineWidth = Math.max(1, visibleLength(value));
-
-  return [
+  const lines = [
     `  ${value}`,
     `  ${style.muted("─".repeat(underlineWidth))}`,
   ];
+
+  if (cursorIndex !== undefined) {
+    const cursorOffset = visibleLength(value.slice(0, cursorIndex));
+    lines.push(`  ${" ".repeat(cursorOffset)}^`);
+  }
+
+  return lines;
 }
 
 function isCtrlC(keypress: Keypress): boolean {
