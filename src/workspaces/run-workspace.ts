@@ -32,6 +32,7 @@ export type RunWorkspaceController = {
   stopSelectedService(): Promise<ManagedProcessState>;
   restartSelectedService(): Promise<ManagedProcessState>;
   startService(serviceId: string): Promise<ManagedProcessState>;
+  startCommand(commandId: string): Promise<ManagedProcessState>;
   addService(service: WorkspaceConfig["services"][number]): ReturnType<WorkspaceController["addService"]>;
   addCommand(command: WorkspaceConfig["commands"][number]): ReturnType<WorkspaceController["addCommand"]>;
   updateService(service: WorkspaceConfig["services"][number]): ReturnType<WorkspaceController["updateService"]>;

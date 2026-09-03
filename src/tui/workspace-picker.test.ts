@@ -62,7 +62,7 @@ describe("renderWorkspacePicker", () => {
         "  portfolio  1",
         "",
         "",
-        "j/k select  ? help  q quit",
+        "j/k select  s stop  r restart  ? help  q quit",
       ].join("\n"),
     );
   });
@@ -77,7 +77,7 @@ describe("renderWorkspacePicker", () => {
         "  portfolio  1",
         "",
         'Status: Auto-start disabled for "api".',
-        "j/k select  ? help  q quit",
+        "j/k select  s stop  r restart  ? help  q quit",
       ].join("\n"),
     );
   });
@@ -92,7 +92,7 @@ describe("renderWorkspacePicker", () => {
         "  portfolio  1         ",
         "",
         "",
-        "j/k select  ? help  q quit",
+        "j/k select  s stop  r restart  ? help  q quit",
       ].join("\n"),
     );
   });
@@ -111,7 +111,7 @@ describe("renderWorkspacePicker", () => {
     const lines = rendered.split("\n");
 
     expect(lines).toHaveLength(17);
-    expect(lines.at(-1)).toBe("j/k select  ? help  q quit");
+    expect(lines.at(-1)).toBe("j/k select  s stop  r restart  ? help  q quit");
     expect(lines.at(-2)).toBe("");
   });
 
@@ -208,6 +208,8 @@ describe("renderWorkspacePicker", () => {
 
   it("renders help", () => {
     expect(renderWorkspacePickerHelp()).toContain("Enter       run selected workspace");
+    expect(renderWorkspacePickerHelp()).toContain("s           stop selected running workspace");
+    expect(renderWorkspacePickerHelp()).toContain("r           restart selected running workspace");
     expect(renderWorkspacePickerHelp()).toContain("c           create blank workspace");
     expect(renderWorkspacePickerHelp()).toContain("e           rename selected workspace");
     expect(renderWorkspacePickerHelp()).toContain("d           delete selected workspace");
@@ -310,6 +312,26 @@ describe("runWorkspacePicker", () => {
         screen: { clear: vi.fn(), write: vi.fn() },
       }),
     ).resolves.toEqual({ type: "renameWorkspace", workspace: workspaces[0] });
+  });
+
+  it("returns the selected workspace on stop", async () => {
+    await expect(
+      runWorkspacePicker({
+        workspaces,
+        keyInput: createKeyInput([{ sequence: "s" }]),
+        screen: { clear: vi.fn(), write: vi.fn() },
+      }),
+    ).resolves.toEqual({ type: "stopActiveWorkspace", workspace: workspaces[0] });
+  });
+
+  it("returns the selected workspace on restart", async () => {
+    await expect(
+      runWorkspacePicker({
+        workspaces,
+        keyInput: createKeyInput([{ sequence: "r" }]),
+        screen: { clear: vi.fn(), write: vi.fn() },
+      }),
+    ).resolves.toEqual({ type: "restartActiveWorkspace", workspace: workspaces[0] });
   });
 
   it("returns the selected workspace on move up", async () => {

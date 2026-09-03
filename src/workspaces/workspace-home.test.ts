@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
+import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import type { RunWorkspaceController } from "./run-workspace.js";
 import { runWorkspaceHome } from "./workspace-home.js";
 
@@ -176,6 +177,144 @@ describe("runWorkspaceHome", () => {
     }));
     expect(ecommerceController.shutdown).toHaveBeenCalledOnce();
     expect(portfolioController.shutdown).toHaveBeenCalledOnce();
+  });
+
+  it("stops the selected active workspace from the picker", async () => {
+    const controller = createFakeController();
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce({ type: "stopActiveWorkspace" as const, workspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+    const runSession = vi.fn(async () => ({ type: "back" as const }));
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession,
+      createController: () => controller,
+    });
+
+    expect(controller.shutdown).toHaveBeenCalledOnce();
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      activeWorkspaceId: undefined,
+      selectedWorkspaceId: workspace.id,
+      statusMessage: 'Stopped workspace "ecommerce".',
+    }));
+  });
+
+  it("does not stop a non-selected active workspace", async () => {
+    const controller = createFakeController();
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce({ type: "stopActiveWorkspace" as const, workspace: portfolioWorkspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+    const runSession = vi.fn(async () => ({ type: "back" as const }));
+
+    await runWorkspaceHome({
+      store: createStore(configWithTwoWorkspaces),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession,
+      createController: () => controller,
+    });
+
+    expect(controller.shutdown).toHaveBeenCalledOnce();
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      activeWorkspaceId: workspace.id,
+      selectedWorkspaceId: portfolioWorkspace.id,
+      statusMessage: "Select the running workspace to stop it.",
+    }));
+  });
+
+  it("restarts the selected active workspace with running items and auto-start services", async () => {
+    const oldController = createFakeController(createRuntimeStateForRestart());
+    const newController = createFakeController();
+    const createController = vi
+      .fn()
+      .mockReturnValueOnce(oldController)
+      .mockReturnValueOnce(newController);
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace: restartWorkspace })
+      .mockResolvedValueOnce({ type: "restartActiveWorkspace" as const, workspace: restartWorkspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+    const runSession = vi.fn(async () => ({ type: "back" as const }));
+
+    await runWorkspaceHome({
+      store: createStore(configForRestart),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession,
+      createController,
+    });
+
+    expect(oldController.shutdown).toHaveBeenCalledOnce();
+    expect(createController).toHaveBeenNthCalledWith(2, restartWorkspace);
+    expect(newController.startService).toHaveBeenCalledWith("svc_api");
+    expect(newController.startService).toHaveBeenCalledWith("svc_worker");
+    expect(newController.startService).not.toHaveBeenCalledWith("svc_web");
+    expect(newController.startCommand).toHaveBeenCalledWith("cmd_watch");
+    expect(newController.startCommand).not.toHaveBeenCalledWith("cmd_build");
+    expect(newController.shutdown).toHaveBeenCalledOnce();
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      activeWorkspaceId: restartWorkspace.id,
+      selectedWorkspaceId: restartWorkspace.id,
+      statusMessage: 'Restarted workspace "ecommerce".',
+    }));
+  });
+
+  it("does not restart a non-selected active workspace", async () => {
+    const controller = createFakeController();
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce({ type: "restartActiveWorkspace" as const, workspace: portfolioWorkspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+    const runSession = vi.fn(async () => ({ type: "back" as const }));
+
+    await runWorkspaceHome({
+      store: createStore(configWithTwoWorkspaces),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession,
+      createController: () => controller,
+    });
+
+    expect(controller.shutdown).toHaveBeenCalledOnce();
+    expect(controller.startService).not.toHaveBeenCalled();
+    expect(controller.startCommand).not.toHaveBeenCalled();
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      activeWorkspaceId: workspace.id,
+      selectedWorkspaceId: portfolioWorkspace.id,
+      statusMessage: "Select the running workspace to restart it.",
+    }));
+  });
+
+  it("reports when stop or restart is requested without an active workspace", async () => {
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "stopActiveWorkspace" as const, workspace })
+      .mockResolvedValueOnce({ type: "restartActiveWorkspace" as const, workspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(),
+    });
+
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      activeWorkspaceId: undefined,
+      statusMessage: "No workspace is running.",
+    }));
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      activeWorkspaceId: undefined,
+      statusMessage: "No workspace is running.",
+    }));
   });
 
   it("creates a workspace from the picker and reloads workspaces with the new selection", async () => {
@@ -536,25 +675,28 @@ function createQueuedKeyInput(keys: Array<Awaited<ReturnType<KeyInput["readKey"]
   };
 }
 
-function createFakeController(): RunWorkspaceController {
+function createFakeController(state?: RuntimeWorkspaceState): RunWorkspaceController {
+  const defaultState: RuntimeWorkspaceState = {
+    workspace: { id: workspace.id, name: workspace.name },
+    services: [],
+    commands: [],
+    selectedServiceIndex: undefined,
+    selectedCommandIndex: undefined,
+    serviceIndexById: {},
+    commandIndexById: {},
+    selectedItem: undefined,
+  };
+
   return {
     startAutoStartServices: vi.fn(async () => undefined),
-    getState: vi.fn(() => ({
-      workspace: { id: workspace.id, name: workspace.name },
-      services: [],
-      commands: [],
-      selectedServiceIndex: undefined,
-      selectedCommandIndex: undefined,
-      serviceIndexById: {},
-      commandIndexById: {},
-      selectedItem: undefined,
-    })),
+    getState: vi.fn(() => state ?? defaultState),
     selectNextService: vi.fn(),
     selectPreviousService: vi.fn(),
     startSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
     stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
     restartSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
     startService: vi.fn(async () => ({ status: "stopped" as const })),
+    startCommand: vi.fn(async () => ({ status: "stopped" as const })),
     addService: vi.fn(),
     addCommand: vi.fn(),
     updateService: vi.fn(),
@@ -564,6 +706,35 @@ function createFakeController(): RunWorkspaceController {
     moveService: vi.fn(),
     getSelectedServiceLogs: vi.fn(() => []),
     shutdown: vi.fn(async () => undefined),
+  };
+}
+
+function createRuntimeStateForRestart(): RuntimeWorkspaceState {
+  const runningState = { status: "running" as const };
+  const stoppedState = { status: "stopped" as const };
+  const services = restartWorkspace.services.map((service) => ({
+    service,
+    process:
+      service.id === "svc_web" ? stoppedState : runningState,
+  }));
+  const commands = restartWorkspace.commands.map((command) => ({
+    command,
+    process: command.id === "cmd_build" ? stoppedState : runningState,
+  }));
+
+  return {
+    workspace: { id: restartWorkspace.id, name: restartWorkspace.name },
+    services,
+    commands,
+    serviceIndexById: Object.fromEntries(
+      services.map((serviceState, index) => [serviceState.service.id, index]),
+    ),
+    commandIndexById: Object.fromEntries(
+      commands.map((commandState, index) => [commandState.command.id, index]),
+    ),
+    selectedServiceIndex: 0,
+    selectedCommandIndex: undefined,
+    selectedItem: { type: "service", index: 0 },
   };
 }
 
@@ -643,4 +814,57 @@ const configWithTwoWorkspaces: AppConfig = {
 const configWithService: AppConfig = {
   version: 1,
   workspaces: [workspaceWithService],
+};
+
+const restartWorkspace: WorkspaceConfig = {
+  id: "ws_ecommerce",
+  name: "ecommerce",
+  projectDirectory: process.cwd(),
+  services: [
+    {
+      id: "svc_api",
+      name: "api",
+      command: "npm run dev",
+      cwd: process.cwd(),
+      autoStart: true,
+      env: {},
+    },
+    {
+      id: "svc_worker",
+      name: "worker",
+      command: "npm run worker",
+      cwd: process.cwd(),
+      autoStart: false,
+      env: {},
+    },
+    {
+      id: "svc_web",
+      name: "web",
+      command: "npm run web",
+      cwd: process.cwd(),
+      autoStart: false,
+      env: {},
+    },
+  ],
+  commands: [
+    {
+      id: "cmd_watch",
+      name: "watch",
+      command: "npm run watch",
+      cwd: process.cwd(),
+      env: {},
+    },
+    {
+      id: "cmd_build",
+      name: "build",
+      command: "npm run build",
+      cwd: process.cwd(),
+      env: {},
+    },
+  ],
+};
+
+const configForRestart: AppConfig = {
+  version: 1,
+  workspaces: [restartWorkspace],
 };

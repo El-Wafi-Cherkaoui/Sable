@@ -19,6 +19,8 @@ describe("mapWorkspacePickerKey", () => {
     expect(mapWorkspacePickerKey({ sequence: "\r" })).toBe("run");
     expect(mapWorkspacePickerKey({ sequence: "c" })).toBe("createWorkspace");
     expect(mapWorkspacePickerKey({ sequence: "e" })).toBe("renameWorkspace");
+    expect(mapWorkspacePickerKey({ sequence: "s" })).toBe("stopActiveWorkspace");
+    expect(mapWorkspacePickerKey({ sequence: "r" })).toBe("restartActiveWorkspace");
     expect(mapWorkspacePickerKey({ sequence: "d" })).toBe("deleteWorkspace");
     expect(mapWorkspacePickerKey({ sequence: "K" })).toBe("moveWorkspaceUp");
     expect(mapWorkspacePickerKey({ sequence: "J" })).toBe("moveWorkspaceDown");

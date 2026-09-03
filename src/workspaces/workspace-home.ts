@@ -157,6 +157,39 @@ export async function runWorkspaceHome(
         continue;
       }
 
+      if (pickerResult.type === "stopActiveWorkspace") {
+        if (activeSession === undefined) {
+          statusMessage = "No workspace is running.";
+        } else if (activeSession.workspaceId !== pickerResult.workspace.id) {
+          statusMessage = "Select the running workspace to stop it.";
+        } else {
+          await activeSession.controller.shutdown();
+          activeSession = undefined;
+          statusMessage = `Stopped workspace "${pickerResult.workspace.name}".`;
+        }
+
+        selectedWorkspaceId = pickerResult.workspace.id;
+        continue;
+      }
+
+      if (pickerResult.type === "restartActiveWorkspace") {
+        if (activeSession === undefined) {
+          statusMessage = "No workspace is running.";
+        } else if (activeSession.workspaceId !== pickerResult.workspace.id) {
+          statusMessage = "Select the running workspace to restart it.";
+        } else {
+          activeSession = await restartActiveSession({
+            workspace: pickerResult.workspace,
+            controller: activeSession.controller,
+            createController,
+          });
+          statusMessage = `Restarted workspace "${pickerResult.workspace.name}".`;
+        }
+
+        selectedWorkspaceId = pickerResult.workspace.id;
+        continue;
+      }
+
       let shouldStartAutoStartServices = false;
 
       if (activeSession !== undefined && activeSession.workspaceId !== pickerResult.workspace.id) {
@@ -196,6 +229,42 @@ export async function runWorkspaceHome(
     signalSource.off("SIGTERM", abortShutdown);
     keyInput.close();
   }
+}
+
+
+type RestartActiveSessionOptions = {
+  workspace: WorkspaceConfig;
+  controller: RunWorkspaceController;
+  createController: (workspace: WorkspaceConfig) => RunWorkspaceController;
+};
+
+async function restartActiveSession(
+  options: RestartActiveSessionOptions,
+): Promise<{ workspaceId: string; controller: RunWorkspaceController }> {
+  const state = options.controller.getState();
+  const runningServiceIds = new Set(
+    state.services
+      .filter((serviceState) => serviceState.process.status === "running")
+      .map((serviceState) => serviceState.service.id),
+  );
+  const runningCommandIds = state.commands
+    .filter((commandState) => commandState.process.status === "running")
+    .map((commandState) => commandState.command.id);
+
+  for (const service of options.workspace.services) {
+    if (service.autoStart) {
+      runningServiceIds.add(service.id);
+    }
+  }
+
+  await options.controller.shutdown();
+
+  const controller = options.createController(options.workspace);
+
+  await Promise.all([...runningServiceIds].map((serviceId) => controller.startService(serviceId)));
+  await Promise.all(runningCommandIds.map((commandId) => controller.startCommand(commandId)));
+
+  return { workspaceId: options.workspace.id, controller };
 }
 
 

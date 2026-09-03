@@ -44,6 +44,8 @@ export type WorkspacePickerAction =
   | "createWorkspace"
   | "deleteWorkspace"
   | "renameWorkspace"
+  | "stopActiveWorkspace"
+  | "restartActiveWorkspace"
   | "moveWorkspaceUp"
   | "moveWorkspaceDown"
   | "view"
@@ -70,6 +72,14 @@ export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction
 
   if (keypress.sequence === "e") {
     return "renameWorkspace";
+  }
+
+  if (keypress.sequence === "s") {
+    return "stopActiveWorkspace";
+  }
+
+  if (keypress.sequence === "r") {
+    return "restartActiveWorkspace";
   }
 
   if (keypress.sequence === "K") {

@@ -18,6 +18,8 @@ export type WorkspacePickerResult =
   | { type: "createWorkspace" }
   | { type: "deleteWorkspace"; workspace: WorkspaceConfig }
   | { type: "renameWorkspace"; workspace: WorkspaceConfig }
+  | { type: "stopActiveWorkspace"; workspace: WorkspaceConfig }
+  | { type: "restartActiveWorkspace"; workspace: WorkspaceConfig }
   | { type: "moveWorkspaceUp"; workspace: WorkspaceConfig }
   | { type: "moveWorkspaceDown"; workspace: WorkspaceConfig }
   | { type: "exit" };
@@ -156,6 +158,24 @@ export async function runWorkspacePicker(
 
         if (workspace !== undefined) {
           return { type: "renameWorkspace", workspace };
+        }
+
+        break;
+      }
+      case "stopActiveWorkspace": {
+        const workspace = getSelectedWorkspace(state);
+
+        if (workspace !== undefined) {
+          return { type: "stopActiveWorkspace", workspace };
+        }
+
+        break;
+      }
+      case "restartActiveWorkspace": {
+        const workspace = getSelectedWorkspace(state);
+
+        if (workspace !== undefined) {
+          return { type: "restartActiveWorkspace", workspace };
         }
 
         break;
@@ -305,7 +325,7 @@ export function renderWorkspacePicker(
   const style = options.style ?? createTuiStyle(options.color ?? false);
   const shouldPadSelectedRows = options.color === true;
   const statusLine = formatPickerStatusLine(state.statusMessage, style);
-  const footer = style.muted("j/k select  ? help  q quit");
+  const footer = style.muted("j/k select  s stop  r restart  ? help  q quit");
   const lines = [style.title("Workspaces"), ""];
 
   if (state.workspaces.length === 0) {
@@ -423,6 +443,8 @@ export function renderWorkspacePickerHelp(): string {
     "",
     "Workspace",
     "Enter       run selected workspace",
+    "s           stop selected running workspace",
+    "r           restart selected running workspace",
     "c           create blank workspace",
     "e           rename selected workspace",
     "d           delete selected workspace",
