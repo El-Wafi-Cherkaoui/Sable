@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { generateShortId } from "../shared/id.js";
-import type { AppConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
+import type { AppConfig, ServiceConfig } from "../config/config-types.js";
 
 export type WorkspaceConfigStore = {
   load(): Promise<AppConfig>;

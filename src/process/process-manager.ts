@@ -361,10 +361,6 @@ function formatProcessExitMessage(
   return `process exited with code ${exitCode ?? "null"}`;
 }
 
-function isActive(entry: ManagedProcessEntry): boolean {
-  return entry.state.status === "running" && hasLiveChild(entry);
-}
-
 function hasLiveChild(entry: ManagedProcessEntry): boolean {
   return entry.child.exitCode === null && entry.child.signalCode === null;
 }

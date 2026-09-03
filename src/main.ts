@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { confirm, input, select } from "@inquirer/prompts";
+import { confirm, input } from "@inquirer/prompts";
 import { ConfigStore } from "./config/config-store.js";
 import { product } from "./shared/product.js";
 import {
@@ -18,10 +18,6 @@ import { runWorkspaceCommand } from "./workspaces/run-workspace.js";
 import { runWorkspaceHome } from "./workspaces/workspace-home.js";
 
 const program = new Command();
-
-function printNotImplemented(commandName: string): void {
-  console.log(`${product.displayName} ${commandName} is not implemented yet.`);
-}
 
 program
   .name(product.binaryName)

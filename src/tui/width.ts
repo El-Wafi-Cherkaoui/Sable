@@ -24,6 +24,7 @@ export function sliceVisibleStart(value: string, startColumn: number): string {
   return sliceVisibleRange(stripAnsi(value), Math.max(0, startColumn));
 }
 export function stripAnsi(value: string): string {
+  // eslint-disable-next-line no-control-regex
   return value.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
