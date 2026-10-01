@@ -135,6 +135,7 @@ describe("runWorkspaceSession", () => {
         { name: "return" },
       ]),
       store,
+      promptScreen: createScreen(),
       runDashboard: async ({ onAddService }) => {
         await expect(onAddService?.()).resolves.toEqual({
           type: "continue",
@@ -165,6 +166,7 @@ describe("runWorkspaceSession", () => {
         { name: "return" },
       ]),
       store,
+      promptScreen: createScreen(),
       runDashboard: async ({ onDeleteService }) => {
         await expect(onDeleteService?.()).resolves.toEqual({
           type: "continue",
@@ -188,6 +190,7 @@ describe("runWorkspaceSession", () => {
       createController: () => controller,
       keyInput: createKeyInput(),
       store,
+      promptScreen: createScreen(),
       runDashboard: async ({ onMoveServiceDown }) => {
         await expect(onMoveServiceDown?.()).resolves.toEqual({
           type: "continue",
@@ -214,6 +217,7 @@ describe("runWorkspaceSession", () => {
       createController: () => controller,
       keyInput: createKeyInput(),
       store,
+      promptScreen: createScreen(),
       runDashboard: async ({ onMoveServiceUp }) => {
         await expect(onMoveServiceUp?.()).resolves.toEqual({
           type: "continue",
@@ -245,6 +249,7 @@ describe("runWorkspaceSession", () => {
       createController: () => controller,
       keyInput: createKeyInput(),
       store,
+      promptScreen: createScreen(),
       runDashboard: async ({ onDeleteService }) => {
         await expect(onDeleteService?.()).resolves.toEqual({
           type: "continue",
@@ -299,6 +304,13 @@ function createKeyInput(keys: Array<{ sequence?: string; name?: string; ctrl?: b
   return {
     readKey: vi.fn(async () => keys.shift() ?? { sequence: "q" }),
     close: vi.fn(),
+  };
+}
+
+function createScreen() {
+  return {
+    clear: vi.fn(),
+    write: vi.fn(),
   };
 }
 

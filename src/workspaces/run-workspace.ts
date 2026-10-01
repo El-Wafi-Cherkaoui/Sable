@@ -11,6 +11,7 @@ import {
   type InteractiveDashboardResult,
   type RunInteractiveDashboardOptions,
 } from "../tui/interactive-dashboard.js";
+import type { PromptScreen } from "../tui/prompt-view.js";
 import { requireWorkspaceByName } from "./find-workspace.js";
 import { runAddWorkspaceItemFlow, runDeleteCommandFlow, runDeleteServiceFlow, runEditCommandFlow, runEditServiceFlow } from "./service-flows.js";
 
@@ -70,6 +71,7 @@ export type RunWorkspaceSessionOptions = {
   abortSignal?: AbortSignal;
   dashboardQuitLabel?: string;
   store?: WorkspaceConfigReader;
+  promptScreen?: PromptScreen;
   startAutoStartServices?: boolean;
   shutdownOnReturn?: boolean;
 };
@@ -139,6 +141,7 @@ export async function runWorkspaceSession(
             store: options.store!,
             workspace: options.workspace,
             keyInput: options.keyInput,
+            screen: options.promptScreen,
           });
 
           if (flowResult.type === "exit") {
@@ -192,6 +195,7 @@ export async function runWorkspaceSession(
               workspace: options.workspace,
               keyInput: options.keyInput,
               commandId: selectedCommandState.command.id,
+              screen: options.promptScreen,
             });
 
             if (flowResult.type === "exit") {
@@ -224,6 +228,7 @@ export async function runWorkspaceSession(
             workspace: options.workspace,
             keyInput: options.keyInput,
             serviceId: selectedServiceState!.service.id,
+            screen: options.promptScreen,
           });
 
           if (flowResult.type === "exit") {
@@ -267,6 +272,7 @@ export async function runWorkspaceSession(
               workspace: options.workspace,
               keyInput: options.keyInput,
               commandId: selectedCommandState.command.id,
+              screen: options.promptScreen,
             });
 
             if (flowResult.type === "exit") {
@@ -289,6 +295,7 @@ export async function runWorkspaceSession(
             workspace: options.workspace,
             keyInput: options.keyInput,
             serviceId: selectedServiceState!.service.id,
+            screen: options.promptScreen,
           });
 
           if (flowResult.type === "exit") {
