@@ -1,4 +1,5 @@
 import type { WorkspaceConfig } from "../config/config-types.js";
+import { sableLogoAnsi, sableLogoAnsiWidth } from "../generated/sable-logo-ansi.js";
 import { mapWorkspacePickerKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { product } from "../shared/product.js";
@@ -366,8 +367,10 @@ export function renderWorkspaceStartupMoment(
   options: RenderWorkspacePickerOptions = {},
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
-  const body = shouldRenderStartupBanner(options.columns)
-    ? renderStartupBanner(style, options.columns)
+  const body = shouldRenderAnsiStartupLogo(options)
+    ? renderAnsiStartupBanner(style, options.columns)
+    : shouldRenderTextStartupBanner(options.columns)
+    ? renderTextStartupBanner(style, options.columns)
     : renderCompactStartupMoment(style, options.columns);
   const leadingBlankLines = options.rows === undefined || options.rows <= body.length
     ? 1
@@ -379,14 +382,32 @@ export function renderWorkspaceStartupMoment(
   ].join("\n");
 }
 
-function shouldRenderStartupBanner(columns: number | undefined): boolean {
+function shouldRenderTextStartupBanner(columns: number | undefined): boolean {
   return columns === undefined || columns >= startupBannerWidth;
 }
 
-function renderStartupBanner(style: TuiStyle, columns: number | undefined): string[] {
+function shouldRenderAnsiStartupLogo(options: RenderWorkspacePickerOptions): boolean {
+  return options.color === true
+    && process.env.NO_COLOR === undefined
+    && process.env.TERM !== "dumb"
+    && (options.columns === undefined || options.columns >= sableLogoAnsiWidth);
+}
+
+function renderAnsiStartupBanner(style: TuiStyle, columns: number | undefined): string[] {
+  return [
+    ...sableLogoAnsi.map((line) => centerVisible(line, columns)),
+    "",
+    centerVisible(style.title(product.displayName), columns),
+    centerVisible(style.muted("Keyboard-first Workspace Manager"), columns),
+    centerVisible(style.muted("─".repeat(sableLogoAnsiWidth)), columns),
+  ];
+}
+
+function renderTextStartupBanner(style: TuiStyle, columns: number | undefined): string[] {
   return [
     ...startupBannerLines.map((line) => centerVisible(style.title(padVisibleEnd(line, startupBannerWidth)), columns)),
     "",
+    centerVisible(style.title(product.displayName), columns),
     centerVisible(style.muted("Keyboard-first Workspace Manager"), columns),
     centerVisible(style.muted("─".repeat(startupBannerWidth)), columns),
   ];

@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceConfig } from "../config/config-types.js";
+import { sableLogoAnsiHeight, sableLogoAnsiWidth } from "../generated/sable-logo-ansi.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { stripAnsi, visibleLength } from "./logs-view.js";
 import {
@@ -13,6 +14,10 @@ import {
   selectNextWorkspace,
   selectPreviousWorkspace,
 } from "./workspace-picker.js";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("workspace picker state", () => {
   it("selects the first workspace by default and wraps selection", () => {
@@ -128,6 +133,28 @@ describe("renderWorkspacePicker", () => {
     expect(rendered).toContain("███████╗ █████╗ ██████╗ ██╗     ███████╗");
     expect(rendered).toContain("Keyboard-first Workspace Manager");
     expect(rendered).toContain("─".repeat(40));
+  });
+
+  it("renders the generated 16-color ANSI logo when color output is safe", () => {
+    const rendered = renderWorkspaceStartupMoment({ color: true, columns: 80, rows: 20 });
+    const logoRows = rendered.split("\n").filter((line) => /\x1b\[(?:3\d|9\d)m/.test(line));
+
+    expect(rendered).toMatch(/\x1b\[(?:3\d|9\d)m/);
+    expect(rendered).toMatch(/\x1b\[(?:4\d|10\d)m/);
+    expect(rendered).not.toContain("\x1b[38;2;");
+    expect(rendered).not.toContain("\x1b[48;2;");
+    expect(rendered).not.toContain("███████╗ █████╗ ██████╗ ██╗     ███████╗");
+    expect(logoRows).toHaveLength(sableLogoAnsiHeight);
+    expect(logoRows.every((line) => visibleLength(line.trimStart()) <= sableLogoAnsiWidth)).toBe(true);
+  });
+
+  it("falls back to the textual startup banner for dumb terminals", () => {
+    vi.stubEnv("TERM", "dumb");
+
+    const rendered = renderWorkspaceStartupMoment({ color: true, columns: 80, rows: 12 });
+
+    expect(rendered).toContain("███████╗ █████╗ ██████╗ ██╗     ███████╗");
+    expect(rendered).not.toContain("\x1b[38;2;");
   });
 
   it("keeps startup banner rows aligned as one fixed-width block", () => {

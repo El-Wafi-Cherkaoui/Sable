@@ -14,6 +14,10 @@ describe("shouldUseColor", () => {
     expect(shouldUseColor({ isTTY: true }, { NO_COLOR: "1" })).toBe(false);
   });
 
+  it("does not use color for dumb terminals", () => {
+    expect(shouldUseColor({ isTTY: true }, { TERM: "dumb" })).toBe(false);
+  });
+
   it("allows FORCE_COLOR for non-TTY output", () => {
     expect(shouldUseColor({ isTTY: false }, { FORCE_COLOR: "1" })).toBe(true);
   });

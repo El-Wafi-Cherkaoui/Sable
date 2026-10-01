@@ -14,6 +14,7 @@ export type TuiStyle = {
 export type StyleEnvironment = {
   NO_COLOR?: string;
   FORCE_COLOR?: string;
+  TERM?: string;
 };
 
 export type ColorSupportStream = {
@@ -25,6 +26,10 @@ export function shouldUseColor(
   environment: StyleEnvironment = process.env,
 ): boolean {
   if (environment.NO_COLOR !== undefined) {
+    return false;
+  }
+
+  if (environment.TERM === "dumb") {
     return false;
   }
 

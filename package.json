@@ -10,6 +10,8 @@
     "sable": "./dist/main.js"
   },
   "scripts": {
+    "generate:logo": "node scripts/generate-ansi-logo.mjs",
+    "prebuild": "npm run generate:logo",
     "build": "tsc -p tsconfig.json",
     "dev": "node --enable-source-maps dist/main.js",
     "lint": "eslint src/",
@@ -30,6 +32,7 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.0.0",
     "eslint": "^10.9.1",
+    "sharp": "^0.35.4",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.69.0",
     "vitest": "^4.1.10"
