@@ -1,5 +1,7 @@
 # Sable
 
+<img width="1254" height="1254" alt="Sable Swoosh Emblem" src="https://github.com/user-attachments/assets/9b7747ed-67be-42ce-80da-93db82c4ebf5" />
+
 Sable is a keyboard-first terminal workspace manager for developers.
 
 It helps you save a workspace made of local services and one-shot commands, switch between them, control their lifecycle, and inspect recent logs or command output from one terminal UI.
@@ -33,6 +35,9 @@ Current capabilities:
 - help overlay
 - minimal command mode
 - graceful shutdown on quit or Ctrl+C
+
+
+<img width="2752" height="1536" alt="hf_20261005_120225_82f8d9bf-05a0-4a76-8fc9-6171e5a250f6(2)" src="https://github.com/user-attachments/assets/55c16850-ea79-48f2-b584-fe24c24d47e0" />
 
 ## Install
 
@@ -222,3 +227,5 @@ The primary interactive flow is the no-argument `sable` home picker. Common dash
 ## License
 
 MIT
+
+<img width="1828" height="1014" alt="hf_20261005_104049_5cb55abf-1988-49a7-92d0-7923d69aac8c_cell_2" src="https://github.com/user-attachments/assets/bab17784-a182-457a-ad44-39f55d5cea11" />
