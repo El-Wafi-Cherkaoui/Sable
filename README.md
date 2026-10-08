@@ -8,7 +8,7 @@ Sable is not a task runner, tmux replacement, IDE, Docker manager, Kubernetes to
 
 ## Status
 
-Sable 0.2.0 is the current daily-use checkpoint. Current work remains focused on reliability and small local-first improvements.
+Sable 0.2.2 is the current daily-use checkpoint. Current work remains focused on reliability and small local-first improvements.
 
 Requirements: Node.js 20+ and npm. Sable is intended to work on Windows, macOS, and Linux, with early smoke testing on Windows and Linux.
 
@@ -33,6 +33,22 @@ Current capabilities:
 - help overlay
 - minimal command mode
 - graceful shutdown on quit or Ctrl+C
+
+## Install
+
+Install globally from npm:
+
+```sh
+npm install -g sable-workspaces
+```
+
+Then run:
+
+```sh
+sable
+```
+
+The npm package is `sable-workspaces`; the installed CLI command is `sable`.
 
 ## Local development
 
@@ -202,3 +218,7 @@ The primary interactive flow is the no-argument `sable` home picker. Common dash
 - no theme system or visual customization
 - no panes, built-in editor, file explorer, task runner, Docker/Kubernetes abstraction, SSH, plugin system, or AI features
 - no remote process management
+
+## License
+
+MIT

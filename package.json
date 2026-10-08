@@ -1,13 +1,23 @@
 {
-  "name": "sable",
-  "version": "0.2.1",
+  "name": "sable-workspaces",
+  "version": "0.2.2",
   "description": "A keyboard-first terminal workspace manager for developers.",
   "type": "module",
+  "license": "MIT",
+  "author": "Cherkaoui-El-Wafi <elwafi.cherkaoui@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/El-Wafi-Cherkaoui/Sable.git"
+  },
+  "bugs": {
+    "url": "https://github.com/El-Wafi-Cherkaoui/Sable/issues"
+  },
+  "homepage": "https://github.com/El-Wafi-Cherkaoui/Sable#readme",
   "files": [
     "dist"
   ],
   "bin": {
-    "sable": "./dist/main.js"
+    "sable": "dist/main.js"
   },
   "scripts": {
     "generate:logo": "node scripts/generate-ansi-logo.mjs",
@@ -15,7 +25,9 @@
     "build": "tsc -p tsconfig.json",
     "dev": "node --enable-source-maps dist/main.js",
     "lint": "eslint src/",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run build && npm test"
   },
   "engines": {
     "node": ">=20"

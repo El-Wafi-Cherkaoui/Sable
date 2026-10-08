@@ -4,6 +4,12 @@
 
 - No changes yet.
 
+## 0.2.2 - Publish prep
+
+- Renamed the npm package to `sable-workspaces` for public publishing while keeping the CLI binary as `sable`.
+- Added MIT licensing and npm package metadata.
+- Added a `prepublishOnly` verification script.
+
 ## 0.2.1 - Stability patch
 
 ### Hardened
