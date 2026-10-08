@@ -1,12 +1,22 @@
 # Sable
-
-<img width="1254" height="1254" alt="Sable Swoosh Emblem" src="https://github.com/user-attachments/assets/9b7747ed-67be-42ce-80da-93db82c4ebf5" />
+<table>
+<tr>
+<td width="60%" valign="middle">
 
 Sable is a keyboard-first terminal workspace manager for developers.
 
 It helps you save a workspace made of local services and one-shot commands, switch between them, control their lifecycle, and inspect recent logs or command output from one terminal UI.
 
 Sable is not a task runner, tmux replacement, IDE, Docker manager, Kubernetes tool, SSH tool, plugin platform, file explorer, editor, or AI tool.
+
+</td>
+<td width="40%" align="center">
+
+<img width="300" height="300" alt="Sable" src="https://github.com/user-attachments/assets/9b7747ed-67be-42ce-80da-93db82c4ebf5" />
+
+</td>
+</tr>
+</table>
 
 ## Status
 
