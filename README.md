@@ -107,30 +107,6 @@ Open the workspace picker/home screen:
 sable
 ```
 
-Create a workspace interactively:
-
-```sh
-sable create <workspace-name>
-```
-
-List saved workspaces:
-
-```sh
-sable list
-```
-
-Delete a workspace:
-
-```sh
-sable delete <workspace-name>
-```
-
-Run a workspace:
-
-```sh
-sable run <workspace-name>
-```
-
 During creation, Sable asks for a project directory. Relative service working directories are resolved against that project directory so you can run the workspace later from anywhere.
 
 ## Workspace picker keys
