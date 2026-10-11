@@ -403,31 +403,31 @@ export function renderWorkspacePicker(
     return welcome.join("\n");
   }
 
+  const maxWidth = Math.max(20, (options.columns ?? 80) - 1);
   const nameWidth = Math.max(...state.workspaces.map((workspace) => visibleLength(workspace.name)));
   const statusWidth = "● running".length;
-  const rowWidth = Math.min(
-    Math.max(2 + nameWidth + 2 + statusWidth + 2 + "10/10 services".length, ...state.workspaces.map((workspace) =>
-      4 + visibleLength(displayPath(workspace.projectDirectory)))),
-    Math.max(20, (options.columns ?? 80) - 1),
-  );
-
-  for (const [index, workspace] of state.workspaces.entries()) {
-    const selected = index === state.selectedWorkspaceIndex;
-    const active = workspace.id === state.activeWorkspaceId;
-    const status = active ? style.running("● running") : style.muted("○ stopped");
+  const servicesText = (workspace: WorkspaceConfig) => {
     const total = workspace.services.length;
-    const services = active && state.activeRunningServiceCount !== undefined
+
+    return workspace.id === state.activeWorkspaceId && state.activeRunningServiceCount !== undefined
       ? `${state.activeRunningServiceCount}/${total} services`
       : `${total} ${total === 1 ? "service" : "services"}`;
+  };
+  const servicesWidth = Math.max(...state.workspaces.map((workspace) => servicesText(workspace).length));
+  // Name, status, and service count are aligned columns; the folder fills what is left.
+  const pathStart = 2 + nameWidth + 2 + statusWidth + 2 + servicesWidth + 2;
+  const rows = state.workspaces.map((workspace, index) => {
+    const selected = index === state.selectedWorkspaceIndex;
+    const status = workspace.id === state.activeWorkspaceId ? style.running("● running") : style.muted("○ stopped");
     const moving = state.moving === true && selected ? `  ${style.muted("↕ moving")}` : "";
-    const rowLines = [
-      `${selected ? "> " : "  "}${padVisibleEnd(workspace.name, nameWidth)}  ${padVisibleEnd(status, statusWidth)}  ${style.muted(services)}${moving}`,
-      `    ${style.muted(truncateVisible(displayPath(workspace.projectDirectory), rowWidth - 4))}`,
-    ];
+    const folder = truncateVisible(displayPath(workspace.projectDirectory), Math.max(8, maxWidth - pathStart - visibleLength(moving)));
 
-    for (const rowLine of rowLines) {
-      lines.push(selected ? style.selected(color ? padVisibleEnd(rowLine, rowWidth) : rowLine) : rowLine);
-    }
+    return `${selected ? "> " : "  "}${padVisibleEnd(workspace.name, nameWidth)}  ${padVisibleEnd(status, statusWidth)}  ${style.muted(padVisibleEnd(servicesText(workspace), servicesWidth))}  ${style.muted(folder)}${moving}`;
+  });
+  const rowWidth = Math.min(maxWidth, Math.max(...rows.map((row) => visibleLength(row))));
+
+  for (const [index, row] of rows.entries()) {
+    lines.push(index === state.selectedWorkspaceIndex ? style.selected(color ? padVisibleEnd(row, rowWidth) : row) : row);
   }
 
   appendAnchoredFooter(lines, ["", statusLine, footer], options.rows);

@@ -63,10 +63,8 @@ describe("renderWorkspacePicker", () => {
       [
         "Sable · 2 workspaces",
         "",
-        "> ecommerce  ○ stopped  2 services",
-        "    /srv/ecommerce",
-        "  portfolio  ○ stopped  1 service",
-        "    /srv/portfolio",
+        "> ecommerce  ○ stopped  2 services  /srv/ecommerce",
+        "  portfolio  ○ stopped  1 service   /srv/portfolio",
         "",
         "",
         "[↑↓] select  [Enter] open  [a] add  [e] rename  [?] help  [q] quit",
@@ -82,8 +80,8 @@ describe("renderWorkspacePicker", () => {
     const state = { ...createWorkspacePickerState(workspaces, undefined, undefined, "ws_ecommerce"), activeRunningServiceCount: 1 };
     const rendered = renderWorkspacePicker(state);
 
-    expect(rendered).toContain("> ecommerce  ● running  1/2 services");
-    expect(rendered).toContain("  portfolio  ○ stopped  1 service");
+    expect(rendered).toContain("> ecommerce  ● running  1/2 services  /srv/ecommerce");
+    expect(rendered).toContain("  portfolio  ○ stopped  1 service     /srv/portfolio");
     expect(rendered.split("\n").at(-1)).toBe("[↑↓] select  [Enter] open  [s] stop  [r] restart  [?] help  [q] quit");
   });
   it("keeps picker frame height stable when status messages appear", () => {
@@ -161,13 +159,24 @@ describe("renderWorkspacePicker", () => {
     ]);
   });
 
-  it("highlights both lines of the selected workspace at the same width", () => {
+  it("highlights the selected row across the table width", () => {
     const rendered = renderWorkspacePicker(createWorkspacePickerState(workspaces), { color: true });
     const highlighted = rendered.split("\n").filter((line) => line.includes("\x1b[48;5;236m"));
+    const plainRows = renderWorkspacePicker(createWorkspacePickerState(workspaces)).split("\n").slice(2, 4);
 
-    expect(highlighted).toHaveLength(2);
-    expect(visibleLength(highlighted[0]!)).toBe(visibleLength(highlighted[1]!));
+    expect(highlighted).toHaveLength(1);
+    expect(visibleLength(highlighted[0]!)).toBe(Math.max(...plainRows.map((row) => visibleLength(row))));
   });
+
+  it("shortens long folders so each row stays on one line", () => {
+    const longFolder = { ...workspaces[0]!, projectDirectory: `/srv/${"deep/".repeat(30)}project` };
+    const rendered = renderWorkspacePicker(createWorkspacePickerState([longFolder]), { columns: 60 });
+    const row = rendered.split("\n")[2]!;
+
+    expect(visibleLength(row)).toBeLessThan(60);
+    expect(row).toContain("> ecommerce  ○ stopped  2 services  /srv/deep/");
+  });
+
   it("renders selected workspace details with services and commands", () => {
     const workspace = {
       ...workspaces[0]!,
