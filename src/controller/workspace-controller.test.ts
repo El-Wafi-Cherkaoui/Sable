@@ -17,6 +17,7 @@ describe("WorkspaceController", () => {
     expect(controller.getState().workspace).toEqual({
       id: "ws_ecommerce",
       name: "ecommerce",
+      projectDirectory: process.cwd(),
     });
     expect(controller.getState().services.map((state) => state.process)).toEqual([
       { status: "stopped" },

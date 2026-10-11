@@ -87,6 +87,8 @@ export async function runWorkspaceHome(
         statusMessage,
         selectedWorkspaceId,
         activeWorkspaceId: activeSession?.workspaceId,
+        activeRunningServiceCount: activeSession?.controller.getState().services
+          .filter((serviceState) => serviceState.process.status === "running").length,
         startupMomentMs: shouldShowStartupMoment ? 700 : 0,
         screen: options.screen,
       });

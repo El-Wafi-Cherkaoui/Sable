@@ -19,6 +19,7 @@ export type RuntimeWorkspaceState = {
   workspace: {
     id: string;
     name: string;
+    projectDirectory?: string;
   };
   services: RuntimeServiceState[];
   commands: RuntimeCommandState[];
@@ -48,6 +49,7 @@ export function createRuntimeState(
     workspace: {
       id: workspace.id,
       name: workspace.name,
+      projectDirectory: workspace.projectDirectory,
     },
     services,
     commands,

@@ -17,7 +17,7 @@ describe("runtime state", () => {
   it("creates runtime state from workspace config", () => {
     const state = createRuntimeState(createWorkspace());
 
-    expect(state.workspace).toEqual({ id: "ws_ecommerce", name: "ecommerce" });
+    expect(state.workspace).toEqual({ id: "ws_ecommerce", name: "ecommerce", projectDirectory: process.cwd() });
     expect(state.services).toHaveLength(2);
     expect(state.services.map((serviceState) => serviceState.service.name)).toEqual([
       "backend",

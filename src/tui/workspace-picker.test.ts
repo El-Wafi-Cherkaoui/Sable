@@ -58,51 +58,34 @@ describe("workspace picker state", () => {
 });
 
 describe("renderWorkspacePicker", () => {
-  it("renders workspaces with service counts", () => {
+  it("renders workspaces with status, service counts, and folders", () => {
     expect(renderWorkspacePicker(createWorkspacePickerState(workspaces))).toBe(
       [
-        "Workspaces",
+        "Sable · 2 workspaces",
         "",
-        "  Workspace  Services",
-        "  ecommerce  2",
-        "  portfolio  1",
+        "> ecommerce  ○ stopped  2 services",
+        "    /srv/ecommerce",
+        "  portfolio  ○ stopped  1 service",
+        "    /srv/portfolio",
         "",
         "",
         "[↑↓] select  [Enter] open  [a] add  [e] rename  [?] help  [q] quit",
       ].join("\n"),
     );
   });
-
   it("renders status messages in a reserved footer slot", () => {
-    expect(renderWorkspacePicker(createWorkspacePickerState(workspaces, 'Auto-start disabled for "api".'))).toBe(
-      [
-        "Workspaces",
-        "",
-        "  Workspace  Services",
-        "  ecommerce  2",
-        "  portfolio  1",
-        "",
-        'Status: Auto-start disabled for "api".',
-        "[↑↓] select  [Enter] open  [a] add  [e] rename  [?] help  [q] quit",
-      ].join("\n"),
-    );
-  });
+    const lines = renderWorkspacePicker(createWorkspacePickerState(workspaces, 'Auto-start disabled for "api".')).split("\n");
 
-  it("marks the active workspace as running", () => {
-    expect(renderWorkspacePicker(createWorkspacePickerState(workspaces, undefined, undefined, "ws_ecommerce"))).toBe(
-      [
-        "Workspaces",
-        "",
-        "  Workspace  Services  State  ",
-        "  ecommerce  2  running",
-        "  portfolio  1         ",
-        "",
-        "",
-        "[↑↓] select  [Enter] open  [s] stop  [r] restart  [?] help  [q] quit",
-      ].join("\n"),
-    );
+    expect(lines.at(-2)).toBe('› Auto-start disabled for "api".');
   });
+  it("marks the active workspace as running with its running service count", () => {
+    const state = { ...createWorkspacePickerState(workspaces, undefined, undefined, "ws_ecommerce"), activeRunningServiceCount: 1 };
+    const rendered = renderWorkspacePicker(state);
 
+    expect(rendered).toContain("> ecommerce  ● running  1/2 services");
+    expect(rendered).toContain("  portfolio  ○ stopped  1 service");
+    expect(rendered.split("\n").at(-1)).toBe("[↑↓] select  [Enter] open  [s] stop  [r] restart  [?] help  [q] quit");
+  });
   it("keeps picker frame height stable when status messages appear", () => {
     const withoutMessage = renderWorkspacePicker(createWorkspacePickerState(workspaces));
     const withMessage = renderWorkspacePicker(
@@ -124,10 +107,9 @@ describe("renderWorkspacePicker", () => {
   it("can render with restrained color", () => {
     const rendered = renderWorkspacePicker(createWorkspacePickerState(workspaces), { color: true });
 
-    expect(rendered).toContain("\x1b[1mWorkspaces\x1b[22m");
-    expect(rendered).toContain("\x1b[2m2\x1b[22m");
+    expect(rendered).toContain("\x1b[1mSable\x1b[22m");
+    expect(rendered).toContain("\x1b[2m2 services\x1b[22m");
   });
-
   it("renders the Sable startup banner on wide terminals", () => {
     const rendered = renderWorkspaceStartupMoment({ columns: 80, rows: 12 });
 
@@ -179,49 +161,41 @@ describe("renderWorkspacePicker", () => {
     ]);
   });
 
-  it("extends the selected workspace highlight across the table width", () => {
+  it("highlights both lines of the selected workspace at the same width", () => {
     const rendered = renderWorkspacePicker(createWorkspacePickerState(workspaces), { color: true });
-    const selectedLine = rendered.split("\n").find((line) => line.startsWith("\x1b[48;5;236m"));
+    const highlighted = rendered.split("\n").filter((line) => line.includes("\x1b[48;5;236m"));
 
-    expect(selectedLine).toBeDefined();
-    expect(stripAnsi(selectedLine ?? "")).toHaveLength(visibleLength("  Workspace  Services"));
-    expect(stripAnsi(selectedLine ?? "")).toBe("  ecommerce  2       ");
+    expect(highlighted).toHaveLength(2);
+    expect(visibleLength(highlighted[0]!)).toBe(visibleLength(highlighted[1]!));
   });
+  it("renders selected workspace details with services and commands", () => {
+    const workspace = {
+      ...workspaces[0]!,
+      commands: [{ id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: ".", env: {} }],
+    };
 
-  it("renders selected workspace details", () => {
-    expect(renderWorkspaceDetails(workspaces[0])).toBe(
+    expect(renderWorkspaceDetails(workspace)).toBe(
       [
-        "ecommerce",
+        "ecommerce · /srv/ecommerce",
         "",
-        "services",
+        "SERVICES",
+        `  api       npm run dev`,
+        `            in ${process.cwd()} · auto-start`,
+        `  web       npm run web`,
+        `            in ${process.cwd()} · 1 env variable`,
         "",
-        "api",
-        "  command     npm run dev",
-        `  cwd         ${process.cwd()}`,
-        "  autoStart   yes",
+        "COMMANDS",
+        "  migrate   npm run migrate",
+        "            in .",
         "",
-        "web",
-        "  command     npm run web",
-        `  cwd         ${process.cwd()}`,
-        "  autoStart   no",
-        "  env         1 variable",
-        "",
-        "Esc back",
+        "[Esc] back",
       ].join("\n"),
     );
   });
 
   it("renders empty workspace details", () => {
-    expect(renderWorkspaceDetails({ id: "ws_empty", name: "empty", projectDirectory: process.cwd(), services: [] })).toBe(
-      [
-        "empty",
-        "",
-        "services",
-        "",
-        "No services configured.",
-        "",
-        "Esc back",
-      ].join("\n"),
+    expect(renderWorkspaceDetails({ id: "ws_empty", name: "empty", projectDirectory: "/srv/empty", services: [], commands: [] })).toBe(
+      ["empty · /srv/empty", "", "No services or commands yet.", "", "[Esc] back"].join("\n"),
     );
   });
 
@@ -463,7 +437,7 @@ const workspaces: WorkspaceConfig[] = [
   {
     id: "ws_ecommerce",
     name: "ecommerce",
-    projectDirectory: process.cwd(),
+    projectDirectory: "/srv/ecommerce",
     services: [
       {
         id: "svc_api",
@@ -486,7 +460,7 @@ const workspaces: WorkspaceConfig[] = [
   {
     id: "ws_portfolio",
     name: "portfolio",
-    projectDirectory: process.cwd(),
+    projectDirectory: "/srv/portfolio",
     services: [
       {
         id: "svc_site",

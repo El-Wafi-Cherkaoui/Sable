@@ -3,10 +3,11 @@ import { sableLogoAnsi, sableLogoAnsiWidth } from "../generated/sable-logo-ansi.
 import { mapHelpKey, mapMoveKey, mapWorkspacePickerKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { product } from "../shared/product.js";
+import { displayPath } from "./format.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { appendAnchoredFooter } from "./layout.js";
-import { visibleLength } from "./logs-view.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
+import { padVisibleEnd, truncateVisible, visibleLength } from "./width.js";
 
 export type WorkspacePickerState = {
   workspaces: WorkspaceConfig[];
@@ -14,6 +15,7 @@ export type WorkspacePickerState = {
   activeWorkspaceId?: string;
   statusMessage?: string;
   moving?: boolean;
+  activeRunningServiceCount?: number;
 };
 
 export type WorkspacePickerResult =
@@ -50,6 +52,7 @@ export type RunWorkspacePickerOptions = {
   statusMessage?: string;
   selectedWorkspaceId?: string;
   activeWorkspaceId?: string;
+  activeRunningServiceCount?: number;
   startupMomentMs?: number;
 };
 
@@ -74,13 +77,16 @@ export async function runWorkspacePicker(
     rows: process.stdout.rows,
   }));
   const renderHelp = options.renderHelp ?? renderWorkspacePickerHelp;
-  const renderDetails = options.renderDetails ?? renderWorkspaceDetails;
-  let state = createWorkspacePickerState(
-    options.workspaces,
-    options.statusMessage,
-    options.selectedWorkspaceId,
-    options.activeWorkspaceId,
-  );
+  const renderDetails = options.renderDetails ?? ((workspace: WorkspaceConfig) => renderWorkspaceDetails(workspace, { color }));
+  let state: WorkspacePickerState = {
+    ...createWorkspacePickerState(
+      options.workspaces,
+      options.statusMessage,
+      options.selectedWorkspaceId,
+      options.activeWorkspaceId,
+    ),
+    activeRunningServiceCount: options.activeRunningServiceCount,
+  };
   let mode: PickerMode = "picker";
   let stateBeforeMove: WorkspacePickerState | undefined;
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
@@ -374,12 +380,13 @@ export function renderWorkspacePicker(
   options: RenderWorkspacePickerOptions = {},
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
-  const shouldPadSelectedRows = options.color === true;
+  const color = options.color === true;
   const statusLine = formatPickerStatusLine(state.statusMessage, style);
   const footer = formatKeyHints(getPickerKeyHints(state), style);
-  const lines = [style.title("Workspaces"), ""];
+  const count = state.workspaces.length;
+  const lines = [`${style.title(product.displayName)}${style.muted(` · ${count} ${count === 1 ? "workspace" : "workspaces"}`)}`, ""];
 
-  if (state.workspaces.length === 0) {
+  if (count === 0) {
     lines.push("No workspaces yet.");
     lines.push("");
     lines.push("Press a to add your first workspace.");
@@ -387,26 +394,31 @@ export function renderWorkspacePicker(
     return lines.join("\n");
   }
 
-  const nameColumnWidth = Math.max(
-    "Workspace".length,
-    ...state.workspaces.map((workspace) => workspace.name.length),
+  const nameWidth = Math.max(...state.workspaces.map((workspace) => visibleLength(workspace.name)));
+  const statusWidth = "● running".length;
+  const rowWidth = Math.min(
+    Math.max(2 + nameWidth + 2 + statusWidth + 2 + "10/10 services".length, ...state.workspaces.map((workspace) =>
+      4 + visibleLength(displayPath(workspace.projectDirectory)))),
+    Math.max(20, (options.columns ?? 80) - 1),
   );
 
-  const stateColumnWidth = state.activeWorkspaceId === undefined ? 0 : "running".length;
-  const header = `  ${"Workspace".padEnd(nameColumnWidth)}  Services${stateColumnWidth > 0 ? `  ${"State".padEnd(stateColumnWidth)}` : ""}`;
-  const tableWidth = visibleLength(header);
-
-  lines.push(style.muted(header));
-
   for (const [index, workspace] of state.workspaces.entries()) {
-    const activeState = workspace.id === state.activeWorkspaceId ? style.running("running") : "";
-    const stateSegment = stateColumnWidth > 0 ? `  ${padVisibleEnd(activeState, stateColumnWidth)}` : "";
-    const movingMarker = state.moving === true && index === state.selectedWorkspaceIndex ? `  ${style.muted("↕ moving")}` : "";
-    const line = `  ${workspace.name.padEnd(nameColumnWidth)}  ${style.muted(String(workspace.services.length))}${stateSegment}${movingMarker}`;
+    const selected = index === state.selectedWorkspaceIndex;
+    const active = workspace.id === state.activeWorkspaceId;
+    const status = active ? style.running("● running") : style.muted("○ stopped");
+    const total = workspace.services.length;
+    const services = active && state.activeRunningServiceCount !== undefined
+      ? `${state.activeRunningServiceCount}/${total} services`
+      : `${total} ${total === 1 ? "service" : "services"}`;
+    const moving = state.moving === true && selected ? `  ${style.muted("↕ moving")}` : "";
+    const rowLines = [
+      `${selected ? "> " : "  "}${padVisibleEnd(workspace.name, nameWidth)}  ${padVisibleEnd(status, statusWidth)}  ${style.muted(services)}${moving}`,
+      `    ${style.muted(truncateVisible(displayPath(workspace.projectDirectory), rowWidth - 4))}`,
+    ];
 
-    lines.push(index === state.selectedWorkspaceIndex ? style.selected(
-      shouldPadSelectedRows ? padVisibleEnd(line, tableWidth) : line,
-    ) : line);
+    for (const rowLine of rowLines) {
+      lines.push(selected ? style.selected(color ? padVisibleEnd(rowLine, rowWidth) : rowLine) : rowLine);
+    }
   }
 
   appendAnchoredFooter(lines, ["", statusLine, footer], options.rows);
@@ -482,9 +494,6 @@ const startupBannerLines = [
 ];
 const startupBannerWidth = Math.max(...startupBannerLines.map((line) => visibleLength(line)));
 
-function padVisibleEnd(value: string, width: number): string {
-  return `${value}${" ".repeat(Math.max(0, width - visibleLength(value)))}`;
-}
 
 function centerVisible(value: string, columns: number | undefined): string {
   if (columns === undefined || columns <= visibleLength(value)) {
@@ -518,7 +527,7 @@ function formatPickerStatusLine(
     return "";
   }
 
-  return `${style.statusLabel("Status:")} ${statusMessage}`;
+  return `${style.statusLabel("›")} ${statusMessage}`;
 }
 
 export function renderWorkspacePickerHelp(): string {
@@ -546,31 +555,49 @@ export function renderWorkspacePickerHelp(): string {
   ].join("\n");
 }
 
-export function renderWorkspaceDetails(workspace: WorkspaceConfig): string {
-  const lines = [workspace.name, "", "services"];
+export function renderWorkspaceDetails(
+  workspace: WorkspaceConfig,
+  options: RenderWorkspacePickerOptions = {},
+): string {
+  const style = options.style ?? createTuiStyle(options.color ?? false);
+  const lines = [`${style.title(workspace.name)}${style.muted(` · ${displayPath(workspace.projectDirectory)}`)}`, ""];
+  const items = [
+    ...workspace.services.map((service) => ({ kind: "service" as const, item: service })),
+    ...workspace.commands.map((command) => ({ kind: "command" as const, item: command })),
+  ];
+  const nameWidth = Math.max(8, ...items.map(({ item }) => visibleLength(item.name)));
 
-  if (workspace.services.length === 0) {
-    lines.push("", "No services configured.", "", "Esc back");
-    return lines.join("\n");
+  if (items.length === 0) {
+    lines.push("No services or commands yet.");
   }
 
-  for (const service of workspace.services) {
-    lines.push(
-      "",
-      service.name,
-      `  command     ${service.command}`,
-      `  cwd         ${service.cwd}`,
-      `  autoStart   ${service.autoStart ? "yes" : "no"}`,
-    );
+  for (const kind of ["service", "command"] as const) {
+    const ofKind = items.filter((entry) => entry.kind === kind);
 
-    const envKeys = Object.keys(service.env);
+    if (ofKind.length === 0) {
+      continue;
+    }
 
-    if (envKeys.length > 0) {
-      lines.push(`  env         ${envKeys.length} ${envKeys.length === 1 ? "variable" : "variables"}`);
+    if (lines.length > 2) {
+      lines.push("");
+    }
+
+    lines.push(style.muted(kind === "service" ? "SERVICES" : "COMMANDS"));
+
+    for (const { item } of ofKind) {
+      const envCount = Object.keys(item.env).length;
+      const notes = [
+        `in ${item.cwd}`,
+        ...("autoStart" in item && item.autoStart ? ["auto-start"] : []),
+        ...(envCount > 0 ? [`${envCount} env ${envCount === 1 ? "variable" : "variables"}`] : []),
+      ];
+
+      lines.push(`  ${padVisibleEnd(item.name, nameWidth)}  ${item.command}`);
+      lines.push(`  ${" ".repeat(nameWidth)}  ${style.muted(notes.join(" · "))}`);
     }
   }
 
-  lines.push("", "Esc back");
+  lines.push("", formatKeyHints([["Esc", "back"]], style));
 
   return lines.join("\n");
 }
