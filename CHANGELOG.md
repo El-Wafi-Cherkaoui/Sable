@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- No changes yet.
+
+## 0.3.0 - Redesign
+
 ### Added
 
 - An update popup at launch when a newer Sable is on npm, with Update now to install it in one step; checked in the background at most once a day, and turned off with `SABLE_NO_UPDATE_CHECK=1`.

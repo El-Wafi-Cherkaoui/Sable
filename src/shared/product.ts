@@ -4,5 +4,5 @@ export const product = {
   binaryName: "sable",
   displayName: "Sable",
   configDirectoryName: "sable",
-  version: "0.2.3",
+  version: "0.3.0",
 } as const;
