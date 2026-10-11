@@ -196,10 +196,6 @@ export async function runWorkspaceSession(
           }
 
           if (selectedCommandState !== undefined) {
-            if (selectedCommandState.process.status === "running") {
-              return { type: "continue", message: "Stop command before editing." };
-            }
-
             const flowResult = await runEditCommandFlow({
               store: options.store!,
               workspace: options.workspace,
@@ -212,25 +208,21 @@ export async function runWorkspaceSession(
               return { type: "exit" };
             }
 
-            if (flowResult.type === "completed") {
-              if (flowResult.removedCommandId !== undefined) {
-                controller.removeCommand(flowResult.removedCommandId);
-              } else if (flowResult.commandId !== undefined) {
-                const config = await options.store!.load();
-                const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
-                const command = workspace?.commands.find((candidate) => candidate.id === flowResult.commandId);
+            if (flowResult.type === "completed" && flowResult.commandId !== undefined) {
+              const config = await options.store!.load();
+              const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
+              const command = workspace?.commands.find((candidate) => candidate.id === flowResult.commandId);
 
-                if (command !== undefined) {
-                  controller.updateCommand(command);
-                }
+              if (command !== undefined) {
+                controller.updateCommand(command);
+              }
+
+              if (selectedCommandState.process.status === "running") {
+                return { type: "continue", message: `${flowResult.message} The change applies next time it runs.` };
               }
             }
 
             return { type: "continue", message: flowResult.message };
-          }
-
-          if (selectedServiceState!.process.status === "running") {
-            return { type: "continue", message: "Stop service before editing." };
           }
 
           const flowResult = await runEditServiceFlow({
@@ -245,17 +237,18 @@ export async function runWorkspaceSession(
             return { type: "exit" };
           }
 
-          if (flowResult.type === "completed") {
-            if (flowResult.removedServiceId !== undefined) {
-              controller.removeService(flowResult.removedServiceId);
-            } else if (flowResult.serviceId !== undefined) {
-              const config = await options.store!.load();
-              const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
-              const service = workspace?.services.find((candidate) => candidate.id === flowResult.serviceId);
+          if (flowResult.type === "completed" && flowResult.serviceId !== undefined) {
+            const config = await options.store!.load();
+            const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
+            const service = workspace?.services.find((candidate) => candidate.id === flowResult.serviceId);
 
-              if (service !== undefined) {
-                controller.updateService(service);
-              }
+            if (service !== undefined) {
+              controller.updateService(service);
+            }
+
+            // Editing a running service is allowed; the new settings take effect on restart.
+            if (selectedServiceState!.process.status === "running") {
+              return { type: "continue", message: `${flowResult.message} Press r to restart it with the changes.` };
             }
           }
 

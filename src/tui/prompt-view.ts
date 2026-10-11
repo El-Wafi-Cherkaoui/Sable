@@ -2,7 +2,7 @@ import type { Keypress } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { formatKeyHints } from "./key-hints.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
-import { padVisibleEnd, visibleLength } from "./width.js";
+import { visibleLength } from "./width.js";
 
 export type PromptResult<T> =
   | { type: "submit"; value: T }
@@ -23,26 +23,6 @@ export type TextPromptOptions = {
   style?: TuiStyle;
   defaultValue?: string;
   validate?: (value: string) => boolean | string;
-};
-
-export type SelectPromptOptions<T extends string> = {
-  title: string;
-  message: string;
-  keyInput: KeyInput;
-  screen?: PromptScreen;
-  color?: boolean;
-  style?: TuiStyle;
-  choices: Array<{ label: string; value: T }>;
-};
-
-export type ConfirmPromptOptions = {
-  title: string;
-  message: string;
-  keyInput: KeyInput;
-  screen?: PromptScreen;
-  color?: boolean;
-  style?: TuiStyle;
-  defaultValue?: boolean;
 };
 
 export async function runTextPrompt(
@@ -130,107 +110,6 @@ export async function runTextPrompt(
   }
 }
 
-export async function runSelectPrompt<T extends string>(
-  options: SelectPromptOptions<T>,
-): Promise<PromptResult<T>> {
-  const screen = options.screen ?? terminalScreen;
-  let selectedIndex = 0;
-  let pulseIndex: number | undefined;
-  let pulseTimer: ReturnType<typeof setTimeout> | undefined;
-
-  renderFrame(screen, renderSelectPrompt(options, selectedIndex, pulseIndex));
-
-  while (true) {
-    const keypress = await options.keyInput.readKey();
-
-    if (isCtrlC(keypress)) {
-      clearPulse();
-      return { type: "exit" };
-    }
-
-    if (keypress.name === "escape") {
-      clearPulse();
-      return { type: "back" };
-    }
-
-    if (keypress.name === "return" || keypress.sequence === "\r") {
-      clearPulse();
-      return { type: "submit", value: options.choices[selectedIndex].value };
-    }
-
-    if (keypress.name === "down" || keypress.sequence === "j") {
-      clearPulse();
-      selectedIndex = (selectedIndex + 1) % options.choices.length;
-      pulseIndex = selectedIndex;
-      schedulePulseClear();
-      renderFrame(screen, renderSelectPrompt(options, selectedIndex, pulseIndex));
-      continue;
-    }
-
-    if (keypress.name === "up" || keypress.sequence === "k") {
-      clearPulse();
-      selectedIndex = (selectedIndex - 1 + options.choices.length) % options.choices.length;
-      pulseIndex = selectedIndex;
-      schedulePulseClear();
-      renderFrame(screen, renderSelectPrompt(options, selectedIndex, pulseIndex));
-    }
-  }
-
-  function clearPulse(): void {
-    if (pulseTimer !== undefined) {
-      clearTimeout(pulseTimer);
-      pulseTimer = undefined;
-    }
-
-    pulseIndex = undefined;
-  }
-
-  function schedulePulseClear(): void {
-    if (pulseTimer !== undefined) {
-      clearTimeout(pulseTimer);
-      pulseTimer = undefined;
-    }
-
-    pulseTimer = setTimeout(() => {
-      pulseIndex = undefined;
-      renderFrame(screen, renderSelectPrompt(options, selectedIndex, pulseIndex));
-    }, 110);
-  }
-}
-
-export async function runConfirmPrompt(
-  options: ConfirmPromptOptions,
-): Promise<PromptResult<boolean>> {
-  const screen = options.screen ?? terminalScreen;
-  const defaultValue = options.defaultValue ?? false;
-
-  renderFrame(screen, renderConfirmPrompt(options, defaultValue));
-
-  while (true) {
-    const keypress = await options.keyInput.readKey();
-
-    if (isCtrlC(keypress)) {
-      return { type: "exit" };
-    }
-
-    if (keypress.name === "escape") {
-      return { type: "back" };
-    }
-
-    if (keypress.name === "return" || keypress.sequence === "\r") {
-      return { type: "submit", value: defaultValue };
-    }
-
-    if (keypress.sequence === "y" || keypress.sequence === "Y") {
-      return { type: "submit", value: true };
-    }
-
-    if (keypress.sequence === "n" || keypress.sequence === "N") {
-      return { type: "submit", value: false };
-    }
-  }
-}
-
 function renderTextPrompt(
   options: TextPromptOptions,
   value: string,
@@ -248,69 +127,6 @@ function renderTextPrompt(
     ...(error === undefined ? [] : ["", error]),
     "",
     formatKeyHints([["Enter", "save"], ["Esc", "back"], ["←→", "edit"]], style),
-  ].join("\n");
-}
-
-function renderSelectPrompt<T extends string>(
-  options: SelectPromptOptions<T>,
-  selectedIndex: number,
-  pulseIndex?: number,
-): string {
-  const color = options.color ?? shouldUseColor();
-  const style = options.style ?? createTuiStyle(color);
-  const selectedLineWidth = Math.max(
-    ...options.choices.map((choice) => visibleLength(`  ${choice.label}`)),
-  );
-
-  return [
-    options.title,
-    "",
-    options.message,
-    "",
-    ...options.choices.map((choice, index) =>
-      formatSelectChoice(choice.label, index === selectedIndex, index === pulseIndex, color, style, selectedLineWidth),
-    ),
-    "",
-    formatKeyHints([["↑↓", "choose"], ["Enter", "select"], ["Esc", "back"]], style),
-  ].join("\n");
-}
-
-function formatSelectChoice(
-  label: string,
-  selected: boolean,
-  pulsed: boolean,
-  color: boolean,
-  style: TuiStyle,
-  selectedLineWidth: number,
-): string {
-  if (!color) {
-    return `${selected ? ">" : " "} ${label}`;
-  }
-
-  const line = `  ${label}`;
-
-  if (pulsed) {
-    return style.pulse(padVisibleEnd(line, selectedLineWidth));
-  }
-
-  return selected ? style.selected(padVisibleEnd(line, selectedLineWidth)) : line;
-}
-
-
-function renderConfirmPrompt(
-  options: ConfirmPromptOptions,
-  defaultValue: boolean,
-): string {
-  const style = options.style ?? createTuiStyle(options.color ?? shouldUseColor());
-
-  return [
-    options.title,
-    "",
-    options.message,
-    "",
-    ...renderInputValue(defaultValue ? "yes" : "no", style),
-    "",
-    formatKeyHints([["y", "yes"], ["n", "no"], ["Enter", defaultValue ? "yes" : "no"], ["Esc", "back"]], style),
   ].join("\n");
 }
 

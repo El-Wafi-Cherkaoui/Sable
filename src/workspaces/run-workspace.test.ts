@@ -147,20 +147,19 @@ describe("runWorkspaceSession", () => {
       workspace,
       createController: () => controller,
       keyInput: createKeyInput([
-        { sequence: "j" },
-        { name: "return" },
+        { name: "right" },
+        { name: "down" },
         ...text("build"),
-        { name: "return" },
+        { name: "down" },
         ...text("npm run build"),
-        { name: "return" },
-        { name: "return" },
+        { ctrl: true, name: "s" },
       ]),
       store,
       promptScreen: createScreen(),
       runDashboard: async ({ onAddService }) => {
         await expect(onAddService?.()).resolves.toEqual({
           type: "continue",
-          message: 'Added command "build" to workspace "ecommerce".',
+          message: 'Added command "build".',
         });
 
         return { type: "back" };
@@ -345,6 +344,38 @@ describe("runWorkspaceSession", () => {
     expect(controller.removeService).not.toHaveBeenCalled();
     expect(store.savedConfig).toBeUndefined();
   });
+
+  it("edits a running service and says how to apply the change", async () => {
+    const controller = createFakeController(workspaceWithService);
+    const state = createRuntimeState(workspaceWithService);
+    controller.getState.mockReturnValue({
+      ...state,
+      services: state.services.map((serviceState) => ({
+        ...serviceState,
+        process: { status: "running" as const, pid: 1234 },
+      })),
+    });
+    const store = createStore(configWithService);
+
+    await runWorkspaceSession({
+      workspace: workspaceWithService,
+      createController: () => controller,
+      keyInput: createKeyInput([{ name: "down" }, { name: "end" }, ...text(" --watch"), { ctrl: true, name: "s" }]),
+      store,
+      promptScreen: createScreen(),
+      runDashboard: async ({ onEditService }) => {
+        await expect(onEditService?.()).resolves.toEqual({
+          type: "continue",
+          message: 'Saved service "api". Press r to restart it with the changes.',
+        });
+
+        return { type: "back" };
+      },
+    });
+
+    expect(store.savedConfig?.workspaces[0]?.services[0]?.command).toBe("npm run dev --watch");
+    expect(controller.updateService).toHaveBeenCalledWith(expect.objectContaining({ command: "npm run dev --watch" }));
+  });
 });
 
 function createStore(appConfig: AppConfig) {
@@ -384,7 +415,16 @@ function createFakeController(workspaceConfig: WorkspaceConfig) {
 
 function createKeyInput(keys: Array<{ sequence?: string; name?: string; ctrl?: boolean }> = []) {
   return {
-    readKey: vi.fn(async () => keys.shift() ?? { sequence: "q" }),
+    // Throw instead of inventing keys, so a flow waiting for input fails the test rather than looping.
+    readKey: vi.fn(async () => {
+      const key = keys.shift();
+
+      if (key === undefined) {
+        throw new Error("No key queued.");
+      }
+
+      return key;
+    }),
     close: vi.fn(),
   };
 }

@@ -227,7 +227,7 @@ function getDashboardKeyHints(
 
   if (command !== undefined) {
     return command.process.status === "running"
-      ? [["s", "stop"], ["Enter", "output"], ["?", "help"], back]
+      ? [["s", "stop"], ["Enter", "output"], ["e", "edit"], ["?", "help"], back]
       : [["r", "run"], ["Enter", "output"], ["e", "edit"], ["a", "add"], ["?", "help"], back];
   }
 

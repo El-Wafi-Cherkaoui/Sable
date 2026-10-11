@@ -3,12 +3,9 @@ import path from "node:path";
 import type { AppConfig, CommandConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { generateShortId } from "../shared/id.js";
-import {
-  runConfirmPrompt,
-  runSelectPrompt,
-  runTextPrompt,
-  type PromptScreen,
-} from "../tui/prompt-view.js";
+import { runForm, type FormErrors, type FormField, type FormValues } from "../tui/form-view.js";
+import { displayPath } from "../tui/format.js";
+import { runTextPrompt, type PromptScreen } from "../tui/prompt-view.js";
 
 export type ServiceFlowResult =
   | { type: "completed"; message: string; serviceId?: string; commandId?: string; removedServiceId?: string; removedCommandId?: string }
@@ -29,6 +26,7 @@ export type ServiceFlowOptions = {
   directoryExists?: (directoryPath: string) => boolean;
   serviceId?: string;
   commandId?: string;
+  form?: typeof runForm;
 };
 
 export type DeleteServiceFlowOptions = ServiceFlowOptions & {
@@ -39,35 +37,11 @@ export type DeleteCommandFlowOptions = ServiceFlowOptions & {
   commandId: string;
 };
 
-type EditAction = "rename" | "command" | "cwd" | "autoStart" | "remove";
-type EditCommandAction = "rename" | "command" | "cwd" | "remove";
-type AddWorkspaceItemKind = "service" | "command";
+type ItemKind = "service" | "command";
 
 export async function runAddWorkspaceItemFlow(
   options: ServiceFlowOptions,
 ): Promise<ServiceFlowResult> {
-  const kindResult = await runSelectPrompt<AddWorkspaceItemKind>({
-    title: "Add to workspace",
-    message: "What do you want to add?",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    choices: [
-      { label: "Service", value: "service" },
-      { label: "Command", value: "command" },
-    ],
-  });
-
-  if (kindResult.type === "back") return { type: "back", message: "Add cancelled." };
-  if (kindResult.type === "exit") return { type: "exit" };
-
-  return kindResult.value === "service"
-    ? runAddServiceFlow(options)
-    : runAddCommandFlow(options);
-}
-
-export async function runAddCommandFlow(
-  options: ServiceFlowOptions,
-): Promise<ServiceFlowResult> {
   const config = await options.store.load();
   const workspace = findWorkspace(config, options.workspace.id);
 
@@ -75,183 +49,35 @@ export async function runAddCommandFlow(
     return { type: "back", message: `Workspace "${options.workspace.name}" was not found.` };
   }
 
-  const baseDirectory = workspace.projectDirectory;
-  const directoryExists = options.directoryExists ?? defaultDirectoryExists;
-  const nameResult = await runTextPrompt({
-    title: "Add command",
-    message: "Command name",
+  const result = await (options.form ?? runForm)({
+    title: "New service or command",
+    subtitle: workspace.name,
+    fields: (values) => itemFields(kindOf(values), workspace, true),
+    values: { type: "service", name: "", command: "", cwd: ".", autoStart: true, env: [] },
+    validate: (values) => validateItem(kindOf(values), values, workspace, undefined, options.directoryExists ?? defaultDirectoryExists),
     keyInput: options.keyInput,
     screen: options.screen,
-    validate(value) {
-      const trimmedValue = value.trim();
-
-      if (trimmedValue.length === 0) {
-        return "Command name is required.";
-      }
-
-      if (workspace.commands.some((command) => normalizeName(command.name) === normalizeName(trimmedValue))) {
-        return `Command "${trimmedValue}" already exists in this workspace.`;
-      }
-
-      return true;
-    },
   });
-  if (nameResult.type === "back") return { type: "back", message: "Add command cancelled." };
-  if (nameResult.type === "exit") return { type: "exit" };
 
-  const commandResult = await runTextPrompt({
-    title: "Add command",
-    message: "Command",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    validate: requiredValue("Command is required."),
-  });
-  if (commandResult.type === "back") return { type: "back", message: "Add command cancelled." };
-  if (commandResult.type === "exit") return { type: "exit" };
+  if (result.type === "back") return { type: "back", message: "Add cancelled." };
+  if (result.type === "exit") return { type: "exit" };
 
-  const cwdResult = await runTextPrompt({
-    title: "Add command",
-    message: "Working directory",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    defaultValue: baseDirectory,
-    validate(value) {
-      const trimmedValue = value.trim();
+  const kind = kindOf(result.values);
+  const generateId = options.generateId ?? generateShortId;
 
-      if (trimmedValue.length === 0) {
-        return "Command working directory is required.";
-      }
+  if (kind === "service") {
+    const service: ServiceConfig = { id: generateId("svc"), ...serviceFromValues(result.values, workspace) };
 
-      if (!directoryExists(resolveServiceWorkingDirectory(trimmedValue, baseDirectory))) {
-        return "Command working directory must exist and be a directory.";
-      }
+    await options.store.save(updateWorkspace(config, workspace.id, { ...workspace, services: [...workspace.services, service] }));
 
-      return true;
-    },
-  });
-  if (cwdResult.type === "back") return { type: "back", message: "Add command cancelled." };
-  if (cwdResult.type === "exit") return { type: "exit" };
-
-  const command: CommandConfig = {
-    id: (options.generateId ?? generateShortId)("cmd"),
-    name: nameResult.value.trim(),
-    command: commandResult.value.trim(),
-    cwd: resolveServiceWorkingDirectory(cwdResult.value.trim(), baseDirectory),
-    env: {},
-  };
-
-  await options.store.save(updateWorkspace(config, workspace.id, {
-    ...workspace,
-    commands: [...workspace.commands, command],
-  }));
-
-  return {
-    type: "completed",
-    message: `Added command "${command.name}" to workspace "${workspace.name}".`,
-    commandId: command.id,
-  };
-}
-
-export async function runAddServiceFlow(
-  options: ServiceFlowOptions,
-): Promise<ServiceFlowResult> {
-  const config = await options.store.load();
-  const workspace = findWorkspace(config, options.workspace.id);
-
-  if (workspace === undefined) {
-    return { type: "back", message: `Workspace "${options.workspace.name}" was not found.` };
+    return { type: "completed", message: `Added service "${service.name}".`, serviceId: service.id };
   }
 
-  const baseDirectory = workspace.projectDirectory;
-  const directoryExists = options.directoryExists ?? defaultDirectoryExists;
-  const nameResult = await runTextPrompt({
-    title: "Add service",
-    message: "Service name",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    validate(value) {
-      const trimmedValue = value.trim();
+  const command: CommandConfig = { id: generateId("cmd"), ...commandFromValues(result.values, workspace) };
 
-      if (trimmedValue.length === 0) {
-        return "Service name is required.";
-      }
+  await options.store.save(updateWorkspace(config, workspace.id, { ...workspace, commands: [...workspace.commands, command] }));
 
-      if (workspace.services.some((service) => normalizeName(service.name) === normalizeName(trimmedValue))) {
-        return `Service "${trimmedValue}" already exists in this workspace.`;
-      }
-
-      return true;
-    },
-  });
-  if (nameResult.type === "back") return { type: "back", message: "Add service cancelled." };
-  if (nameResult.type === "exit") return { type: "exit" };
-
-  const commandResult = await runTextPrompt({
-    title: "Add service",
-    message: "Command",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    validate: requiredValue("Service command is required."),
-  });
-  if (commandResult.type === "back") return { type: "back", message: "Add service cancelled." };
-  if (commandResult.type === "exit") return { type: "exit" };
-
-  const cwdResult = await runTextPrompt({
-    title: "Add service",
-    message: "Working directory",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    defaultValue: baseDirectory,
-    validate(value) {
-      const trimmedValue = value.trim();
-
-      if (trimmedValue.length === 0) {
-        return "Service working directory is required.";
-      }
-
-      if (!directoryExists(resolveServiceWorkingDirectory(trimmedValue, baseDirectory))) {
-        return "Service working directory must exist and be a directory.";
-      }
-
-      return true;
-    },
-  });
-  if (cwdResult.type === "back") return { type: "back", message: "Add service cancelled." };
-  if (cwdResult.type === "exit") return { type: "exit" };
-
-  const autoStartResult = await runConfirmPrompt({
-    title: "Add service",
-    message: "Auto-start this service?",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    defaultValue: true,
-  });
-  if (autoStartResult.type === "back") return { type: "back", message: "Add service cancelled." };
-  if (autoStartResult.type === "exit") return { type: "exit" };
-
-  const service: ServiceConfig = {
-    id: (options.generateId ?? generateShortId)("svc"),
-    name: nameResult.value.trim(),
-    command: commandResult.value.trim(),
-    cwd: resolveServiceWorkingDirectory(cwdResult.value.trim(), baseDirectory),
-    autoStart: autoStartResult.value,
-    env: {},
-  };
-
-  await options.store.save({
-    ...config,
-    workspaces: config.workspaces.map((candidate) =>
-      candidate.id === workspace.id
-        ? { ...candidate, services: [...candidate.services, service] }
-        : candidate,
-    ),
-  });
-
-  return {
-    type: "completed",
-    message: `Added service "${service.name}" to workspace "${workspace.name}".`,
-    serviceId: service.id,
-  };
+  return { type: "completed", message: `Added command "${command.name}".`, commandId: command.id };
 }
 
 export async function runEditServiceFlow(
@@ -259,90 +85,39 @@ export async function runEditServiceFlow(
 ): Promise<ServiceFlowResult> {
   const config = await options.store.load();
   const workspace = findWorkspace(config, options.workspace.id);
-  const directoryExists = options.directoryExists ?? defaultDirectoryExists;
+  const service = workspace?.services.find((candidate) => candidate.id === options.serviceId);
 
-  if (workspace === undefined) {
-    return { type: "back", message: `Workspace "${options.workspace.name}" was not found.` };
+  if (workspace === undefined || service === undefined) {
+    return { type: "back", message: "That service no longer exists." };
   }
 
-  if (workspace.services.length === 0) {
-    return { type: "back", message: `Workspace "${workspace.name}" has no services to edit.` };
-  }
-
-  const service = options.serviceId === undefined
-    ? await promptForServiceToEdit({
-      workspace,
-      keyInput: options.keyInput,
-      screen: options.screen,
-    })
-    : workspace.services.find((candidate) => candidate.id === options.serviceId);
-
-  if (service === "back") return { type: "back", message: "Edit cancelled." };
-  if (service === "exit") return { type: "exit" };
-  if (service === undefined) return { type: "back", message: "Edit cancelled." };
-
-  const actionResult = await runSelectPrompt<EditAction>({
-    title: "Edit service",
-    message: "Action",
+  const result = await (options.form ?? runForm)({
+    title: `Edit service "${service.name}"`,
+    subtitle: workspace.name,
+    fields: () => itemFields("service", workspace, false),
+    values: {
+      name: service.name,
+      command: service.command,
+      cwd: toDirectoryValue(service.cwd, workspace.projectDirectory),
+      autoStart: service.autoStart,
+      env: envToList(service.env),
+    },
+    validate: (values) => validateItem("service", values, workspace, service.id, options.directoryExists ?? defaultDirectoryExists),
     keyInput: options.keyInput,
     screen: options.screen,
-    choices: [
-      { label: "Rename service", value: "rename" },
-      { label: "Edit command", value: "command" },
-      { label: "Edit working directory", value: "cwd" },
-      { label: "Toggle auto-start", value: "autoStart" },
-      { label: "Remove service", value: "remove" },
-    ],
   });
-  if (actionResult.type === "back") return { type: "back", message: "Edit cancelled." };
-  if (actionResult.type === "exit") return { type: "exit" };
 
-  if (actionResult.value === "remove") {
-    const confirmResult = await runConfirmPrompt({
-      title: "Edit service",
-      message: `Remove service "${service.name}"?`,
-      keyInput: options.keyInput,
-      screen: options.screen,
-      defaultValue: false,
-    });
-    if (confirmResult.type === "back") return { type: "back", message: "Edit cancelled." };
-    if (confirmResult.type === "exit") return { type: "exit" };
-    if (!confirmResult.value) return { type: "back", message: "Remove cancelled." };
+  if (result.type === "back") return { type: "back", message: "Edit cancelled." };
+  if (result.type === "exit") return { type: "exit" };
 
-    await options.store.save(updateWorkspace(config, workspace.id, {
-      ...workspace,
-      services: workspace.services.filter((candidate) => candidate.id !== service.id),
-    }));
+  const nextService: ServiceConfig = { id: service.id, ...serviceFromValues(result.values, workspace) };
 
-    return {
-      type: "completed",
-      message: `Removed service "${service.name}" from workspace "${workspace.name}".`,
-      removedServiceId: service.id,
-    };
-  }
-
-  const nextServiceResult = await updateServiceFromAction({
-    action: actionResult.value,
-    service,
-    keyInput: options.keyInput,
-    screen: options.screen,
-    directoryExists,
-    workspace,
-  });
-  if (nextServiceResult.type === "back") return { type: "back", message: "Edit cancelled." };
-  if (nextServiceResult.type === "exit") return { type: "exit" };
-
-  const nextService = nextServiceResult.value;
   await options.store.save(updateWorkspace(config, workspace.id, {
     ...workspace,
     services: workspace.services.map((candidate) => candidate.id === service.id ? nextService : candidate),
   }));
 
-  return {
-    type: "completed",
-    message: formatUpdateMessage(actionResult.value, service, nextService),
-    serviceId: nextService.id,
-  };
+  return { type: "completed", message: `Saved service "${nextService.name}".`, serviceId: nextService.id };
 }
 
 export async function runEditCommandFlow(
@@ -350,85 +125,38 @@ export async function runEditCommandFlow(
 ): Promise<ServiceFlowResult> {
   const config = await options.store.load();
   const workspace = findWorkspace(config, options.workspace.id);
-  const directoryExists = options.directoryExists ?? defaultDirectoryExists;
+  const command = workspace?.commands.find((candidate) => candidate.id === options.commandId);
 
-  if (workspace === undefined) {
-    return { type: "back", message: `Workspace "${options.workspace.name}" was not found.` };
+  if (workspace === undefined || command === undefined) {
+    return { type: "back", message: "That command no longer exists." };
   }
 
-  if (workspace.commands.length === 0) {
-    return { type: "back", message: `Workspace "${workspace.name}" has no commands to edit.` };
-  }
-
-  const command = options.commandId === undefined
-    ? await promptForCommandToEdit({ workspace, keyInput: options.keyInput, screen: options.screen })
-    : workspace.commands.find((candidate) => candidate.id === options.commandId);
-
-  if (command === "back") return { type: "back", message: "Edit cancelled." };
-  if (command === "exit") return { type: "exit" };
-  if (command === undefined) return { type: "back", message: "Edit cancelled." };
-
-  const actionResult = await runSelectPrompt<EditCommandAction>({
-    title: "Edit command",
-    message: "Action",
+  const result = await (options.form ?? runForm)({
+    title: `Edit command "${command.name}"`,
+    subtitle: workspace.name,
+    fields: () => itemFields("command", workspace, false),
+    values: {
+      name: command.name,
+      command: command.command,
+      cwd: toDirectoryValue(command.cwd, workspace.projectDirectory),
+      env: envToList(command.env),
+    },
+    validate: (values) => validateItem("command", values, workspace, command.id, options.directoryExists ?? defaultDirectoryExists),
     keyInput: options.keyInput,
     screen: options.screen,
-    choices: [
-      { label: "Rename command", value: "rename" },
-      { label: "Edit command", value: "command" },
-      { label: "Edit working directory", value: "cwd" },
-      { label: "Remove command", value: "remove" },
-    ],
   });
-  if (actionResult.type === "back") return { type: "back", message: "Edit cancelled." };
-  if (actionResult.type === "exit") return { type: "exit" };
 
-  if (actionResult.value === "remove") {
-    const confirmResult = await runConfirmPrompt({
-      title: "Edit command",
-      message: `Remove command "${command.name}"?`,
-      keyInput: options.keyInput,
-      screen: options.screen,
-      defaultValue: false,
-    });
-    if (confirmResult.type === "back") return { type: "back", message: "Edit cancelled." };
-    if (confirmResult.type === "exit") return { type: "exit" };
-    if (!confirmResult.value) return { type: "back", message: "Remove cancelled." };
+  if (result.type === "back") return { type: "back", message: "Edit cancelled." };
+  if (result.type === "exit") return { type: "exit" };
 
-    await options.store.save(updateWorkspace(config, workspace.id, {
-      ...workspace,
-      commands: workspace.commands.filter((candidate) => candidate.id !== command.id),
-    }));
+  const nextCommand: CommandConfig = { id: command.id, ...commandFromValues(result.values, workspace) };
 
-    return {
-      type: "completed",
-      message: `Removed command "${command.name}" from workspace "${workspace.name}".`,
-      removedCommandId: command.id,
-    };
-  }
-
-  const nextCommandResult = await updateCommandFromAction({
-    action: actionResult.value,
-    command,
-    workspace,
-    keyInput: options.keyInput,
-    screen: options.screen,
-    directoryExists,
-  });
-  if (nextCommandResult.type === "back") return { type: "back", message: "Edit cancelled." };
-  if (nextCommandResult.type === "exit") return { type: "exit" };
-
-  const nextCommand = nextCommandResult.value;
   await options.store.save(updateWorkspace(config, workspace.id, {
     ...workspace,
     commands: workspace.commands.map((candidate) => candidate.id === command.id ? nextCommand : candidate),
   }));
 
-  return {
-    type: "completed",
-    message: formatCommandUpdateMessage(actionResult.value, command, nextCommand),
-    commandId: nextCommand.id,
-  };
+  return { type: "completed", message: `Saved command "${nextCommand.name}".`, commandId: nextCommand.id };
 }
 
 export async function runDeleteCommandFlow(
@@ -521,218 +249,119 @@ export async function runDeleteServiceFlow(
   };
 }
 
-async function promptForServiceToEdit(options: {
-  workspace: WorkspaceConfig;
-  keyInput: KeyInput;
-  screen?: PromptScreen;
-}): Promise<ServiceConfig | "back" | "exit" | undefined> {
-  const serviceResult = await runSelectPrompt({
-    title: "Edit service",
-    message: "Service",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    choices: options.workspace.services.map((service) => ({ label: service.name, value: service.id })),
-  });
-
-  if (serviceResult.type === "back") return "back";
-  if (serviceResult.type === "exit") return "exit";
-
-  return options.workspace.services.find((candidate) => candidate.id === serviceResult.value);
-}
-
-async function promptForCommandToEdit(options: {
-  workspace: WorkspaceConfig;
-  keyInput: KeyInput;
-  screen?: PromptScreen;
-}): Promise<CommandConfig | "back" | "exit" | undefined> {
-  const commandResult = await runSelectPrompt({
-    title: "Edit command",
-    message: "Command",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    choices: options.workspace.commands.map((command) => ({ label: command.name, value: command.id })),
-  });
-
-  if (commandResult.type === "back") return "back";
-  if (commandResult.type === "exit") return "exit";
-
-  return options.workspace.commands.find((candidate) => candidate.id === commandResult.value);
-}
-
-type UpdateCommandFromActionOptions = {
-  action: Exclude<EditCommandAction, "remove">;
-  command: CommandConfig;
-  workspace: WorkspaceConfig;
-  keyInput: KeyInput;
-  screen?: PromptScreen;
-  directoryExists: (directoryPath: string) => boolean;
-};
-
-async function updateCommandFromAction(
-  options: UpdateCommandFromActionOptions,
-): Promise<{ type: "submit"; value: CommandConfig } | { type: "back" } | { type: "exit" }> {
-  if (options.action === "rename") {
-    const result = await runTextPrompt({
-      title: "Edit command",
-      message: "Command name",
-      keyInput: options.keyInput,
-      screen: options.screen,
-      defaultValue: options.command.name,
-      validate(value) {
-        const trimmedValue = value.trim();
-
-        if (trimmedValue.length === 0) {
-          return "Command name is required.";
-        }
-
-        if (options.workspace.commands.some((candidate) =>
-          candidate.id !== options.command.id &&
-          normalizeName(candidate.name) === normalizeName(trimmedValue)
-        )) {
-          return `Command "${trimmedValue}" already exists in this workspace.`;
-        }
-
-        return true;
-      },
-    });
-
-    if (result.type !== "submit") return result;
-    return { type: "submit", value: { ...options.command, name: result.value.trim() } };
-  }
-
-  if (options.action === "command") {
-    const result = await runTextPrompt({
-      title: "Edit command",
-      message: "Command",
-      keyInput: options.keyInput,
-      screen: options.screen,
-      defaultValue: options.command.command,
-      validate: requiredValue("Command is required."),
-    });
-
-    if (result.type !== "submit") return result;
-    return { type: "submit", value: { ...options.command, command: result.value.trim() } };
-  }
-
-  const result = await runTextPrompt({
-    title: "Edit command",
-    message: "Working directory",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    defaultValue: options.command.cwd,
-    validate(value) {
-      const trimmedValue = value.trim();
-
-      if (trimmedValue.length === 0) {
-        return "Command working directory is required.";
-      }
-
-      if (!options.directoryExists(resolveServiceWorkingDirectory(trimmedValue, options.command.cwd))) {
-        return "Command working directory must exist and be a directory.";
-      }
-
-      return true;
+export function itemFields(kind: ItemKind, workspace: WorkspaceConfig, includeType: boolean): FormField[] {
+  return [
+    ...(includeType
+      ? [{
+        type: "choice" as const,
+        key: "type",
+        label: "Type",
+        choices: [{ value: "service", label: "service" }, { value: "command", label: "command" }],
+      }]
+      : []),
+    { type: "text", key: "name", label: "Name", hint: "Shown in the dashboard and logs" },
+    {
+      type: "text",
+      key: "command",
+      label: "Command",
+      hint: kind === "service" ? "Keeps running until stopped, e.g. npm run dev" : "Runs once, e.g. npm run migrate",
     },
-  });
+    { type: "text", key: "cwd", label: "Directory", hint: `Relative to ${displayPath(workspace.projectDirectory)}` },
+    ...(kind === "service" ? [{ type: "toggle" as const, key: "autoStart", label: "Auto-start" }] : []),
+    { type: "list", key: "env", label: "Env", hint: "KEY=value, e.g. PORT=3000", addLabel: "add variable" },
+  ];
+}
 
-  if (result.type !== "submit") return result;
+export function validateItem(
+  kind: ItemKind,
+  values: FormValues,
+  workspace: WorkspaceConfig,
+  selfId: string | undefined,
+  directoryExists: (directoryPath: string) => boolean,
+): FormErrors {
+  const errors: FormErrors = {};
+  const name = text(values.name);
+  const siblings: Array<{ id: string; name: string }> = kind === "service" ? workspace.services : workspace.commands;
+
+  if (name === "") {
+    errors.name = "Name is required.";
+  } else if (siblings.some((sibling) => sibling.id !== selfId && normalizeName(sibling.name) === normalizeName(name))) {
+    errors.name = `A ${kind} named "${name}" already exists.`;
+  }
+
+  if (text(values.command) === "") {
+    errors.command = "Command is required.";
+  }
+
+  const cwd = text(values.cwd) === "" ? "." : text(values.cwd);
+
+  if (!directoryExists(path.resolve(workspace.projectDirectory, cwd))) {
+    errors.cwd = "This folder doesn't exist.";
+  }
+
+  const seenKeys = new Set<string>();
+
+  for (const [index, item] of list(values.env).entries()) {
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/s.exec(item.trim());
+
+    if (match === null) {
+      errors[`env.${index}`] = "Use KEY=value, e.g. PORT=3000.";
+    } else if (seenKeys.has(match[1]!)) {
+      errors[`env.${index}`] = `${match[1]} is set twice.`;
+    } else {
+      seenKeys.add(match[1]!);
+    }
+  }
+
+  return errors;
+}
+
+function serviceFromValues(values: FormValues, workspace: WorkspaceConfig): Omit<ServiceConfig, "id"> {
+  return { ...commandFromValues(values, workspace), autoStart: values.autoStart === true };
+}
+
+function commandFromValues(values: FormValues, workspace: WorkspaceConfig): Omit<CommandConfig, "id"> {
   return {
-    type: "submit",
-    value: {
-      ...options.command,
-      cwd: resolveServiceWorkingDirectory(result.value.trim(), options.command.cwd),
-    },
+    name: text(values.name),
+    command: text(values.command),
+    cwd: path.resolve(workspace.projectDirectory, text(values.cwd) === "" ? "." : text(values.cwd)),
+    env: listToEnv(list(values.env)),
   };
 }
 
-type UpdateServiceFromActionOptions = {
-  action: Exclude<EditAction, "remove">;
-  service: ServiceConfig;
-  workspace: WorkspaceConfig;
-  keyInput: KeyInput;
-  screen?: PromptScreen;
-  directoryExists: (directoryPath: string) => boolean;
-};
+// Shows folders inside the project as relative paths, and anything else as-is.
+export function toDirectoryValue(directory: string, projectDirectory: string): string {
+  const relative = path.relative(projectDirectory, directory);
 
-async function updateServiceFromAction(
-  options: UpdateServiceFromActionOptions,
-): Promise<{ type: "submit"; value: ServiceConfig } | { type: "back" } | { type: "exit" }> {
-  if (options.action === "rename") {
-    const result = await runTextPrompt({
-      title: "Edit service",
-      message: "Service name",
-      keyInput: options.keyInput,
-      screen: options.screen,
-      defaultValue: options.service.name,
-      validate(value) {
-        const trimmedValue = value.trim();
-
-        if (trimmedValue.length === 0) {
-          return "Service name is required.";
-        }
-
-        if (options.workspace.services.some((candidate) =>
-          candidate.id !== options.service.id &&
-          normalizeName(candidate.name) === normalizeName(trimmedValue)
-        )) {
-          return `Service "${trimmedValue}" already exists in this workspace.`;
-        }
-
-        return true;
-      },
-    });
-
-    if (result.type !== "submit") return result;
-    return { type: "submit", value: { ...options.service, name: result.value.trim() } };
+  if (relative === "") {
+    return ".";
   }
 
-  if (options.action === "autoStart") {
-    return { type: "submit", value: { ...options.service, autoStart: !options.service.autoStart } };
-  }
+  return relative.startsWith("..") || path.isAbsolute(relative) ? directory : relative;
+}
 
-  if (options.action === "command") {
-    const result = await runTextPrompt({
-      title: "Edit service",
-      message: "Command",
-      keyInput: options.keyInput,
-      screen: options.screen,
-      defaultValue: options.service.command,
-      validate: requiredValue("Service command is required."),
-    });
+function envToList(env: Record<string, string>): string[] {
+  return Object.entries(env).map(([key, value]) => `${key}=${value}`);
+}
 
-    if (result.type !== "submit") return result;
-    return { type: "submit", value: { ...options.service, command: result.value.trim() } };
-  }
+function listToEnv(items: string[]): Record<string, string> {
+  return Object.fromEntries(items.map((item) => {
+    const separator = item.indexOf("=");
 
-  const result = await runTextPrompt({
-    title: "Edit service",
-    message: "Working directory",
-    keyInput: options.keyInput,
-    screen: options.screen,
-    defaultValue: options.service.cwd,
-    validate(value) {
-      const trimmedValue = value.trim();
+    return [item.slice(0, separator).trim(), item.slice(separator + 1)];
+  }));
+}
 
-      if (trimmedValue.length === 0) {
-        return "Service working directory is required.";
-      }
+function kindOf(values: FormValues): ItemKind {
+  return values.type === "command" ? "command" : "service";
+}
 
-      if (!options.directoryExists(resolveServiceWorkingDirectory(trimmedValue, options.service.cwd))) {
-        return "Service working directory must exist and be a directory.";
-      }
+function text(value: FormValues[string] | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
 
-      return true;
-    },
-  });
-
-  if (result.type !== "submit") return result;
-  return {
-    type: "submit",
-    value: {
-      ...options.service,
-      cwd: resolveServiceWorkingDirectory(result.value.trim(), options.service.cwd),
-    },
-  };
+function list(value: FormValues[string] | undefined): string[] {
+  return Array.isArray(value) ? value : [];
 }
 
 function findWorkspace(config: AppConfig, workspaceId: string): WorkspaceConfig | undefined {
@@ -750,48 +379,6 @@ function updateWorkspace(
       candidate.id === workspaceId ? workspace : candidate,
     ),
   };
-}
-
-function formatUpdateMessage(
-  action: Exclude<EditAction, "remove">,
-  previousService: ServiceConfig,
-  service: ServiceConfig,
-): string {
-  switch (action) {
-    case "rename":
-      return `Renamed service "${previousService.name}" to "${service.name}".`;
-    case "command":
-      return `Updated command for "${service.name}".`;
-    case "cwd":
-      return `Updated working directory for "${service.name}".`;
-    case "autoStart":
-      return `Auto-start ${service.autoStart ? "enabled" : "disabled"} for "${service.name}".`;
-  }
-}
-
-function formatCommandUpdateMessage(
-  action: Exclude<EditCommandAction, "remove">,
-  previousCommand: CommandConfig,
-  command: CommandConfig,
-): string {
-  switch (action) {
-    case "rename":
-      return `Renamed command "${previousCommand.name}" to "${command.name}".`;
-    case "command":
-      return `Updated command for "${command.name}".`;
-    case "cwd":
-      return `Updated working directory for "${command.name}".`;
-  }
-}
-
-function resolveServiceWorkingDirectory(rawWorkingDirectory: string, baseDirectory: string): string {
-  return path.isAbsolute(rawWorkingDirectory)
-    ? rawWorkingDirectory
-    : path.resolve(baseDirectory, rawWorkingDirectory);
-}
-
-function requiredValue(message: string): (value: string) => boolean | string {
-  return (value) => (value.trim().length > 0 ? true : message);
 }
 
 function normalizeName(name: string): string {

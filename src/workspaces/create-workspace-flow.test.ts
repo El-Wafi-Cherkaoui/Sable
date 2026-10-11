@@ -40,26 +40,42 @@ describe("runCreateWorkspaceFlow", () => {
     ]);
   });
 
-  it("keeps prompting when the workspace name is invalid", async () => {
+  it("suggests the folder name as the workspace name", async () => {
     const store = createStore(emptyConfig);
+    const folder = path.resolve(path.sep, "projects", "shop-api");
+
+    await runCreateWorkspaceFlow({
+      store,
+      keyInput: createKeyInput([{ ctrl: true, name: "s" }]),
+      screen: createScreen(),
+      generateId: () => "ws_shop",
+      defaultProjectDirectory: folder,
+      projectDirectoryExists: () => true,
+    });
+
+    expect(store.savedConfig?.workspaces[0]).toMatchObject({ name: "shop-api", projectDirectory: folder });
+  });
+
+  it("shows an error and stays open when the workspace name is invalid", async () => {
+    const store = createStore(emptyConfig);
+    const screen = createScreen();
 
     await runCreateWorkspaceFlow({
       store,
       keyInput: createKeyInput([
-        { name: "return" },
         ...text("bad name"),
-        { name: "return" },
+        { ctrl: true, name: "s" },
         ...backspaces("bad name".length),
         ...text("good_name"),
-        { name: "return" },
-        { name: "return" },
+        { ctrl: true, name: "s" },
       ]),
-      screen: createScreen(),
+      screen,
       generateId: () => "ws_good",
-      defaultProjectDirectory: process.cwd(),
+      defaultProjectDirectory: path.sep,
       projectDirectoryExists: () => true,
     });
 
+    expect(screen.output()).toContain("Use only letters, numbers, dashes, and underscores.");
     expect(store.savedConfig?.workspaces[0]?.name).toBe("good_name");
   });
 
@@ -81,19 +97,18 @@ describe("runCreateWorkspaceFlow", () => {
       store,
       keyInput: createKeyInput([
         ...text("SHOP"),
-        { name: "return" },
+        { ctrl: true, name: "s" },
         ...backspaces("SHOP".length),
         ...text("portfolio"),
-        { name: "return" },
-        { name: "return" },
+        { ctrl: true, name: "s" },
       ]),
       screen,
       generateId: () => "ws_portfolio",
-      defaultProjectDirectory: process.cwd(),
+      defaultProjectDirectory: path.sep,
       projectDirectoryExists: () => true,
     });
 
-    expect(screen.output()).toContain('Workspace "SHOP" already exists.');
+    expect(screen.output()).toContain('A workspace named "SHOP" already exists.');
     expect(store.savedConfig?.workspaces.map((workspace) => workspace.name)).toEqual([
       "shop",
       "portfolio",
