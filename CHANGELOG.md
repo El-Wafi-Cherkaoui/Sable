@@ -28,7 +28,7 @@
 
 ### Hardened
 
-- Services and commands with a relative folder in `workspaces.json` now run inside the project folder instead of the folder Sable was started from.
+- Workspaces now run from anywhere even when a service's folder in `workspaces.json` is relative (like `"."`): it is resolved against the workspace's project folder, not the folder you started `sable` in.
 - Workspace details (`v`) now list commands as well as services.
 - Key hints are shortened to fit narrow terminals instead of wrapping.
 
