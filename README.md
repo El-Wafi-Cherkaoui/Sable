@@ -166,6 +166,16 @@ Sable stores workspace configuration as JSON in an OS-aware user config director
 
 Workspace commands are treated as trusted local configuration.
 
+## Updates
+
+Once a day, Sable asks the npm registry in the background whether a newer version exists. If one does, the picker and the line printed when you quit say so:
+
+```text
+Sable 0.4.0 is available: npm install -g sable-workspaces
+```
+
+The check never delays startup or quitting, never updates anything by itself, and is silent when you are offline. It is skipped in CI and when output is not a terminal. To turn it off, set `SABLE_NO_UPDATE_CHECK=1` (or the common `NO_UPDATE_NOTIFIER=1`).
+
 ## First-user notes
 
 Sable runs workspace service commands through the user's shell. Treat workspace configuration as trusted local configuration, not as safe input from untrusted sources.

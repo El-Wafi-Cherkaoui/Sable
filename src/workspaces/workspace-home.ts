@@ -45,6 +45,8 @@ export type RunWorkspaceHomeOptions = {
   runDeleteWorkspace?: (options: DeleteWorkspaceFlowOptions) => Promise<DeleteWorkspaceFlowResult>;
   runRenameWorkspace?: (options: RenameWorkspaceFlowOptions) => Promise<RenameWorkspaceFlowResult>;
   runSuggestServices?: (options: SuggestServicesFlowOptions) => Promise<SuggestServicesFlowResult>;
+  // Shown in the picker's status line when there is no other message, e.g. a newer Sable version.
+  updateNotice?: () => string | undefined;
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   signalSource?: WorkspaceHomeSignalSource;
@@ -96,7 +98,7 @@ export async function runWorkspaceHome(
         workspaces: config.workspaces,
         keyInput,
         abortSignal: shutdownAbortController.signal,
-        statusMessage,
+        statusMessage: statusMessage ?? options.updateNotice?.(),
         selectedWorkspaceId,
         activeWorkspaceId: activeSession?.workspaceId,
         activeRunningServiceCount: activeSession?.controller.getState().services

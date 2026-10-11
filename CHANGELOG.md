@@ -4,6 +4,7 @@
 
 ### Added
 
+- A notice when a newer Sable is on npm, checked in the background at most once a day; turn it off with `SABLE_NO_UPDATE_CHECK=1`.
 - A welcome screen for new users, and newly created workspaces now open straight away.
 - When a new workspace has a `package.json`, Sable offers its scripts as services and one-shot commands (npm, pnpm, yarn, or bun, picked from the lockfile).
 - One form to add or edit a service, command, or workspace, with every field visible, inline validation, and environment variables.

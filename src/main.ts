@@ -8,7 +8,9 @@ import {
   ConfigValidationError,
   formatConfigError,
 } from "./config/config-store.js";
+import { resolveConfigPaths } from "./config/config-path.js";
 import { product } from "./shared/product.js";
+import { formatUpdateNotice, startUpdateCheck, updateCacheFile } from "./update/update-check.js";
 import {
   DuplicateWorkspaceNameError,
   runCreateWorkspaceCommand,
@@ -32,6 +34,29 @@ function handleConfigError(error: unknown): boolean {
   return false;
 }
 
+// Runs an interactive command with a background check for a newer Sable,
+// printing one line about it after the TUI closes.
+async function withUpdateCheck(run: (updateNotice: () => string | undefined) => Promise<void>): Promise<void> {
+  const updateCheck = startUpdateCheck({ cacheFile: updateCacheFile(resolveConfigPaths().directory) });
+  const updateNotice = () => {
+    const version = updateCheck.newerVersion();
+
+    return version === undefined ? undefined : formatUpdateNotice(version);
+  };
+
+  try {
+    await run(updateNotice);
+  } finally {
+    updateCheck.cancel();
+
+    const notice = updateNotice();
+
+    if (notice !== undefined) {
+      console.log(notice);
+    }
+  }
+}
+
 const program = new Command();
 
 program
@@ -40,9 +65,10 @@ program
   .version(product.version)
   .action(async () => {
     try {
-      await runWorkspaceHome({
+      await withUpdateCheck((updateNotice) => runWorkspaceHome({
         store: new ConfigStore(),
-      });
+        updateNotice,
+      }));
     } catch (error) {
       if (handleConfigError(error)) {
         return;
@@ -83,9 +109,9 @@ program
   .description("run a saved workspace")
   .action(async (workspaceName: string) => {
     try {
-      await runWorkspaceCommand(workspaceName, {
+      await withUpdateCheck(() => runWorkspaceCommand(workspaceName, {
         store: new ConfigStore(),
-      });
+      }));
     } catch (error) {
       if (handleConfigError(error)) {
         return;

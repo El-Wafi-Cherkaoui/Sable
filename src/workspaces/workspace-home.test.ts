@@ -815,6 +815,26 @@ describe("runWorkspaceHome", () => {
     expect(controller.shutdown).toHaveBeenCalledOnce();
   });
 
+  it("shows the update notice in the picker only when there is no other message", async () => {
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "reorderWorkspace" as const, workspace, index: 0 })
+      .mockResolvedValueOnce({ type: "exit" as const });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(),
+      updateNotice: () => "Sable 0.4.0 is available: npm install -g sable-workspaces",
+    });
+
+    expect(runPicker).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      statusMessage: "Sable 0.4.0 is available: npm install -g sable-workspaces",
+    }));
+    expect(runPicker.mock.calls[1]![0].statusMessage).not.toContain("is available");
+  });
+
   it("aborts picker wait on SIGINT and removes signal listeners", async () => {
     const signalSource = createSignalSource();
     const runPicker = vi.fn(
