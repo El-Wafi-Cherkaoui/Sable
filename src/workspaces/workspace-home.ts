@@ -92,11 +92,19 @@ export async function runWorkspaceHome(
       }
 
       if (pickerResult.type === "createWorkspace") {
-        const flowResult = await createWorkspace({
-          store: options.store,
-          keyInput,
-          screen: options.screen,
-        });
+        let flowResult: CreateWorkspaceFlowResult;
+
+        try {
+          flowResult = await createWorkspace({
+            store: options.store,
+            keyInput,
+            screen: options.screen,
+          });
+        } catch (error) {
+          statusMessage = configUpdateFailedMessage(error);
+          selectedWorkspaceId = undefined;
+          continue;
+        }
 
         if (flowResult.type === "exit") {
           return;
@@ -109,12 +117,26 @@ export async function runWorkspaceHome(
       }
 
       if (pickerResult.type === "deleteWorkspace") {
-        const flowResult = await deleteWorkspace({
-          store: options.store,
-          workspace: pickerResult.workspace,
-          keyInput,
-          screen: options.screen,
-        });
+        if (activeSession?.workspaceId === pickerResult.workspace.id) {
+          statusMessage = `Stop workspace "${pickerResult.workspace.name}" before deleting it.`;
+          selectedWorkspaceId = pickerResult.workspace.id;
+          continue;
+        }
+
+        let flowResult: DeleteWorkspaceFlowResult;
+
+        try {
+          flowResult = await deleteWorkspace({
+            store: options.store,
+            workspace: pickerResult.workspace,
+            keyInput,
+            screen: options.screen,
+          });
+        } catch (error) {
+          statusMessage = configUpdateFailedMessage(error);
+          selectedWorkspaceId = pickerResult.workspace.id;
+          continue;
+        }
 
         if (flowResult.type === "exit") {
           return;
@@ -127,12 +149,20 @@ export async function runWorkspaceHome(
       }
 
       if (pickerResult.type === "renameWorkspace") {
-        const flowResult = await renameWorkspace({
-          store: options.store,
-          workspace: pickerResult.workspace,
-          keyInput,
-          screen: options.screen,
-        });
+        let flowResult: RenameWorkspaceFlowResult;
+
+        try {
+          flowResult = await renameWorkspace({
+            store: options.store,
+            workspace: pickerResult.workspace,
+            keyInput,
+            screen: options.screen,
+          });
+        } catch (error) {
+          statusMessage = configUpdateFailedMessage(error);
+          selectedWorkspaceId = pickerResult.workspace.id;
+          continue;
+        }
 
         if (flowResult.type === "exit") {
           return;
@@ -145,13 +175,18 @@ export async function runWorkspaceHome(
       }
 
       if (pickerResult.type === "moveWorkspaceUp" || pickerResult.type === "moveWorkspaceDown") {
-        const result = await moveWorkspace({
-          store: options.store,
-          workspace: pickerResult.workspace,
-          direction: pickerResult.type === "moveWorkspaceUp" ? "up" : "down",
-        });
+        try {
+          const result = await moveWorkspace({
+            store: options.store,
+            workspace: pickerResult.workspace,
+            direction: pickerResult.type === "moveWorkspaceUp" ? "up" : "down",
+          });
 
-        statusMessage = result.message;
+          statusMessage = result.message;
+        } catch (error) {
+          statusMessage = configUpdateFailedMessage(error);
+        }
+
         selectedWorkspaceId = pickerResult.workspace.id;
 
         continue;
@@ -231,6 +266,9 @@ export async function runWorkspaceHome(
   }
 }
 
+function configUpdateFailedMessage(error: unknown): string {
+  return `Could not update config: ${error instanceof Error ? error.message : String(error)}`;
+}
 
 type RestartActiveSessionOptions = {
   workspace: WorkspaceConfig;

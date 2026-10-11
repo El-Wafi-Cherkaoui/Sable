@@ -7,6 +7,7 @@ import {
   ConfigStore,
   ConfigValidationError,
   defaultConfig,
+  formatConfigError,
 } from "./config-store.js";
 
 let tempDirectory: string;
@@ -193,5 +194,52 @@ describe("ConfigStore", () => {
     const entries = await fs.readdir(tempDirectory);
 
     expect(entries).toEqual(["workspaces.json"]);
+  });
+});
+
+describe("formatConfigError", () => {
+  it("lists zod issues for validation errors", async () => {
+    const store = new ConfigStore({ directory: tempDirectory });
+
+    await fs.writeFile(
+      store.paths.file,
+      JSON.stringify({ version: 1, workspaces: [{ id: "a", name: "bad name!" }] }),
+      "utf8",
+    );
+
+    const error = await store.load().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConfigValidationError);
+
+    const lines = formatConfigError(error as ConfigValidationError).split("\n");
+
+    expect(lines[0]).toBe(`Invalid config at ${store.paths.file}.`);
+    expect(lines.some((line) => line.startsWith("  - workspaces.0."))).toBe(true);
+    expect(lines.at(-1)).toBe("Fix or remove the file and run sable again.");
+  });
+
+  it("omits the path prefix when an issue has an empty path", async () => {
+    const store = new ConfigStore({ directory: tempDirectory });
+
+    await fs.writeFile(store.paths.file, "42", "utf8");
+
+    const error = await store.load().catch((caught: unknown) => caught);
+    const lines = formatConfigError(error as ConfigValidationError).split("\n");
+
+    expect(lines[1]).toMatch(/^  - [^:]/);
+    expect(lines[1]).not.toMatch(/^  - : /);
+  });
+
+  it("includes the JSON syntax error for parse errors", () => {
+    const cause = new SyntaxError("Unexpected token } in JSON at position 3");
+    const error = new ConfigParseError("/tmp/workspaces.json", cause);
+
+    expect(formatConfigError(error)).toBe(
+      [
+        "Could not parse config JSON at /tmp/workspaces.json.",
+        "  Unexpected token } in JSON at position 3",
+        "Fix or remove the file and run sable again.",
+      ].join("\n"),
+    );
   });
 });

@@ -609,6 +609,126 @@ describe("runWorkspaceHome", () => {
     expect(keyInput.close).toHaveBeenCalledOnce();
   });
 
+  it("refuses to delete the active workspace and keeps it running", async () => {
+    const controller = createFakeController();
+    const runDeleteWorkspace = vi.fn();
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce({ type: "deleteWorkspace" as const, workspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(async () => ({ type: "back" as const })),
+      runDeleteWorkspace,
+      createController: () => controller,
+    });
+
+    expect(runDeleteWorkspace).not.toHaveBeenCalled();
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      activeWorkspaceId: workspace.id,
+      selectedWorkspaceId: workspace.id,
+      statusMessage: 'Stop workspace "ecommerce" before deleting it.',
+    }));
+    // Only the final cleanup shuts the controller down.
+    expect(controller.shutdown).toHaveBeenCalledOnce();
+  });
+
+  it("deletes a non-active workspace while another workspace is active", async () => {
+    const controller = createFakeController();
+    const runDeleteWorkspace = vi.fn(async () => ({
+      type: "completed" as const,
+      selectedWorkspaceId: undefined,
+      message: "Deleted workspace.",
+    }));
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce({ type: "deleteWorkspace" as const, workspace: portfolioWorkspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+
+    await runWorkspaceHome({
+      store: createStore(configWithTwoWorkspaces),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(async () => ({ type: "back" as const })),
+      runDeleteWorkspace,
+      createController: () => controller,
+    });
+
+    expect(runDeleteWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      workspace: portfolioWorkspace,
+    }));
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      activeWorkspaceId: workspace.id,
+      statusMessage: "Deleted workspace.",
+    }));
+  });
+
+  it.each([
+    ["create", { type: "createWorkspace" as const }, "runCreateWorkspace", undefined],
+    ["delete", { type: "deleteWorkspace" as const, workspace: portfolioWorkspace }, "runDeleteWorkspace", "ws_portfolio"],
+    ["rename", { type: "renameWorkspace" as const, workspace: portfolioWorkspace }, "runRenameWorkspace", "ws_portfolio"],
+  ])("shows a status message when the %s flow fails to update config", async (_name, pickerResult, flowOption, selectedId) => {
+    const controller = createFakeController();
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce(pickerResult)
+      .mockResolvedValueOnce({ type: "exit" as const });
+
+    await runWorkspaceHome({
+      store: createStore(configWithTwoWorkspaces),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(async () => ({ type: "back" as const })),
+      createController: () => controller,
+      [flowOption]: vi.fn(async () => {
+        throw new Error("disk full");
+      }),
+    });
+
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      activeWorkspaceId: workspace.id,
+      selectedWorkspaceId: selectedId,
+      statusMessage: "Could not update config: disk full",
+    }));
+    expect(controller.shutdown).toHaveBeenCalledOnce();
+  });
+
+  it("shows a status message when moving a workspace fails to save", async () => {
+    const controller = createFakeController();
+    const store = {
+      ...createStore(configWithTwoWorkspaces),
+      async save() {
+        throw new Error("read-only file system");
+      },
+    };
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce({ type: "moveWorkspaceUp" as const, workspace: portfolioWorkspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+
+    await runWorkspaceHome({
+      store,
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(async () => ({ type: "back" as const })),
+      createController: () => controller,
+    });
+
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      activeWorkspaceId: workspace.id,
+      selectedWorkspaceId: "ws_portfolio",
+      statusMessage: "Could not update config: read-only file system",
+    }));
+    expect(controller.shutdown).toHaveBeenCalledOnce();
+  });
+
   it("aborts picker wait on SIGINT and removes signal listeners", async () => {
     const signalSource = createSignalSource();
     const runPicker = vi.fn(

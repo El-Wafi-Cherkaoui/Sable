@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-- No changes yet.
+### Hardened
+
+- Deleting the running workspace from the picker is refused with a message until it is stopped, so its processes can no longer be orphaned.
+- Invalid or unparsable config files now print a readable error (with the file path and validation issues) instead of a stack trace.
+- Config save or reload failures during picker and dashboard actions show a status message and keep the TUI and running services alive.
 
 ## 0.2.2 - Publish prep
 

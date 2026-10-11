@@ -8,6 +8,7 @@ import {
 } from "../process/process-manager.js";
 import {
   runInteractiveDashboard,
+  type DashboardCallbackResult,
   type InteractiveDashboardResult,
   type RunInteractiveDashboardOptions,
 } from "../tui/interactive-dashboard.js";
@@ -136,7 +137,7 @@ export async function runWorkspaceSession(
       dashboardQuitLabel: options.dashboardQuitLabel,
       onAddService: options.store === undefined
         ? undefined
-        : async () => {
+        : guardConfigUpdate(async () => {
           const flowResult = await runAddWorkspaceItemFlow({
             store: options.store!,
             workspace: options.workspace,
@@ -173,10 +174,10 @@ export async function runWorkspaceSession(
           }
 
           return { type: "continue", message: flowResult.type === "completed" ? flowResult.message : flowResult.message };
-        },
+        }),
       onEditService: options.store === undefined
         ? undefined
-        : async () => {
+        : guardConfigUpdate(async () => {
           const state = controller.getState();
           const selectedServiceState = getSelectedServiceState(state);
           const selectedCommandState = getSelectedCommandState(state);
@@ -250,10 +251,10 @@ export async function runWorkspaceSession(
           }
 
           return { type: "continue", message: flowResult.message };
-        },
+        }),
       onDeleteService: options.store === undefined
         ? undefined
-        : async () => {
+        : guardConfigUpdate(async () => {
           const state = controller.getState();
           const selectedServiceState = getSelectedServiceState(state);
           const selectedCommandState = getSelectedCommandState(state);
@@ -307,29 +308,44 @@ export async function runWorkspaceSession(
           }
 
           return { type: "continue", message: flowResult.message };
-        },
+        }),
       onMoveServiceUp: options.store === undefined
         ? undefined
-        : async () => moveSelectedService({
+        : guardConfigUpdate(async () => moveSelectedService({
           store: options.store!,
           workspace: options.workspace,
           controller,
           direction: "up",
-        }),
+        })),
       onMoveServiceDown: options.store === undefined
         ? undefined
-        : async () => moveSelectedService({
+        : guardConfigUpdate(async () => moveSelectedService({
           store: options.store!,
           workspace: options.workspace,
           controller,
           direction: "down",
-        }),
+        })),
     });
   } finally {
     if (shouldShutdownOnReturn) {
       await controller.shutdown();
     }
   }
+}
+
+function guardConfigUpdate(
+  callback: () => Promise<DashboardCallbackResult>,
+): () => Promise<DashboardCallbackResult> {
+  return async () => {
+    try {
+      return await callback();
+    } catch (error) {
+      return {
+        type: "continue",
+        message: `Could not update config: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  };
 }
 
 function getSelectedServiceState(state: ReturnType<RunWorkspaceController["getState"]>) {

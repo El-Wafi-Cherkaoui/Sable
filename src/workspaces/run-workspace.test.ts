@@ -232,6 +232,67 @@ describe("runWorkspaceSession", () => {
     expect(store.savedConfig).toBeUndefined();
   });
 
+  it("returns a continue message when a dashboard callback fails to update config", async () => {
+    const controller = createFakeController(workspaceWithTwoServices);
+    const baseStore = createStore(configWithTwoServices);
+    const store = {
+      load: baseStore.load.bind(baseStore),
+      async save() {
+        throw new Error("disk full");
+      },
+    };
+
+    await runWorkspaceSession({
+      workspace: workspaceWithTwoServices,
+      createController: () => controller,
+      keyInput: createKeyInput(),
+      store,
+      promptScreen: createScreen(),
+      runDashboard: async ({ onMoveServiceUp, onMoveServiceDown }) => {
+        await expect(onMoveServiceDown?.()).resolves.toEqual({
+          type: "continue",
+          message: "Could not update config: disk full",
+        });
+
+        await expect(onMoveServiceUp?.()).resolves.toEqual({
+          type: "continue",
+          message: 'Service "api" is already first.',
+        });
+
+        return { type: "back" };
+      },
+    });
+
+    expect(controller.moveService).not.toHaveBeenCalled();
+  });
+
+  it("returns a continue message when the store cannot be loaded in a dashboard callback", async () => {
+    const controller = createFakeController(workspaceWithTwoServices);
+    const store = {
+      async load(): Promise<AppConfig> {
+        throw new Error("Invalid config");
+      },
+      async save() {},
+    };
+
+    await runWorkspaceSession({
+      workspace: workspaceWithTwoServices,
+      createController: () => controller,
+      keyInput: createKeyInput(),
+      store,
+      promptScreen: createScreen(),
+      runDashboard: async ({ onMoveServiceDown, onEditService, onDeleteService }) => {
+        const expected = { type: "continue", message: "Could not update config: Invalid config" };
+
+        await expect(onMoveServiceDown?.()).resolves.toEqual(expected);
+        expect(onEditService).toBeDefined();
+        expect(onDeleteService).toBeDefined();
+
+        return { type: "back" };
+      },
+    });
+  });
+
   it("does not delete a running selected service", async () => {
     const controller = createFakeController(workspaceWithService);
     const state = createRuntimeState(workspaceWithService);

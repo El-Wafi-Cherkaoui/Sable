@@ -2,7 +2,12 @@
 
 import { Command } from "commander";
 import { confirm, input } from "@inquirer/prompts";
-import { ConfigStore } from "./config/config-store.js";
+import {
+  ConfigParseError,
+  ConfigStore,
+  ConfigValidationError,
+  formatConfigError,
+} from "./config/config-store.js";
 import { product } from "./shared/product.js";
 import {
   DuplicateWorkspaceNameError,
@@ -17,6 +22,16 @@ import { WorkspaceLookupError } from "./workspaces/find-workspace.js";
 import { runWorkspaceCommand } from "./workspaces/run-workspace.js";
 import { runWorkspaceHome } from "./workspaces/workspace-home.js";
 
+function handleConfigError(error: unknown): boolean {
+  if (error instanceof ConfigParseError || error instanceof ConfigValidationError) {
+    console.error(formatConfigError(error));
+    process.exitCode = 1;
+    return true;
+  }
+
+  return false;
+}
+
 const program = new Command();
 
 program
@@ -24,9 +39,17 @@ program
   .description("A keyboard-first terminal workspace manager for developers.")
   .version(product.version)
   .action(async () => {
-    await runWorkspaceHome({
-      store: new ConfigStore(),
-    });
+    try {
+      await runWorkspaceHome({
+        store: new ConfigStore(),
+      });
+    } catch (error) {
+      if (handleConfigError(error)) {
+        return;
+      }
+
+      throw error;
+    }
   });
 
 program
@@ -40,6 +63,10 @@ program
         prompts: { confirm, input },
       });
     } catch (error) {
+      if (handleConfigError(error)) {
+        return;
+      }
+
       if (error instanceof DuplicateWorkspaceNameError) {
         console.error(error.message);
         process.exitCode = 1;
@@ -60,6 +87,10 @@ program
         store: new ConfigStore(),
       });
     } catch (error) {
+      if (handleConfigError(error)) {
+        return;
+      }
+
       if (error instanceof WorkspaceLookupError) {
         console.error(error.message);
         process.exitCode = 1;
@@ -74,9 +105,17 @@ program
   .command("list")
   .description("list saved workspaces")
   .action(async () => {
-    await runListWorkspacesCommand({
-      store: new ConfigStore(),
-    });
+    try {
+      await runListWorkspacesCommand({
+        store: new ConfigStore(),
+      });
+    } catch (error) {
+      if (handleConfigError(error)) {
+        return;
+      }
+
+      throw error;
+    }
   });
 
 program
@@ -90,6 +129,10 @@ program
         prompts: { confirm },
       });
     } catch (error) {
+      if (handleConfigError(error)) {
+        return;
+      }
+
       if (error instanceof WorkspaceNotFoundError) {
         console.error(error.message);
         process.exitCode = 1;

@@ -8,7 +8,7 @@ import { clampScrollOffset, maxScrollOffset, renderLogsView } from "./logs-view.
 import { renderStaticDashboard } from "./static-dashboard.js";
 import { shouldUseColor } from "./style.js";
 
-type DashboardCallbackResult =
+export type DashboardCallbackResult =
   | { type: "continue"; message?: string }
   | { type: "exit" };
 

@@ -24,6 +24,23 @@ export class ConfigValidationError extends Error {
   }
 }
 
+export function formatConfigError(error: ConfigParseError | ConfigValidationError): string {
+  const lines = [error.message];
+
+  if (error instanceof ConfigValidationError && error.cause instanceof ZodError) {
+    for (const issue of error.cause.issues) {
+      const issuePath = issue.path.map(String).join(".");
+      lines.push(issuePath === "" ? `  - ${issue.message}` : `  - ${issuePath}: ${issue.message}`);
+    }
+  } else if (error instanceof ConfigParseError && error.cause !== undefined) {
+    lines.push(`  ${error.cause instanceof Error ? error.cause.message : String(error.cause)}`);
+  }
+
+  lines.push("Fix or remove the file and run sable again.");
+
+  return lines.join("\n");
+}
+
 export type ConfigStoreOptions = {
   directory?: string;
 };
