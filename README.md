@@ -107,7 +107,7 @@ Open the workspace picker/home screen:
 sable
 ```
 
-During creation, Sable asks for a project directory. Relative service working directories are resolved against that project directory so you can run the workspace later from anywhere.
+When you create a workspace (`c` in the picker), Sable asks for a project directory. Relative service working directories are resolved against that project directory so you can run the workspace later from anywhere.
 
 ## Workspace picker keys
 
