@@ -702,7 +702,6 @@ describe("runInteractiveDashboard", () => {
         keyInput: createKeyInput([{ name: "return" }, { ctrl: true, name: "c" }]),
         screen: { clear: vi.fn(), write },
         render: () => "dashboard",
-        renderLogs: ({ visibleLineCount }) => `logs:${visibleLineCount}`,
       });
     } finally {
       if (rowsDescriptor === undefined) {
@@ -712,7 +711,10 @@ describe("runInteractiveDashboard", () => {
       }
     }
 
-    expect(write).toHaveBeenNthCalledWith(2, "logs:7\n");
+    const logsFrame = String(write.mock.calls[1]![0]);
+
+    // 18 rows: the frame fills 17, leaving the last row as scroll margin.
+    expect(logsFrame.replace(/\n$/, "").split("\n")).toHaveLength(17);
   });
 
   it("opens help from logs and returns to logs", async () => {

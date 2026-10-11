@@ -90,6 +90,14 @@ describe("mapLogsKey", () => {
     expect(mapLogsKey({ sequence: "0" })).toBe("resetHorizontalScroll");
   });
 
+  it("maps search, error, and wrap keys", () => {
+    expect(mapLogsKey({ sequence: "/" })).toBe("search");
+    expect(mapLogsKey({ sequence: "n" })).toBe("nextMatch");
+    expect(mapLogsKey({ sequence: "N" })).toBe("previousMatch");
+    expect(mapLogsKey({ sequence: "e" })).toBe("nextError");
+    expect(mapLogsKey({ sequence: "w" })).toBe("toggleWrap");
+  });
+
   it("maps Escape and q to back and ? to help", () => {
     expect(mapLogsKey({ name: "escape" })).toBe("back");
     expect(mapLogsKey({ sequence: "q" })).toBe("back");

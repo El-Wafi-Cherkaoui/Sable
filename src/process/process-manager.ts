@@ -48,7 +48,7 @@ type PendingLogChunks = Partial<Record<ProcessOutputStream, string>>;
 
 const defaultGracefulStopTimeoutMs = 3_000;
 const defaultForceStopTimeoutMs = 1_000;
-const defaultMaxLogLinesPerService = 200;
+const defaultMaxLogLinesPerService = 2_000;
 
 export class ProcessManager {
   private readonly processes = new Map<string, ManagedProcessEntry>();

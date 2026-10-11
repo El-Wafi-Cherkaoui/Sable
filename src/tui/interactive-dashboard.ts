@@ -3,7 +3,16 @@ import type { KeyInput } from "../input/terminal-key-input.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
 import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import { renderHelpView, type HelpContext } from "./help-view.js";
-import { clampScrollOffset, maxScrollOffset, renderLogsView } from "./logs-view.js";
+import {
+  bottomScrollOffset,
+  clampScrollOffset,
+  errorIndexes,
+  findMatches,
+  nextIndex,
+  renderLogsView,
+  type LogsLayout,
+  type LogsSearch,
+} from "./logs-view.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
 import { shouldUseColor } from "./style.js";
 
@@ -81,6 +90,10 @@ export async function runInteractiveDashboard(
   let logHorizontalScrollOffset = 0;
   let followLogTail = true;
   let logRevealLineCount: number | undefined;
+  let logWrap = false;
+  let logSearch: LogsSearch | undefined;
+  let logHighlightIndex: number | undefined;
+  let logMessage: string | undefined;
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
   let lastDashboardContents: string | undefined;
 
@@ -134,85 +147,117 @@ export async function runInteractiveDashboard(
     }
 
     if (currentMode === "logs") {
-      if (event.type === "refresh") {
-        const logs = options.controller.getSelectedServiceLogs();
+      const logs = options.controller.getSelectedServiceLogs();
 
+      if (event.type === "refresh") {
         logScrollOffset = followLogTail
-          ? maxScrollOffset(logs.length, getLogVisibleLineCount())
-          : clampScrollOffset(logScrollOffset, logs.length, getLogVisibleLineCount());
+          ? bottomScrollOffset(logs, getLogsLayout())
+          : clampScrollOffset(logScrollOffset, logs, getLogsLayout());
         advanceLogReveal(logs.length);
         renderLogsFrame();
         continue;
       }
 
       const keypress = event.keypress;
+
+      clearLogReveal();
+      logMessage = undefined;
+
+      if (logSearch?.editing === true) {
+        if (keypress.name === "escape") {
+          logSearch = undefined;
+        } else if (keypress.name === "return" || keypress.sequence === "\r") {
+          logSearch = logSearch.query === "" ? undefined : { query: logSearch.query, editing: false };
+
+          if (logSearch !== undefined) {
+            jumpToLogLine(findMatches(logs, logSearch.query).at(-1), logs);
+          }
+        } else if (keypress.name === "backspace") {
+          logSearch = { ...logSearch, query: logSearch.query.slice(0, -1) };
+        } else if (keypress.sequence !== undefined && keypress.ctrl !== true && keypress.sequence >= " " && keypress.sequence !== "\x7f") {
+          logSearch = { ...logSearch, query: logSearch.query + keypress.sequence };
+        }
+
+        renderLogsFrame();
+        continue;
+      }
+
       const action = mapLogsKey(keypress);
-      const logs = options.controller.getSelectedServiceLogs();
 
       switch (action) {
         case "scrollDown":
-          clearLogReveal();
-          logScrollOffset = clampScrollOffset(
-            logScrollOffset + 1,
-            logs.length,
-            getLogVisibleLineCount(),
-          );
-          followLogTail = logScrollOffset === maxScrollOffset(logs.length, getLogVisibleLineCount());
-          renderLogsFrame();
+          logScrollOffset = clampScrollOffset(logScrollOffset + 1, logs, getLogsLayout());
+          followLogTail = logScrollOffset === bottomScrollOffset(logs, getLogsLayout());
           break;
         case "scrollUp":
-          clearLogReveal();
-          logScrollOffset = clampScrollOffset(
-            logScrollOffset - 1,
-            logs.length,
-            getLogVisibleLineCount(),
-          );
+          logScrollOffset = clampScrollOffset(logScrollOffset - 1, logs, getLogsLayout());
           followLogTail = false;
-          renderLogsFrame();
           break;
         case "scrollTop":
-          clearLogReveal();
           logScrollOffset = 0;
           followLogTail = false;
-          renderLogsFrame();
           break;
         case "scrollBottom":
-          clearLogReveal();
-          logScrollOffset = maxScrollOffset(logs.length, getLogVisibleLineCount());
+          logScrollOffset = bottomScrollOffset(logs, getLogsLayout());
           followLogTail = true;
-          renderLogsFrame();
+          logHighlightIndex = undefined;
           break;
         case "scrollLeft":
-          clearLogReveal();
           logHorizontalScrollOffset = Math.max(0, logHorizontalScrollOffset - 8);
-          renderLogsFrame();
           break;
         case "scrollRight":
-          clearLogReveal();
           logHorizontalScrollOffset += 8;
-          renderLogsFrame();
           break;
         case "resetHorizontalScroll":
-          clearLogReveal();
           logHorizontalScrollOffset = 0;
-          renderLogsFrame();
+          break;
+        case "search":
+          logSearch = { query: "", editing: true };
+          break;
+        case "nextMatch":
+        case "previousMatch":
+          if (logSearch !== undefined) {
+            jumpToLogLine(nextIndex(findMatches(logs, logSearch.query), logHighlightIndex, action === "nextMatch" ? 1 : -1), logs);
+          }
+          break;
+        case "nextError": {
+          const errorLine = nextIndex(errorIndexes(logs), logHighlightIndex ?? logScrollOffset - 1, 1);
+
+          if (errorLine === undefined) {
+            logMessage = "No errors in this output.";
+          } else {
+            jumpToLogLine(errorLine, logs);
+          }
+          break;
+        }
+        case "toggleWrap":
+          logWrap = !logWrap;
+          logHorizontalScrollOffset = 0;
+          if (followLogTail) {
+            logScrollOffset = bottomScrollOffset(logs, getLogsLayout());
+          }
           break;
         case "openHelp":
-          clearLogReveal();
           helpReturnMode = "logs";
           mode = "help";
           renderHelpFrame("logs");
-          break;
+          continue;
         case "back":
+          if (logSearch !== undefined) {
+            logSearch = undefined;
+            logHighlightIndex = undefined;
+            break;
+          }
+
           clearPulse();
-          clearLogReveal();
           mode = "dashboard";
           renderDashboardFrame();
-          break;
+          continue;
         case "none":
-          break;
+          continue;
       }
 
+      renderLogsFrame();
       continue;
     }
 
@@ -353,14 +398,14 @@ export async function runInteractiveDashboard(
         mode = "logs";
         followLogTail = true;
         logHorizontalScrollOffset = 0;
+        logSearch = undefined;
+        logHighlightIndex = undefined;
+        logMessage = undefined;
         logRevealLineCount = resolveInitialLogRevealLineCount(
           options.controller.getSelectedServiceLogs().length,
           getLogVisibleLineCount(),
         );
-        logScrollOffset = maxScrollOffset(
-          options.controller.getSelectedServiceLogs().length,
-          getLogVisibleLineCount(),
-        );
+        logScrollOffset = bottomScrollOffset(options.controller.getSelectedServiceLogs(), getLogsLayout());
         renderLogsFrame();
         break;
       case "openHelp":
@@ -402,11 +447,7 @@ export async function runInteractiveDashboard(
   function renderLogsFrame(): void {
     const logs = options.controller.getSelectedServiceLogs();
 
-    logScrollOffset = clampScrollOffset(
-      logScrollOffset,
-      logs.length,
-        getLogVisibleLineCount(),
-    );
+    logScrollOffset = clampScrollOffset(logScrollOffset, logs, getLogsLayout());
     lastDashboardContents = undefined;
     renderFrame(
       screen,
@@ -414,10 +455,15 @@ export async function runInteractiveDashboard(
         state: options.controller.getState(),
         logs,
         scrollOffset: logScrollOffset,
+        following: followLogTail,
         visibleLineCount: getLogVisibleLineCount(),
         revealLineCount: logRevealLineCount,
         horizontalScrollOffset: logHorizontalScrollOffset,
         viewportColumns: process.stdout.columns,
+        wrap: logWrap,
+        search: logSearch,
+        highlightIndex: logHighlightIndex,
+        message: logMessage,
         color,
       }),
     );
@@ -434,7 +480,28 @@ export async function runInteractiveDashboard(
       return 12;
     }
 
-    return Math.max(3, rows - 11);
+    // Header, blank, blank, search line, footer, and one row of scroll margin.
+    return Math.max(3, rows - 6);
+  }
+
+  function getLogsLayout(): LogsLayout {
+    return {
+      height: getLogVisibleLineCount(),
+      width: Math.max(23, (process.stdout.columns ?? 80) - 1),
+      wrap: logWrap,
+    };
+  }
+
+  // Shows a found line a third of the way down, so there is context above and below it.
+  function jumpToLogLine(index: number | undefined, logs: ReturnType<typeof options.controller.getSelectedServiceLogs>): void {
+    logHighlightIndex = index;
+
+    if (index === undefined) {
+      return;
+    }
+
+    followLogTail = false;
+    logScrollOffset = clampScrollOffset(index - Math.floor(getLogVisibleLineCount() / 3), logs, getLogsLayout());
   }
 
   function isLogRevealActive(): boolean {

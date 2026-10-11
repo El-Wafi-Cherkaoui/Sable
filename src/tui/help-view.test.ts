@@ -19,10 +19,11 @@ describe("renderHelpView", () => {
   it("renders logs help", () => {
     const rendered = renderHelpView("logs");
 
-    expect(rendered).toContain("← / →       scroll long lines sideways");
+    expect(rendered).toContain("/           search, then Enter");
+    expect(rendered).toContain("e           jump to the next error (stderr) line");
+    expect(rendered).toContain("w           wrap long lines, or scroll them sideways");
     expect(rendered).toContain("g / Home    jump to top");
-    expect(rendered).toContain("G / End     jump to bottom and follow");
-    expect(rendered).toContain("Esc, q      back to dashboard");
+    expect(rendered).toContain("Esc, q      clear the search, or go back to the dashboard");
     expect(rendered).not.toContain("command mode");
   });
 });

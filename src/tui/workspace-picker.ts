@@ -382,7 +382,7 @@ export function renderWorkspacePicker(
   const style = options.style ?? createTuiStyle(options.color ?? false);
   const color = options.color === true;
   const statusLine = formatPickerStatusLine(state.statusMessage, style);
-  const footer = formatKeyHints(getPickerKeyHints(state), style);
+  const footer = formatKeyHints(getPickerKeyHints(state), style, options.columns === undefined ? undefined : options.columns - 1);
   const count = state.workspaces.length;
   const lines = [`${style.title(product.displayName)}${style.muted(` · ${count} ${count === 1 ? "workspace" : "workspaces"}`)}`, ""];
 

@@ -224,7 +224,7 @@ export function renderForm(
     }
   }
 
-  lines.push("", formatKeyHints(getFormKeyHints(rows[state.focus]), style));
+  lines.push("", formatKeyHints(getFormKeyHints(rows[state.focus]), style, columns - 1));
 
   return lines.join("\n");
 }

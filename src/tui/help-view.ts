@@ -24,14 +24,20 @@ export function renderHelpView(context: HelpContext): string {
     );
   } else {
     lines.push(
-      "Logs",
+      "Reading",
       "↑ / ↓       scroll",
-      "← / →       scroll long lines sideways",
-      "0           reset sideways scroll",
       "g / Home    jump to top",
-      "G / End     jump to bottom and follow",
+      "G / End     jump to bottom and follow new output",
+      "w           wrap long lines, or scroll them sideways",
+      "← / →       scroll long lines sideways (when not wrapping)",
+      "0           reset sideways scroll",
       "",
-      "Esc, q      back to dashboard",
+      "Finding",
+      "/           search, then Enter",
+      "n / N       next / previous match",
+      "e           jump to the next error (stderr) line",
+      "",
+      "Esc, q      clear the search, or go back to the dashboard",
       "Ctrl+C      quit Sable and stop everything",
     );
   }

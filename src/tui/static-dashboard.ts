@@ -38,7 +38,7 @@ export function renderStaticDashboard(
   const footer = [
     "",
     formatStatusLine(state, options, style),
-    formatKeyHints(getDashboardKeyHints(state, options), style),
+    formatKeyHints(getDashboardKeyHints(state, options), style, options.columns === undefined ? undefined : options.columns - 1),
   ];
   const lines = [formatHeader(state, style), ""];
 

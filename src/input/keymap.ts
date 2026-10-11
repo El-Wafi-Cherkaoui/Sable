@@ -32,6 +32,11 @@ export type LogsAction =
   | "scrollLeft"
   | "scrollRight"
   | "resetHorizontalScroll"
+  | "search"
+  | "nextMatch"
+  | "previousMatch"
+  | "nextError"
+  | "toggleWrap"
   | "openHelp"
   | "back"
   | "none";
@@ -176,6 +181,16 @@ export function mapLogsKey(keypress: Keypress): LogsAction {
   switch (keypress.sequence) {
     case "0":
       return "resetHorizontalScroll";
+    case "/":
+      return "search";
+    case "n":
+      return "nextMatch";
+    case "N":
+      return "previousMatch";
+    case "e":
+      return "nextError";
+    case "w":
+      return "toggleWrap";
     case "?":
       return "openHelp";
     default:
