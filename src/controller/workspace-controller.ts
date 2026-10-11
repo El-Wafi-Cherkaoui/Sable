@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { CommandConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { ManagedProcessState, ServiceLogEntry, StopFailure } from "../process/process-manager.js";
 import {
@@ -77,7 +78,7 @@ export class WorkspaceController {
     }
 
     const processState = await this.runProcessAction(serviceId, () =>
-      this.processManager.start(service),
+      this.processManager.start(this.withResolvedDirectory(service)),
     );
 
     return processState;
@@ -103,7 +104,7 @@ export class WorkspaceController {
     }
 
     const processState = await this.runProcessAction(serviceId, () =>
-      this.processManager.restart(service),
+      this.processManager.restart(this.withResolvedDirectory(service)),
     );
 
     return processState;
@@ -132,7 +133,7 @@ export class WorkspaceController {
     }
 
     return this.runCommandProcessAction(commandId, () =>
-      this.processManager.start(command),
+      this.processManager.start(this.withResolvedDirectory(command)),
     );
   }
 
@@ -269,6 +270,16 @@ export class WorkspaceController {
       pid: failure.pid,
       message: failure.error.message,
     }));
+  }
+
+  // Relative folders (e.g. hand-edited "cwd": ".") mean the project folder,
+  // not wherever Sable was launched from.
+  private withResolvedDirectory<T extends ServiceConfig | CommandConfig>(item: T): T {
+    const projectDirectory = this.state.workspace.projectDirectory;
+
+    return projectDirectory === undefined || path.isAbsolute(item.cwd)
+      ? item
+      : { ...item, cwd: path.resolve(projectDirectory, item.cwd) };
   }
 
   private findService(serviceId: string): ServiceConfig | undefined {

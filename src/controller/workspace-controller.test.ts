@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { ManagedProcessState } from "../process/process-manager.js";
@@ -93,6 +94,44 @@ describe("WorkspaceController", () => {
       "failed",
       "running",
       "stopped",
+    ]);
+  });
+
+  it("runs services and commands with relative folders inside the project folder", async () => {
+    const started: Array<{ id: string; cwd: string }> = [];
+    const processManager = createFakeProcessManager({
+      start(item) {
+        started.push({ id: item.id, cwd: item.cwd });
+        return { status: "running", pid: 1 };
+      },
+      async restart(item) {
+        started.push({ id: item.id, cwd: item.cwd });
+        return { status: "running", pid: 2 };
+      },
+    });
+    const projectDirectory = path.resolve(path.sep, "srv", "shop");
+    const controller = new WorkspaceController({
+      workspace: {
+        id: "ws_shop",
+        name: "shop",
+        projectDirectory,
+        services: [
+          createService({ id: "svc_rel", name: "rel", cwd: "api" }),
+          createService({ id: "svc_abs", name: "abs", cwd: path.resolve(path.sep, "elsewhere") }),
+        ],
+        commands: [{ id: "cmd_dot", name: "dot", command: "make", cwd: ".", env: {} }],
+      },
+      processManager,
+    });
+
+    await controller.startService("svc_rel");
+    await controller.restartService("svc_abs");
+    await controller.startCommand("cmd_dot");
+
+    expect(started).toEqual([
+      { id: "svc_rel", cwd: path.join(projectDirectory, "api") },
+      { id: "svc_abs", cwd: path.resolve(path.sep, "elsewhere") },
+      { id: "cmd_dot", cwd: projectDirectory },
     ]);
   });
 
