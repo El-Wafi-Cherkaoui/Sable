@@ -20,7 +20,7 @@ Sable is not a task runner, tmux replacement, IDE, Docker manager, Kubernetes to
 
 ## Status
 
-Sable 0.2.2 is the current daily-use checkpoint. Current work remains focused on reliability and small local-first improvements.
+Sable 0.2.3 is the current daily-use checkpoint. Current work remains focused on reliability and small local-first improvements.
 
 Requirements: Node.js 20+ and npm. Sable is intended to work on Windows, macOS, and Linux, with early smoke testing on Windows and Linux.
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- No changes yet.
+
+## 0.2.3 - Reliability patch
+
 ### Changed
 
 - Restarting a workspace from the picker restarts its services only; one-shot commands are no longer re-run.
