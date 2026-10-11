@@ -50,7 +50,7 @@ export type RunInteractiveDashboardOptions = {
   logsRevealIntervalMs?: number;
   onAddService?: () => Promise<DashboardCallbackResult>;
   onEditService?: () => Promise<DashboardCallbackResult>;
-  onDeleteService?: () => Promise<DashboardCallbackResult>;
+  onDeleteService?: (context: { background?: string }) => Promise<DashboardCallbackResult>;
   onMoveServiceUp?: () => Promise<DashboardCallbackResult>;
   onMoveServiceDown?: () => Promise<DashboardCallbackResult>;
 };
@@ -97,6 +97,8 @@ export async function runInteractiveDashboard(
   let logMessage: string | undefined;
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
   let lastDashboardContents: string | undefined;
+  // The last dashboard or logs frame, shown dimmed behind the help popup.
+  let lastScreenContents: string | undefined;
 
   renderDashboardFrame();
 
@@ -349,7 +351,7 @@ export async function runInteractiveDashboard(
         clearPulse();
 
         if (options.onDeleteService !== undefined) {
-          const result = await options.onDeleteService();
+          const result = await options.onDeleteService({ background: lastScreenContents });
 
           if (result.type === "exit") {
             return { type: "exit" };
@@ -450,9 +452,7 @@ export async function runInteractiveDashboard(
 
     logScrollOffset = clampScrollOffset(logScrollOffset, logs, getLogsLayout());
     lastDashboardContents = undefined;
-    renderFrame(
-      screen,
-      renderLogs({
+    lastScreenContents = renderLogs({
         state: options.controller.getState(),
         logs,
         scrollOffset: logScrollOffset,
@@ -466,8 +466,8 @@ export async function runInteractiveDashboard(
         highlightIndex: logHighlightIndex,
         message: logMessage,
         color,
-      }),
-    );
+      });
+    renderFrame(screen, lastScreenContents);
   }
 
   function getLogVisibleLineCount(): number {
@@ -528,7 +528,12 @@ export async function runInteractiveDashboard(
 
   function renderHelpFrame(context: HelpContext): void {
     lastDashboardContents = undefined;
-    renderFrame(screen, renderHelp(context));
+    renderFrame(screen, renderHelp(context, {
+      background: lastScreenContents,
+      columns: process.stdout.columns,
+      rows: process.stdout.rows,
+      color,
+    }));
   }
 
   function renderCurrentMode(): void {
@@ -563,6 +568,7 @@ export async function runInteractiveDashboard(
     }
 
     lastDashboardContents = contents;
+    lastScreenContents = contents;
     renderFrame(screen, contents);
   }
 

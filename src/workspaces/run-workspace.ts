@@ -258,7 +258,7 @@ export async function runWorkspaceSession(
         }),
       onDeleteService: options.store === undefined
         ? undefined
-        : guardConfigUpdate(async () => {
+        : guardConfigUpdate(async (context?: { background?: string }) => {
           const state = controller.getState();
           const selectedServiceState = getSelectedServiceState(state);
           const selectedCommandState = getSelectedCommandState(state);
@@ -278,6 +278,7 @@ export async function runWorkspaceSession(
               keyInput: options.keyInput,
               commandId: selectedCommandState.command.id,
               screen: options.promptScreen,
+              background: context?.background,
             });
 
             if (flowResult.type === "exit") {
@@ -301,6 +302,7 @@ export async function runWorkspaceSession(
             keyInput: options.keyInput,
             serviceId: selectedServiceState!.service.id,
             screen: options.promptScreen,
+            background: context?.background,
           });
 
           if (flowResult.type === "exit") {
@@ -346,12 +348,12 @@ export function reportShutdownFailures(
   }
 }
 
-function guardConfigUpdate(
-  callback: () => Promise<DashboardCallbackResult>,
-): () => Promise<DashboardCallbackResult> {
-  return async () => {
+function guardConfigUpdate<Args extends unknown[]>(
+  callback: (...args: Args) => Promise<DashboardCallbackResult>,
+): (...args: Args) => Promise<DashboardCallbackResult> {
+  return async (...args: Args) => {
     try {
-      return await callback();
+      return await callback(...args);
     } catch (error) {
       return {
         type: "continue",

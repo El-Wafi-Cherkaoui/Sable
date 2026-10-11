@@ -16,6 +16,7 @@
 - Every screen shares one frame: a header saying where you are, status symbols with words (`● running`, `○ stopped`, `✕ exited 1`, `✓ done`), and a `>` marker on the selected row so selection shows without color.
 - The picker shows each workspace's folder and how many of its services are running.
 - Running services and commands can now be edited; changes apply on the next restart.
+- Help (`?`) and delete confirmations open as popups over the current screen, in the same box style as the update popup; deleting now says what is removed and that project files are untouched.
 - Logs keep 2,000 lines per service instead of 200.
 
 - Redesigned the keymap so the same key means the same thing on every screen: `s` starts or stops the selected item, `a` adds a workspace in the picker (was `c`), and `m` enters a move mode for reordering (was `J`/`K`).

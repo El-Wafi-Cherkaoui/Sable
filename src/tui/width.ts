@@ -23,6 +23,11 @@ export function truncateVisible(value: string, maxLength: number): string {
 export function sliceVisibleStart(value: string, startColumn: number): string {
   return sliceVisibleRange(stripAnsi(value), Math.max(0, startColumn));
 }
+// The part of a line between two screen columns, without colors.
+export function sliceVisible(value: string, startColumn: number, length: number): string {
+  return sliceVisibleRange(stripAnsi(value), Math.max(0, startColumn), Math.max(0, length));
+}
+
 export function stripAnsi(value: string): string {
   // eslint-disable-next-line no-control-regex
   return value.replace(/\x1b\[[0-9;]*m/g, "");

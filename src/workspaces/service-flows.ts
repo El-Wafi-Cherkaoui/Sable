@@ -5,7 +5,8 @@ import type { KeyInput } from "../input/terminal-key-input.js";
 import { generateShortId } from "../shared/id.js";
 import { runForm, type FormErrors, type FormField, type FormValues } from "../tui/form-view.js";
 import { displayPath } from "../tui/format.js";
-import { runTextPrompt, type PromptScreen } from "../tui/prompt-view.js";
+import { runDeleteDialog } from "../tui/delete-dialog.js";
+import type { PromptScreen } from "../tui/prompt-view.js";
 
 export type ServiceFlowResult =
   | { type: "completed"; message: string; serviceId?: string; commandId?: string; removedServiceId?: string; removedCommandId?: string }
@@ -27,6 +28,9 @@ export type ServiceFlowOptions = {
   serviceId?: string;
   commandId?: string;
   form?: typeof runForm;
+  // The screen the action was started from, shown dimmed behind a popup.
+  background?: string;
+  deleteDialog?: typeof runDeleteDialog;
 };
 
 export type DeleteServiceFlowOptions = ServiceFlowOptions & {
@@ -175,20 +179,22 @@ export async function runDeleteCommandFlow(
     return { type: "back", message: "Delete cancelled." };
   }
 
-  const confirmationResult = await runTextPrompt({
+  const confirmation = await (options.deleteDialog ?? runDeleteDialog)({
     title: "Delete command",
-    message: `Type "${command.name}" to delete this command`,
+    explanation: [
+      `This removes the command "${command.name}" from "${workspace.name}".`,
+      "Your project files stay untouched.",
+    ],
+    name: command.name,
     keyInput: options.keyInput,
     screen: options.screen,
-    validate(value) {
-      return value === command.name ? true : "Name does not match. Try again or press Esc to cancel.";
-    },
+    background: options.background,
   });
 
-  if (confirmationResult.type === "back") {
+  if (confirmation === "back") {
     return { type: "back", message: "Delete command cancelled." };
   }
-  if (confirmationResult.type === "exit") {
+  if (confirmation === "exit") {
     return { type: "exit" };
   }
 
@@ -220,20 +226,22 @@ export async function runDeleteServiceFlow(
     return { type: "back", message: "Delete cancelled." };
   }
 
-  const confirmationResult = await runTextPrompt({
+  const confirmation = await (options.deleteDialog ?? runDeleteDialog)({
     title: "Delete service",
-    message: `Type "${service.name}" to delete this service`,
+    explanation: [
+      `This removes the service "${service.name}" from "${workspace.name}".`,
+      "Your project files stay untouched.",
+    ],
+    name: service.name,
     keyInput: options.keyInput,
     screen: options.screen,
-    validate(value) {
-      return value === service.name ? true : "Name does not match. Try again or press Esc to cancel.";
-    },
+    background: options.background,
   });
 
-  if (confirmationResult.type === "back") {
+  if (confirmation === "back") {
     return { type: "back", message: "Delete service cancelled." };
   }
-  if (confirmationResult.type === "exit") {
+  if (confirmation === "exit") {
     return { type: "exit" };
   }
 

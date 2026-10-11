@@ -194,6 +194,7 @@ export async function runWorkspaceHome(
             workspace: pickerResult.workspace,
             keyInput,
             screen: options.screen,
+            background: pickerResult.background,
           });
         } catch (error) {
           statusMessage = configUpdateFailedMessage(error);

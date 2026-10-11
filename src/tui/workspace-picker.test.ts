@@ -449,7 +449,7 @@ describe("runWorkspacePicker", () => {
         keyInput: createKeyInput([{ sequence: "d" }]),
         screen: { clear: vi.fn(), write: vi.fn() },
       }),
-    ).resolves.toEqual({ type: "deleteWorkspace", workspace: workspaces[0] });
+    ).resolves.toEqual({ type: "deleteWorkspace", workspace: workspaces[0], background: expect.stringContaining("ecommerce") });
   });
 
   it("ignores service action keys in the picker", async () => {

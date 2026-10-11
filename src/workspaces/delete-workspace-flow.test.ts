@@ -39,7 +39,8 @@ describe("runDeleteWorkspaceFlow", () => {
       screen,
     });
 
-    expect(screen.output()).toContain("Name does not match. Try again or press Esc to cancel.");
+    expect(screen.output()).toContain('That doesn\'t match "ecommerce".');
+    expect(screen.output()).toContain("Your project files stay untouched.");
     expect(store.savedConfig?.workspaces.map((workspace) => workspace.id)).toEqual(["ws_api"]);
   });
 

@@ -1,6 +1,7 @@
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
-import { runTextPrompt, type PromptScreen } from "../tui/prompt-view.js";
+import { runDeleteDialog } from "../tui/delete-dialog.js";
+import type { PromptScreen } from "../tui/prompt-view.js";
 
 export type DeleteWorkspaceFlowResult =
   | { type: "completed"; selectedWorkspaceId?: string; message: string }
@@ -17,6 +18,9 @@ export type DeleteWorkspaceFlowOptions = {
   workspace: WorkspaceConfig;
   keyInput: KeyInput;
   screen?: PromptScreen;
+  // The screen the delete was started from, shown dimmed behind the popup.
+  background?: string;
+  dialog?: typeof runDeleteDialog;
 };
 
 export async function runDeleteWorkspaceFlow(
@@ -32,25 +36,23 @@ export async function runDeleteWorkspaceFlow(
   }
 
   const workspace = config.workspaces[workspaceIndex];
-  const confirmationResult = await runTextPrompt({
+  const confirmation = await (options.dialog ?? runDeleteDialog)({
     title: "Delete workspace",
-    message: `Type "${workspace.name}" to delete this workspace`,
+    explanation: [
+      `This removes "${workspace.name}" and ${describeContents(workspace)} from Sable.`,
+      "Your project files stay untouched.",
+    ],
+    name: workspace.name,
     keyInput: options.keyInput,
     screen: options.screen,
-    validate(value) {
-      if (value !== workspace.name) {
-        return "Name does not match. Try again or press Esc to cancel.";
-      }
-
-      return true;
-    },
+    background: options.background,
   });
 
-  if (confirmationResult.type === "back") {
+  if (confirmation === "back") {
     return { type: "back", message: "Delete workspace cancelled." };
   }
 
-  if (confirmationResult.type === "exit") {
+  if (confirmation === "exit") {
     return { type: "exit" };
   }
 
@@ -71,4 +73,14 @@ export async function runDeleteWorkspaceFlow(
     selectedWorkspaceId,
     message: `Deleted workspace "${workspace.name}".`,
   };
+}
+
+function describeContents(workspace: WorkspaceConfig): string {
+  const count = (amount: number, noun: string) => `${amount} ${noun}${amount === 1 ? "" : "s"}`;
+  const parts = [
+    ...(workspace.services.length > 0 ? [count(workspace.services.length, "service")] : []),
+    ...((workspace.commands ?? []).length > 0 ? [count(workspace.commands.length, "command")] : []),
+  ];
+
+  return parts.length === 0 ? "its settings" : `its ${parts.join(" and ")}`;
 }

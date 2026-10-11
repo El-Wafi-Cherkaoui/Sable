@@ -313,6 +313,27 @@ describe("runWorkspaceSession", () => {
     });
   });
 
+  it("opens the delete popup over the dashboard it was started from", async () => {
+    const controller = createFakeController(workspaceWithService);
+    const store = createStore(configWithService);
+    const promptScreen = { clear: vi.fn(), write: vi.fn() };
+
+    await runWorkspaceSession({
+      workspace: workspaceWithService,
+      createController: () => controller,
+      keyInput: createKeyInput([{ name: "escape" }]),
+      store,
+      promptScreen,
+      runDashboard: async ({ onDeleteService }) => {
+        await onDeleteService?.({ background: "DASHBOARD FRAME" });
+
+        return { type: "back" };
+      },
+    });
+
+    expect(promptScreen.write.mock.calls.map(([frame]) => frame).join("")).toContain("DASHBOARD FRAME");
+  });
+
   it("does not delete a running selected service", async () => {
     const controller = createFakeController(workspaceWithService);
     const state = createRuntimeState(workspaceWithService);

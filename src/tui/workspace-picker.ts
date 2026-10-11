@@ -4,6 +4,7 @@ import { mapHelpKey, mapMoveKey, mapWorkspacePickerKey } from "../input/keymap.j
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { product } from "../shared/product.js";
 import { displayPath } from "./format.js";
+import { renderHelpBox, type HelpViewOptions } from "./help-view.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { appendAnchoredFooter } from "./layout.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
@@ -21,7 +22,7 @@ export type WorkspacePickerState = {
 export type WorkspacePickerResult =
   | { type: "run"; workspace: WorkspaceConfig }
   | { type: "createWorkspace" }
-  | { type: "deleteWorkspace"; workspace: WorkspaceConfig }
+  | { type: "deleteWorkspace"; workspace: WorkspaceConfig; background?: string }
   | { type: "renameWorkspace"; workspace: WorkspaceConfig }
   | { type: "stopActiveWorkspace"; workspace: WorkspaceConfig }
   | { type: "restartActiveWorkspace"; workspace: WorkspaceConfig }
@@ -199,7 +200,7 @@ export async function runWorkspacePicker(
         const workspace = getSelectedWorkspace(state);
 
         if (workspace !== undefined) {
-          return { type: "deleteWorkspace", workspace };
+          return { type: "deleteWorkspace", workspace, background: render(state) };
         }
 
         break;
@@ -253,7 +254,7 @@ export async function runWorkspacePicker(
       }
       case "openHelp":
         mode = "help";
-        renderFrame(screen, renderHelp());
+        renderFrame(screen, renderHelp({ background: render(state), columns: process.stdout.columns, rows: process.stdout.rows, color }));
         break;
       case "quit":
         return { type: "exit" };
@@ -559,29 +560,30 @@ function formatPickerStatusLine(
   return `${style.statusLabel("›")} ${statusMessage}`;
 }
 
-export function renderWorkspacePickerHelp(): string {
-  return [
-    "Workspaces · help",
-    "",
-    "Moving around",
-    "↑ / ↓       select workspace",
-    "Enter       open selected workspace",
-    "",
-    "Workspaces",
-    "a           add a workspace",
-    "e           rename selected workspace",
-    "d           delete selected workspace",
-    "m           move selected workspace (↑ ↓, then Enter)",
-    "v           view services in selected workspace",
-    "",
-    "Running workspace",
-    "s           stop it",
-    "r           restart its services",
-    "",
-    "Esc, q, ?   close help",
-    "q           quit Sable (from this screen)",
-    "Ctrl+C      quit Sable from anywhere",
-  ].join("\n");
+export function renderWorkspacePickerHelp(options: HelpViewOptions = {}): string {
+  return renderHelpBox("Help · workspaces", [
+    {
+      heading: "Moving around",
+      rows: ["↑ / ↓       select workspace", "Enter       open selected workspace"],
+    },
+    {
+      heading: "Workspaces",
+      rows: [
+        "a           add a workspace",
+        "e           rename selected workspace",
+        "d           delete selected workspace",
+        "m           move selected workspace (↑ ↓, then Enter)",
+        "v           view services in selected workspace",
+      ],
+    },
+    {
+      heading: "Running workspace",
+      rows: ["s           stop it", "r           restart its services"],
+    },
+    {
+      rows: ["q           quit Sable (from this screen)", "Ctrl+C      quit Sable from anywhere"],
+    },
+  ], options);
 }
 
 export function renderWorkspaceDetails(
