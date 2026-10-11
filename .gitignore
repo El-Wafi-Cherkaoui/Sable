@@ -1,2 +1,6 @@
 node_modules/
 dist/
+
+# AI agent files
+CLAUDE.md
+.claude/
