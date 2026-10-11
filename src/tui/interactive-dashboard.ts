@@ -44,6 +44,7 @@ export type RunInteractiveDashboardOptions = {
   renderLogs?: typeof renderLogsView;
   renderHelp?: typeof renderHelpView;
   dashboardQuitLabel?: string;
+  initialMessage?: string;
   logVisibleLineCount?: number;
   logsRefreshIntervalMs?: number;
   logsRevealIntervalMs?: number;
@@ -72,7 +73,7 @@ export async function runInteractiveDashboard(
 ): Promise<InteractiveDashboardResult> {
   const screen = options.screen ?? terminalScreen;
   const color = shouldUseColor();
-  let dashboardMessage: string | undefined;
+  let dashboardMessage: string | undefined = options.initialMessage;
   const render = options.render ?? renderStaticDashboard;
   const renderLogs = options.renderLogs ?? renderLogsView;
   const renderHelp = options.renderHelp ?? renderHelpView;

@@ -56,37 +56,69 @@ describe("runWorkspaceHome", () => {
     expect(keyInput.close).toHaveBeenCalledOnce();
   });
 
-  it("clears picker status after returning from a workspace session", async () => {
-    const keyInput = createKeyInput();
+  it("opens a newly created workspace directly and clears the status on return", async () => {
     const runPicker = vi
       .fn()
       .mockResolvedValueOnce({ type: "createWorkspace" })
-      .mockResolvedValueOnce({ type: "run", workspace })
       .mockResolvedValueOnce({ type: "exit" });
     const runCreateWorkspace = vi.fn(async () => ({
       type: "completed" as const,
       workspaceId: workspace.id,
       message: "Created workspace.",
     }));
+    const runSuggestServices = vi.fn(async () => ({ type: "skipped" as const }));
     const runSession = vi.fn(async () => ({ type: "back" as const }));
 
     await runWorkspaceHome({
       store: createStore(config),
-      keyInput,
+      keyInput: createKeyInput(),
       runPicker,
       runCreateWorkspace,
+      runSuggestServices,
       runSession,
     });
 
-    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      statusMessage: "Created workspace.",
-      selectedWorkspaceId: workspace.id,
+    expect(runSuggestServices).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: workspace.id }));
+    expect(runSession).toHaveBeenCalledWith(expect.objectContaining({
+      workspace,
+      initialMessage: "Created workspace. Press a to add a service.",
     }));
-    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+    expect(runPicker).toHaveBeenCalledTimes(2);
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
       activeWorkspaceId: workspace.id,
       statusMessage: undefined,
       selectedWorkspaceId: workspace.id,
     }));
+  });
+
+  it("shows what was added from package.json when the new workspace opens", async () => {
+    const runSession = vi.fn(async () => ({ type: "exit" as const }));
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker: vi.fn().mockResolvedValueOnce({ type: "createWorkspace" }),
+      runCreateWorkspace: vi.fn(async () => ({ type: "completed" as const, workspaceId: workspace.id, message: "Created." })),
+      runSuggestServices: vi.fn(async () => ({ type: "added" as const, message: "Added 2 services from package.json." })),
+      runSession,
+    });
+
+    expect(runSession).toHaveBeenCalledWith(expect.objectContaining({ initialMessage: "Added 2 services from package.json." }));
+  });
+
+  it("exits when Sable is quit from the suggestions screen", async () => {
+    const runSession = vi.fn();
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker: vi.fn().mockResolvedValueOnce({ type: "createWorkspace" }),
+      runCreateWorkspace: vi.fn(async () => ({ type: "completed" as const, workspaceId: workspace.id, message: "Created." })),
+      runSuggestServices: vi.fn(async () => ({ type: "exit" as const })),
+      runSession,
+    });
+
+    expect(runSession).not.toHaveBeenCalled();
   });
 
   it("exits the app when the workspace session exits", async () => {

@@ -82,6 +82,7 @@ export type RunWorkspaceSessionOptions = {
   promptScreen?: PromptScreen;
   startAutoStartServices?: boolean;
   shutdownOnReturn?: boolean;
+  initialMessage?: string;
   warn?: ShutdownWarn;
 };
 
@@ -144,6 +145,7 @@ export async function runWorkspaceSession(
       keyInput: options.keyInput,
       abortSignal: options.abortSignal,
       dashboardQuitLabel: options.dashboardQuitLabel,
+      initialMessage: options.initialMessage,
       onAddService: options.store === undefined
         ? undefined
         : guardConfigUpdate(async () => {

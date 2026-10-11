@@ -29,6 +29,7 @@ import {
   type RenameWorkspaceFlowOptions,
   type RenameWorkspaceFlowResult,
 } from "./rename-workspace-flow.js";
+import { runSuggestServicesFlow, type SuggestServicesFlowOptions, type SuggestServicesFlowResult } from "./suggest-services-flow.js";
 
 export type WorkspaceHomeConfigStore = {
   load(): Promise<AppConfig>;
@@ -43,6 +44,7 @@ export type RunWorkspaceHomeOptions = {
   runCreateWorkspace?: (options: CreateWorkspaceFlowOptions) => Promise<CreateWorkspaceFlowResult>;
   runDeleteWorkspace?: (options: DeleteWorkspaceFlowOptions) => Promise<DeleteWorkspaceFlowResult>;
   runRenameWorkspace?: (options: RenameWorkspaceFlowOptions) => Promise<RenameWorkspaceFlowResult>;
+  runSuggestServices?: (options: SuggestServicesFlowOptions) => Promise<SuggestServicesFlowResult>;
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   signalSource?: WorkspaceHomeSignalSource;
@@ -63,11 +65,14 @@ export async function runWorkspaceHome(
   const createWorkspace = options.runCreateWorkspace ?? runCreateWorkspaceFlow;
   const deleteWorkspace = options.runDeleteWorkspace ?? runDeleteWorkspaceFlow;
   const renameWorkspace = options.runRenameWorkspace ?? runRenameWorkspaceFlow;
+  const suggestServices = options.runSuggestServices ?? runSuggestServicesFlow;
   const shutdownAbortController = new AbortController();
   const signalSource = options.signalSource ?? process;
   let statusMessage: string | undefined;
   let selectedWorkspaceId: string | undefined;
   let shouldShowStartupMoment = true;
+  // Set after creating a workspace, so it opens directly instead of returning to the picker.
+  let workspaceToOpen: { id: string; message: string } | undefined;
   let activeSession: { workspaceId: string; controller: RunWorkspaceController } | undefined;
   // Processes that failed to stop are reported once Sable leaves the TUI.
   const shutdownFailures: ShutdownFailure[] = [];
@@ -80,7 +85,14 @@ export async function runWorkspaceHome(
   try {
     while (!shutdownAbortController.signal.aborted) {
       const config = await options.store.load();
-      const pickerResult = await runPicker({
+      const opening = workspaceToOpen === undefined
+        ? undefined
+        : config.workspaces.find((workspace) => workspace.id === workspaceToOpen!.id);
+      const openingMessage = workspaceToOpen?.message;
+
+      workspaceToOpen = undefined;
+
+      const pickerResult: WorkspacePickerResult = opening !== undefined ? { type: "run", workspace: opening } : await runPicker({
         workspaces: config.workspaces,
         keyInput,
         abortSignal: shutdownAbortController.signal,
@@ -120,6 +132,26 @@ export async function runWorkspaceHome(
 
         statusMessage = flowResult.message;
         selectedWorkspaceId = flowResult.type === "completed" ? flowResult.workspaceId : undefined;
+
+        if (flowResult.type === "completed") {
+          let suggestion: SuggestServicesFlowResult;
+
+          try {
+            suggestion = await suggestServices({ store: options.store, workspaceId: flowResult.workspaceId, keyInput, screen: options.screen });
+          } catch (error) {
+            suggestion = { type: "skipped" };
+            statusMessage = configUpdateFailedMessage(error);
+          }
+
+          if (suggestion.type === "exit") {
+            return;
+          }
+
+          workspaceToOpen = {
+            id: flowResult.workspaceId,
+            message: suggestion.type === "added" ? suggestion.message : `${flowResult.message} Press a to add a service.`,
+          };
+        }
 
         continue;
       }
@@ -262,6 +294,7 @@ export async function runWorkspaceHome(
         store: options.store,
         startAutoStartServices: shouldStartAutoStartServices,
         shutdownOnReturn: false,
+        initialMessage: openingMessage,
       });
 
       statusMessage = undefined;

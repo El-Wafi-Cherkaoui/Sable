@@ -387,11 +387,20 @@ export function renderWorkspacePicker(
   const lines = [`${style.title(product.displayName)}${style.muted(` · ${count} ${count === 1 ? "workspace" : "workspaces"}`)}`, ""];
 
   if (count === 0) {
-    lines.push("No workspaces yet.");
-    lines.push("");
-    lines.push("Press a to add your first workspace.");
-    appendAnchoredFooter(lines, ["", statusLine, footer], options.rows);
-    return lines.join("\n");
+    const welcome = [
+      style.title(`Welcome to ${product.displayName}`),
+      "",
+      "A workspace is a project folder plus the services you run in it,",
+      "like a dev server, a worker, or a database.",
+      "",
+      "Start them together, see their logs in one place, and switch",
+      "between projects with one key.",
+      "",
+      style.muted("Press a to create your first workspace."),
+    ];
+
+    appendAnchoredFooter(welcome, ["", statusLine, footer], options.rows);
+    return welcome.join("\n");
   }
 
   const nameWidth = Math.max(...state.workspaces.map((workspace) => visibleLength(workspace.name)));
@@ -509,7 +518,7 @@ function getPickerKeyHints(state: WorkspacePickerState): KeyHint[] {
   }
 
   if (state.workspaces.length === 0) {
-    return [["a", "add workspace"], ["?", "help"], ["q", "quit"]];
+    return [["a", "create your first workspace"], ["?", "help"], ["q", "quit"]];
   }
 
   if (getSelectedWorkspace(state)?.id === state.activeWorkspaceId) {

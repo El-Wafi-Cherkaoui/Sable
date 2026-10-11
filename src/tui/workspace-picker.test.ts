@@ -199,14 +199,14 @@ describe("renderWorkspacePicker", () => {
     );
   });
 
-  it("renders an empty state", () => {
-    expect(renderWorkspacePicker(createWorkspacePickerState([]))).toContain(
-      "No workspaces yet.",
-    );
-    expect(renderWorkspacePicker(createWorkspacePickerState([]))).toContain(
-      "Press a to add your first workspace.",
-    );
+  it("welcomes a new user and explains what a workspace is", () => {
+    const rendered = renderWorkspacePicker(createWorkspacePickerState([]));
+
+    expect(rendered.split("\n")[0]).toBe("Welcome to Sable");
+    expect(rendered).toContain("A workspace is a project folder plus the services you run in it,");
+    expect(rendered.split("\n").at(-1)).toBe("[a] create your first workspace  [?] help  [q] quit");
   });
+
 
   it("renders help", () => {
     const help = renderWorkspacePickerHelp();
