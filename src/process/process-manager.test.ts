@@ -95,7 +95,8 @@ describe("ProcessManager", () => {
       async processTreeKiller(pid, signal) {
         killedPids.push(pid);
         killedSignals.push(signal);
-        process.kill(pid, signal);
+        // Kill the whole tree: process.kill would only stop the shell and orphan its child.
+        await killTreeForTest(pid);
       },
     });
     const service = createService({ command: nodeCommand("setInterval(() => {}, 1000);") });
@@ -153,14 +154,22 @@ describe("ProcessManager", () => {
     const service = createService({ command: nodeCommand("setInterval(() => {}, 1000);") });
 
     const firstState = manager.start(service);
-    const restartState = await manager.restart(service);
 
-    expect(firstState.status).toBe("running");
-    expect(restartState).toEqual({ status: "failed", error: stopError });
-    expect(manager.getState(service.id)).toEqual({ status: "failed", error: stopError });
-    expect(
-      manager.getLogs(service.id).filter((entry) => entry.line === "service started"),
-    ).toHaveLength(1);
+    try {
+      const restartState = await manager.restart(service);
+
+      expect(firstState.status).toBe("running");
+      expect(restartState).toEqual({ status: "failed", error: stopError });
+      expect(manager.getState(service.id)).toEqual({ status: "failed", error: stopError });
+      expect(
+        manager.getLogs(service.id).filter((entry) => entry.line === "service started"),
+      ).toHaveLength(1);
+    } finally {
+      // The fake killer always fails, so afterEach's stopAll can't clean this process up.
+      if (firstState.status === "running" && firstState.pid !== undefined) {
+        await killTreeForTest(firstState.pid);
+      }
+    }
   });
 
   it("preserves failed state when a process exits after stop failure", async () => {
