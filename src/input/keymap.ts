@@ -4,21 +4,24 @@ export type Keypress = {
   ctrl?: boolean;
 };
 
+// Keys marked "0.3 alias" are pre-0.3.0 bindings kept working but no longer
+// shown in footers or help. Remove them in 0.4.0.
+
 export type DashboardAction =
   | "selectNext"
   | "selectPrevious"
   | "openLogs"
   | "openHelp"
-  | "openCommand"
+  | "toggle"
   | "start"
-  | "stop"
   | "restart"
   | "addService"
   | "editService"
   | "deleteService"
+  | "startMove"
   | "moveServiceUp"
   | "moveServiceDown"
-  | "quit"
+  | "back"
   | "none";
 
 export type LogsAction =
@@ -30,12 +33,12 @@ export type LogsAction =
   | "scrollRight"
   | "resetHorizontalScroll"
   | "openHelp"
-  | "openCommand"
   | "back"
-  | "quit"
   | "none";
 
-export type HelpAction = "back" | "openCommand" | "quit" | "none";
+export type HelpAction = "back" | "none";
+
+export type MoveAction = "moveUp" | "moveDown" | "done" | "cancel" | "none";
 
 export type WorkspacePickerAction =
   | "selectNext"
@@ -46,6 +49,7 @@ export type WorkspacePickerAction =
   | "renameWorkspace"
   | "stopActiveWorkspace"
   | "restartActiveWorkspace"
+  | "startMove"
   | "moveWorkspaceUp"
   | "moveWorkspaceDown"
   | "view"
@@ -54,181 +58,167 @@ export type WorkspacePickerAction =
   | "none";
 
 export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction {
-  if (keypress.name === "down" || keypress.sequence === "j") {
+  if (isDown(keypress)) {
     return "selectNext";
   }
 
-  if (keypress.name === "up" || keypress.sequence === "k") {
+  if (isUp(keypress)) {
     return "selectPrevious";
   }
 
-  if (keypress.name === "return" || keypress.sequence === "\r") {
+  if (isEnter(keypress)) {
     return "run";
   }
 
-  if (keypress.sequence === "v") {
-    return "view";
+  switch (keypress.sequence) {
+    case "a":
+    case "c": // 0.3 alias
+      return "createWorkspace";
+    case "e":
+      return "renameWorkspace";
+    case "d":
+      return "deleteWorkspace";
+    case "m":
+      return "startMove";
+    case "K": // 0.3 alias
+      return "moveWorkspaceUp";
+    case "J": // 0.3 alias
+      return "moveWorkspaceDown";
+    case "s":
+      return "stopActiveWorkspace";
+    case "r":
+      return "restartActiveWorkspace";
+    case "v":
+      return "view";
+    case "?":
+      return "openHelp";
+    case "q":
+      return "quit";
+    default:
+      return "none";
   }
-
-  if (keypress.sequence === "e") {
-    return "renameWorkspace";
-  }
-
-  if (keypress.sequence === "s") {
-    return "stopActiveWorkspace";
-  }
-
-  if (keypress.sequence === "r") {
-    return "restartActiveWorkspace";
-  }
-
-  if (keypress.sequence === "K") {
-    return "moveWorkspaceUp";
-  }
-
-  if (keypress.sequence === "J") {
-    return "moveWorkspaceDown";
-  }
-
-  if (keypress.sequence === "c") {
-    return "createWorkspace";
-  }
-
-  if (keypress.sequence === "d") {
-    return "deleteWorkspace";
-  }
-
-  if (keypress.sequence === "?") {
-    return "openHelp";
-  }
-
-  if (keypress.sequence === "q") {
-    return "quit";
-  }
-
-  return "none";
 }
 
 export function mapDashboardKey(keypress: Keypress): DashboardAction {
-  if (keypress.name === "down" || keypress.sequence === "j") {
+  if (isDown(keypress)) {
     return "selectNext";
   }
 
-  if (keypress.name === "up" || keypress.sequence === "k") {
+  if (isUp(keypress)) {
     return "selectPrevious";
   }
 
-  if (keypress.name === "escape" || keypress.sequence === "q") {
-    return "quit";
-  }
-
-  if (keypress.sequence === "?") {
-    return "openHelp";
-  }
-
-  if (keypress.sequence === ":") {
-    return "openCommand";
-  }
-
-  if (keypress.name === "return" || keypress.sequence === "\r") {
+  if (isEnter(keypress)) {
     return "openLogs";
   }
 
-  if (keypress.sequence === "S") {
-    return "start";
+  if (keypress.name === "escape") {
+    return "back";
   }
 
-  if (keypress.sequence === "s") {
-    return "stop";
+  switch (keypress.sequence) {
+    case "s":
+      return "toggle";
+    case "S": // 0.3 alias
+      return "start";
+    case "r":
+      return "restart";
+    case "a":
+      return "addService";
+    case "e":
+      return "editService";
+    case "d":
+      return "deleteService";
+    case "m":
+      return "startMove";
+    case "K": // 0.3 alias
+      return "moveServiceUp";
+    case "J": // 0.3 alias
+      return "moveServiceDown";
+    case "?":
+      return "openHelp";
+    case "q":
+      return "back";
+    default:
+      return "none";
   }
-
-  if (keypress.sequence === "r") {
-    return "restart";
-  }
-
-  if (keypress.sequence === "a") {
-    return "addService";
-  }
-
-  if (keypress.sequence === "e") {
-    return "editService";
-  }
-
-  if (keypress.sequence === "K") {
-    return "moveServiceUp";
-  }
-
-  if (keypress.sequence === "J") {
-    return "moveServiceDown";
-  }
-
-  if (keypress.sequence === "d") {
-    return "deleteService";
-  }
-
-  return "none";
 }
 
 export function mapLogsKey(keypress: Keypress): LogsAction {
-  if (keypress.name === "down" || keypress.sequence === "j") {
+  if (isDown(keypress)) {
     return "scrollDown";
   }
 
-  if (keypress.name === "up" || keypress.sequence === "k") {
+  if (isUp(keypress)) {
     return "scrollUp";
   }
 
-  if (keypress.sequence === "g") {
-    return "scrollTop";
-  }
-
-  if (keypress.sequence === "G") {
-    return "scrollBottom";
-  }
-
-  if (keypress.name === "left" || keypress.sequence === "h") {
+  if (keypress.name === "left" || keypress.sequence === "h") { // h: 0.3 alias
     return "scrollLeft";
   }
 
-  if (keypress.name === "right" || keypress.sequence === "l") {
+  if (keypress.name === "right" || keypress.sequence === "l") { // l: 0.3 alias
     return "scrollRight";
   }
 
-  if (keypress.sequence === "0") {
-    return "resetHorizontalScroll";
+  if (keypress.name === "home" || keypress.sequence === "g") {
+    return "scrollTop";
   }
 
-  if (keypress.name === "escape") {
+  if (keypress.name === "end" || keypress.sequence === "G") {
+    return "scrollBottom";
+  }
+
+  if (keypress.name === "escape" || keypress.sequence === "q") {
     return "back";
   }
 
-  if (keypress.sequence === "?") {
-    return "openHelp";
+  switch (keypress.sequence) {
+    case "0":
+      return "resetHorizontalScroll";
+    case "?":
+      return "openHelp";
+    default:
+      return "none";
   }
+}
 
-  if (keypress.sequence === ":") {
-    return "openCommand";
-  }
-
-  if (keypress.sequence === "q") {
-    return "quit";
+export function mapHelpKey(keypress: Keypress): HelpAction {
+  if (keypress.name === "escape" || keypress.sequence === "q" || keypress.sequence === "?") {
+    return "back";
   }
 
   return "none";
 }
 
-export function mapHelpKey(keypress: Keypress): HelpAction {
-  if (keypress.name === "escape") {
-    return "back";
+export function mapMoveKey(keypress: Keypress): MoveAction {
+  if (isUp(keypress)) {
+    return "moveUp";
   }
 
-  if (keypress.sequence === ":") {
-    return "openCommand";
+  if (isDown(keypress)) {
+    return "moveDown";
   }
 
-  if (keypress.sequence === "q") {
-    return "quit";
+  if (isEnter(keypress) || keypress.sequence === "m") {
+    return "done";
+  }
+
+  if (keypress.name === "escape" || keypress.sequence === "q") {
+    return "cancel";
   }
 
   return "none";
+}
+
+function isDown(keypress: Keypress): boolean {
+  return keypress.name === "down" || keypress.sequence === "j"; // j: 0.3 alias
+}
+
+function isUp(keypress: Keypress): boolean {
+  return keypress.name === "up" || keypress.sequence === "k"; // k: 0.3 alias
+}
+
+function isEnter(keypress: Keypress): boolean {
+  return keypress.name === "return" || keypress.sequence === "\r";
 }

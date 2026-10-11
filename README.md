@@ -42,8 +42,7 @@ Current capabilities:
 - show concise failed/exited details in the service dashboard
 - capture stdout, stderr, and lifecycle logs in memory
 - view logs/output, including vertical scroll and horizontal scroll for long lines
-- help overlay
-- minimal command mode
+- help overlay on every screen, and key hints that change with the selected item
 - graceful shutdown on quit or Ctrl+C
 
 
@@ -107,87 +106,64 @@ Open the workspace picker/home screen:
 sable
 ```
 
-When you create a workspace (`c` in the picker), Sable asks for a project directory. Relative service working directories are resolved against that project directory so you can run the workspace later from anywhere.
+When you add a workspace (`a` in the picker), Sable asks for a project directory. Relative service working directories are resolved against that project directory so you can run the workspace later from anywhere.
 
-## Workspace picker keys
+## Keys
+
+The footer on each screen shows the keys that work for what is selected. Press `?` anywhere for the full list. `Esc` and `q` always go back one level; `Ctrl+C` quits Sable from anywhere and stops everything.
+
+### Workspace picker
 
 In `sable`:
 
 ```text
-j / Down    select next workspace
-k / Up      select previous workspace
-Enter       run selected workspace
-c           create blank workspace
+↑ / ↓       select workspace
+Enter       open selected workspace
+a           add a workspace
 e           rename selected workspace
 d           delete selected workspace
-K           move selected workspace up
-J           move selected workspace down
-v           view selected workspace details
-?           show help
-Esc         back from help/details/create/delete/rename flows
-q           quit Sable from the picker
-Ctrl+C      quit Sable from anywhere
+m           move selected workspace (↑ ↓, then Enter; Esc cancels)
+v           view services in selected workspace
+s           stop the running workspace
+r           restart the running workspace's services
+?           help
+q           quit Sable
 ```
 
 Deleting a workspace from the picker requires typing the workspace name exactly.
 
-Only one workspace is active at a time. When a workspace is launched from the picker, `q` / `:quit` in the dashboard returns to the picker and keeps that workspace running. The picker marks the active workspace as `running`. Quitting Sable from the picker stops the active workspace; opening a different workspace stops the previous active workspace first.
+Only one workspace is active at a time. When you open a workspace from the picker, `q` in the dashboard returns to the picker and keeps that workspace running. The picker marks the active workspace as `running`. Quitting Sable from the picker stops the active workspace; opening a different workspace stops the previous active workspace first.
 
-## Dashboard keys
+### Dashboard
 
 In `sable run`, or after opening a workspace from the picker:
 
 ```text
-j / Down    select next item
-k / Up      select previous item
-a           add service or command
-e           edit selected non-running item
-d           delete selected non-running item
-K           move selected service up
-J           move selected service down
-S           start selected service
-s           stop selected item
-r           restart service or run command
-Enter       show selected logs/output
-?           show help
-:           command mode
-q           quit, or return to picker when launched from picker
-Ctrl+C      quit Sable cleanly
+↑ / ↓       select service or command
+Enter       show logs or output
+s           start or stop selected item
+r           restart service, or run command
+a           add a service or command
+e           edit selected item (stop it first)
+d           delete selected item (stop it first)
+m           move selected service (↑ ↓, then Enter; Esc cancels)
+?           help
+Esc, q      back to the picker, or quit when started with sable run
 ```
 
-## Logs view keys
+### Logs
 
 ```text
-j / Down    scroll down
-k / Up      scroll up
-g           jump to top
-G           jump to bottom
-h / Left    scroll long lines left
-l / Right   scroll long lines right
-0           reset horizontal scroll
-Esc         return to dashboard
-?           show help
-:           command mode
-q           quit, or return to picker when launched from picker
-Ctrl+C      quit Sable cleanly
+↑ / ↓       scroll
+← / →       scroll long lines sideways
+0           reset sideways scroll
+g / Home    jump to top
+G / End     jump to bottom and follow new output
+?           help
+Esc, q      back to the dashboard
 ```
 
 Logs/output are kept in memory and bounded per service or command. They are not persisted to disk.
-
-## Command mode
-
-Press `:` to enter command mode.
-
-Supported commands:
-
-```text
-:help
-:h
-:quit
-:q
-```
-
-Use `Esc` to cancel command mode.
 
 ## Configuration
 
@@ -199,7 +175,7 @@ Workspace commands are treated as trusted local configuration.
 
 Sable runs workspace service commands through the user's shell. Treat workspace configuration as trusted local configuration, not as safe input from untrusted sources.
 
-The primary interactive flow is the no-argument `sable` home picker. Common dashboard actions are direct keys on the selected service or command; less common global actions belong in command mode.
+The primary interactive flow is the no-argument `sable` home picker. Every action is a single key on the selected workspace, service, or command.
 
 ## MVP limitations
 

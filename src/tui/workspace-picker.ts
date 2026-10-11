@@ -1,8 +1,9 @@
 import type { WorkspaceConfig } from "../config/config-types.js";
 import { sableLogoAnsi, sableLogoAnsiWidth } from "../generated/sable-logo-ansi.js";
-import { mapWorkspacePickerKey } from "../input/keymap.js";
+import { mapHelpKey, mapMoveKey, mapWorkspacePickerKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { product } from "../shared/product.js";
+import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { appendAnchoredFooter } from "./layout.js";
 import { visibleLength } from "./logs-view.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
@@ -12,6 +13,7 @@ export type WorkspacePickerState = {
   selectedWorkspaceIndex: number | undefined;
   activeWorkspaceId?: string;
   statusMessage?: string;
+  moving?: boolean;
 };
 
 export type WorkspacePickerResult =
@@ -21,8 +23,7 @@ export type WorkspacePickerResult =
   | { type: "renameWorkspace"; workspace: WorkspaceConfig }
   | { type: "stopActiveWorkspace"; workspace: WorkspaceConfig }
   | { type: "restartActiveWorkspace"; workspace: WorkspaceConfig }
-  | { type: "moveWorkspaceUp"; workspace: WorkspaceConfig }
-  | { type: "moveWorkspaceDown"; workspace: WorkspaceConfig }
+  | { type: "reorderWorkspace"; workspace: WorkspaceConfig; index: number }
   | { type: "exit" };
 
 export type WorkspacePickerScreen = {
@@ -52,7 +53,7 @@ export type RunWorkspacePickerOptions = {
   startupMomentMs?: number;
 };
 
-type PickerMode = "picker" | "help" | "details";
+type PickerMode = "picker" | "help" | "details" | "move";
 type PickerEvent =
   | { type: "key"; keypress: Awaited<ReturnType<KeyInput["readKey"]>> }
   | { type: "abort" };
@@ -81,6 +82,7 @@ export async function runWorkspacePicker(
     options.activeWorkspaceId,
   );
   let mode: PickerMode = "picker";
+  let stateBeforeMove: WorkspacePickerState | undefined;
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
   let queuedEvent = await runStartupMoment();
 
@@ -95,8 +97,8 @@ export async function runWorkspacePicker(
       return { type: "exit" };
     }
 
-    if (mode === "help") {
-      if (event.keypress.name === "escape" || event.keypress.sequence === "q") {
+    if (mode === "help" || mode === "details") {
+      if (mapHelpKey(event.keypress) === "back") {
         mode = "picker";
         renderFrame(screen, render(state));
       }
@@ -104,8 +106,30 @@ export async function runWorkspacePicker(
       continue;
     }
 
-    if (mode === "details") {
-      if (event.keypress.name === "escape" || event.keypress.sequence === "q") {
+    if (mode === "move") {
+      const moveAction = mapMoveKey(event.keypress);
+
+      if (moveAction === "moveUp" || moveAction === "moveDown") {
+        state = moveSelectedWorkspace(state, moveAction === "moveUp" ? "up" : "down");
+        renderFrame(screen, render(state));
+        continue;
+      }
+
+      if (moveAction === "done" || moveAction === "cancel") {
+        const originalIndex = stateBeforeMove?.selectedWorkspaceIndex;
+        const workspace = getSelectedWorkspace(state);
+
+        if (
+          moveAction === "done"
+          && workspace !== undefined
+          && state.selectedWorkspaceIndex !== undefined
+          && state.selectedWorkspaceIndex !== originalIndex
+        ) {
+          return { type: "reorderWorkspace", workspace, index: state.selectedWorkspaceIndex };
+        }
+
+        state = { ...(stateBeforeMove ?? state), moving: false };
+        stateBeforeMove = undefined;
         mode = "picker";
         renderFrame(screen, render(state));
       }
@@ -181,20 +205,22 @@ export async function runWorkspacePicker(
 
         break;
       }
-      case "moveWorkspaceUp": {
-        const workspace = getSelectedWorkspace(state);
-
-        if (workspace !== undefined) {
-          return { type: "moveWorkspaceUp", workspace };
+      case "startMove":
+        if (getSelectedWorkspace(state) !== undefined && state.workspaces.length > 1) {
+          stateBeforeMove = state;
+          state = { ...state, statusMessage: undefined, moving: true };
+          mode = "move";
+          renderFrame(screen, render(state));
         }
 
         break;
-      }
+      case "moveWorkspaceUp":
       case "moveWorkspaceDown": {
         const workspace = getSelectedWorkspace(state);
+        const index = (state.selectedWorkspaceIndex ?? 0) + (action === "moveWorkspaceUp" ? -1 : 1);
 
-        if (workspace !== undefined) {
-          return { type: "moveWorkspaceDown", workspace };
+        if (workspace !== undefined && index >= 0 && index < state.workspaces.length) {
+          return { type: "reorderWorkspace", workspace, index };
         }
 
         break;
@@ -309,6 +335,30 @@ export function selectPreviousWorkspace(
   };
 }
 
+export function moveSelectedWorkspace(
+  state: WorkspacePickerState,
+  direction: "up" | "down",
+): WorkspacePickerState {
+  const fromIndex = state.selectedWorkspaceIndex;
+
+  if (fromIndex === undefined) {
+    return state;
+  }
+
+  const toIndex = direction === "up" ? fromIndex - 1 : fromIndex + 1;
+
+  if (toIndex < 0 || toIndex >= state.workspaces.length) {
+    return state;
+  }
+
+  const workspaces = [...state.workspaces];
+  const [workspace] = workspaces.splice(fromIndex, 1);
+
+  workspaces.splice(toIndex, 0, workspace!);
+
+  return { ...state, workspaces, selectedWorkspaceIndex: toIndex };
+}
+
 export function getSelectedWorkspace(
   state: WorkspacePickerState,
 ): WorkspaceConfig | undefined {
@@ -326,13 +376,13 @@ export function renderWorkspacePicker(
   const style = options.style ?? createTuiStyle(options.color ?? false);
   const shouldPadSelectedRows = options.color === true;
   const statusLine = formatPickerStatusLine(state.statusMessage, style);
-  const footer = style.muted("j/k select  s stop  r restart  ? help  q quit");
+  const footer = formatKeyHints(getPickerKeyHints(state), style);
   const lines = [style.title("Workspaces"), ""];
 
   if (state.workspaces.length === 0) {
     lines.push("No workspaces yet.");
     lines.push("");
-    lines.push("Press c to create your first workspace.");
+    lines.push("Press a to add your first workspace.");
     appendAnchoredFooter(lines, ["", statusLine, footer], options.rows);
     return lines.join("\n");
   }
@@ -351,7 +401,8 @@ export function renderWorkspacePicker(
   for (const [index, workspace] of state.workspaces.entries()) {
     const activeState = workspace.id === state.activeWorkspaceId ? style.running("running") : "";
     const stateSegment = stateColumnWidth > 0 ? `  ${padVisibleEnd(activeState, stateColumnWidth)}` : "";
-    const line = `  ${workspace.name.padEnd(nameColumnWidth)}  ${style.muted(String(workspace.services.length))}${stateSegment}`;
+    const movingMarker = state.moving === true && index === state.selectedWorkspaceIndex ? `  ${style.muted("↕ moving")}` : "";
+    const line = `  ${workspace.name.padEnd(nameColumnWidth)}  ${style.muted(String(workspace.services.length))}${stateSegment}${movingMarker}`;
 
     lines.push(index === state.selectedWorkspaceIndex ? style.selected(
       shouldPadSelectedRows ? padVisibleEnd(line, tableWidth) : line,
@@ -443,6 +494,22 @@ function centerVisible(value: string, columns: number | undefined): string {
   return `${" ".repeat(Math.floor((columns - visibleLength(value)) / 2))}${value}`;
 }
 
+function getPickerKeyHints(state: WorkspacePickerState): KeyHint[] {
+  if (state.moving === true) {
+    return [["↑↓", "move"], ["Enter", "done"], ["Esc", "cancel"]];
+  }
+
+  if (state.workspaces.length === 0) {
+    return [["a", "add workspace"], ["?", "help"], ["q", "quit"]];
+  }
+
+  if (getSelectedWorkspace(state)?.id === state.activeWorkspaceId) {
+    return [["↑↓", "select"], ["Enter", "open"], ["s", "stop"], ["r", "restart"], ["?", "help"], ["q", "quit"]];
+  }
+
+  return [["↑↓", "select"], ["Enter", "open"], ["a", "add"], ["e", "rename"], ["?", "help"], ["q", "quit"]];
+}
+
 function formatPickerStatusLine(
   statusMessage: string | undefined,
   style: TuiStyle,
@@ -456,29 +523,26 @@ function formatPickerStatusLine(
 
 export function renderWorkspacePickerHelp(): string {
   return [
-    "workspaces · help",
+    "Workspaces · help",
     "",
-    "Navigation",
-    "j / Down    select next workspace",
-    "k / Up      select previous workspace",
+    "Moving around",
+    "↑ / ↓       select workspace",
+    "Enter       open selected workspace",
     "",
-    "Workspace",
-    "Enter       run selected workspace",
-    "s           stop selected running workspace",
-    "r           restart selected running workspace",
-    "c           create blank workspace",
+    "Workspaces",
+    "a           add a workspace",
     "e           rename selected workspace",
     "d           delete selected workspace",
-    "K           move selected workspace up",
-    "J           move selected workspace down",
-    "v           view selected workspace",
+    "m           move selected workspace (↑ ↓, then Enter)",
+    "v           view services in selected workspace",
     "",
-    "Global",
-    "?           help",
-    "q           quit Sable",
-    "Ctrl+C      quit Sable",
+    "Running workspace",
+    "s           stop it",
+    "r           restart its services",
     "",
-    "Esc back",
+    "Esc, q, ?   close help",
+    "q           quit Sable (from this screen)",
+    "Ctrl+C      quit Sable from anywhere",
   ].join("\n");
 }
 
@@ -486,7 +550,7 @@ export function renderWorkspaceDetails(workspace: WorkspaceConfig): string {
   const lines = [workspace.name, "", "services"];
 
   if (workspace.services.length === 0) {
-    lines.push("", "No services configured.", "", "Esc back  q back");
+    lines.push("", "No services configured.", "", "Esc back");
     return lines.join("\n");
   }
 
@@ -506,7 +570,7 @@ export function renderWorkspaceDetails(workspace: WorkspaceConfig): string {
     }
   }
 
-  lines.push("", "Esc back  q back");
+  lines.push("", "Esc back");
 
   return lines.join("\n");
 }

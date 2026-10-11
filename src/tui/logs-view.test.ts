@@ -23,7 +23,7 @@ describe("renderLogsView", () => {
     expect(rendered).toContain("\u2502 stdout server ready");
     expect(rendered).toContain("\u2502 stderr warning");
     expect(rendered).toContain(`${"\u2514"}${"\u2500".repeat(54)}${"\u2518"}`);
-    expect(rendered).toContain("j/k scroll  h/l sideways  0 reset  Esc back  ? help  q quit");
+    expect(rendered).toContain("[↑↓] scroll  [←→] sideways  [g] top  [G] bottom  [?] help  [Esc] back");
   });
 
   it("keeps the log box width stable and truncates long lines", () => {
@@ -51,7 +51,7 @@ describe("renderLogsView", () => {
 
     expect(rendered).toContain("stdout ijkl");
     expect(rendered).not.toContain("stdout abc");
-    expect(rendered).toContain("h/l sideways  0 reset");
+    expect(rendered).toContain("[←→] sideways");
   });
 
   it("renders system lifecycle entries with logs", () => {

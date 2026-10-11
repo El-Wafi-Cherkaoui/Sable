@@ -1,5 +1,6 @@
-import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
+import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { appendAnchoredFooter } from "./layout.js";
 import { renderLogBox, truncateVisible, visibleLength } from "./logs-view.js";
 import { createTuiStyle, type TuiStyle } from "./style.js";
@@ -7,6 +8,7 @@ import { createTuiStyle, type TuiStyle } from "./style.js";
 export type RenderStaticDashboardOptions = {
   quitLabel?: string;
   statusMessage?: string;
+  moving?: boolean;
   color?: boolean;
   style?: TuiStyle;
   pulseServiceIndex?: number;
@@ -27,11 +29,11 @@ export function renderStaticDashboard(
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
   const shouldPadSelectedRows = options.color === true;
-  const dashboardFooter = style.muted(`j/k select  ? help  q ${
-    options.quitLabel ?? "quit"
-  }`);
+  const dashboardFooter = formatKeyHints(getDashboardKeyHints(state, options), style);
   const statusLine = formatDashboardStatusLine(
-    options.statusMessage ?? formatSelectedItemDescription(state),
+    options.moving === true
+      ? `Moving service "${getSelectedService(state)?.service.name ?? ""}"`
+      : options.statusMessage ?? formatSelectedItemDescription(state),
     style,
   );
   const lines = [`${style.muted("Workspace:")} ${style.title(state.workspace.name)}`, ""];
@@ -39,7 +41,7 @@ export function renderStaticDashboard(
   if (state.services.length === 0 && state.commands.length === 0) {
     lines.push("No services or commands yet.");
     lines.push("");
-    lines.push("Press a to add a service to this workspace.");
+    lines.push("Press a to add a service or command.");
     appendAnchoredFooter(lines, ["", statusLine, dashboardFooter], options.rows);
     return lines.join("\n");
   }
@@ -228,6 +230,35 @@ function resolveBodyAvailableRows(currentLineCount: number, rows: number | undef
   return Math.max(5, rows - currentLineCount - 4);
 }
 
+function getDashboardKeyHints(
+  state: RuntimeWorkspaceState,
+  options: RenderStaticDashboardOptions,
+): KeyHint[] {
+  const back: KeyHint = ["q", options.quitLabel ?? "quit"];
+
+  if (options.moving === true) {
+    return [["↑↓", "move"], ["Enter", "done"], ["Esc", "cancel"]];
+  }
+
+  const command = getSelectedCommand(state);
+
+  if (command !== undefined) {
+    return command.process.status === "running"
+      ? [["s", "stop"], ["Enter", "output"], ["?", "help"], back]
+      : [["r", "run"], ["Enter", "output"], ["e", "edit"], ["a", "add"], ["?", "help"], back];
+  }
+
+  const service = getSelectedService(state);
+
+  if (service === undefined) {
+    return [["a", "add"], ["?", "help"], back];
+  }
+
+  return service.process.status === "running"
+    ? [["s", "stop"], ["r", "restart"], ["Enter", "logs"], ["?", "help"], back]
+    : [["s", "start"], ["Enter", "logs"], ["e", "edit"], ["a", "add"], ["?", "help"], back];
+}
+
 function formatDashboardStatusLine(
   statusMessage: string | undefined,
   style: TuiStyle,
@@ -241,11 +272,11 @@ function formatDashboardStatusLine(
 
 function formatSelectedItemDescription(state: RuntimeWorkspaceState): string | undefined {
   if (state.selectedCommandIndex !== undefined) {
-    return "Command runs once; use r to run, s to stop while running, Enter for output.";
+    return "Command: runs once, then stops.";
   }
 
   if (state.selectedServiceIndex !== undefined) {
-    return "Service stays running; use S start, s stop, r restart, Enter for logs.";
+    return "Service: keeps running until you stop it.";
   }
 
   return "Add services for long-running processes or commands for one-shot work.";

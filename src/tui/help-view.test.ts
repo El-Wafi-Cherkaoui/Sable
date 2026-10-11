@@ -2,29 +2,27 @@ import { describe, expect, it } from "vitest";
 import { renderHelpView } from "./help-view.js";
 
 describe("renderHelpView", () => {
-  it("renders dashboard help", () => {
+  it("renders dashboard help with the 0.3 keys only", () => {
     const rendered = renderHelpView("dashboard");
 
-    expect(rendered).toContain("Dashboard");
-    expect(rendered).toContain("S           start selected service");
-    expect(rendered).toContain("a           add service or command");
-    expect(rendered).toContain("d           delete selected non-running item");
-    expect(rendered).toContain("K           move selected service up");
-    expect(rendered).toContain("Enter       show selected logs/output");
-    expect(rendered).toContain(":           command mode");
-    expect(rendered).toContain("Esc back  : command  q quit");
+    expect(rendered).toContain("s           start or stop selected item");
+    expect(rendered).toContain("r           restart service, or run command");
+    expect(rendered).toContain("a           add a service or command");
+    expect(rendered).toContain("m           move selected service (↑ ↓, then Enter)");
+    expect(rendered).toContain("Enter       show logs or output");
+    expect(rendered).toContain("Esc, q      back");
+    expect(rendered).toContain("Esc, q, ?   close help");
+    expect(rendered).not.toContain("S  ");
+    expect(rendered).not.toContain("command mode");
   });
 
   it("renders logs help", () => {
     const rendered = renderHelpView("logs");
 
-    expect(rendered).toContain("Logs");
-    expect(rendered).toContain("g           jump to top");
-    expect(rendered).toContain("G           jump to bottom");
-    expect(rendered).toContain("h / Left    scroll long lines left");
-    expect(rendered).toContain("l / Right   scroll long lines right");
-    expect(rendered).toContain("0           reset horizontal scroll");
-    expect(rendered).toContain("Esc         return to dashboard");
-    expect(rendered).toContain(":           command mode");
+    expect(rendered).toContain("← / →       scroll long lines sideways");
+    expect(rendered).toContain("g / Home    jump to top");
+    expect(rendered).toContain("G / End     jump to bottom and follow");
+    expect(rendered).toContain("Esc, q      back to dashboard");
+    expect(rendered).not.toContain("command mode");
   });
 });

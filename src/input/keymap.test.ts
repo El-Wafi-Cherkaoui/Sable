@@ -3,122 +3,125 @@ import {
   mapDashboardKey,
   mapHelpKey,
   mapLogsKey,
+  mapMoveKey,
   mapWorkspacePickerKey,
 } from "./keymap.js";
 
 describe("mapWorkspacePickerKey", () => {
   it("maps navigation keys", () => {
     expect(mapWorkspacePickerKey({ name: "down" })).toBe("selectNext");
-    expect(mapWorkspacePickerKey({ sequence: "j" })).toBe("selectNext");
     expect(mapWorkspacePickerKey({ name: "up" })).toBe("selectPrevious");
-    expect(mapWorkspacePickerKey({ sequence: "k" })).toBe("selectPrevious");
-  });
-
-  it("maps run, create, view, help, and quit keys", () => {
     expect(mapWorkspacePickerKey({ name: "return" })).toBe("run");
     expect(mapWorkspacePickerKey({ sequence: "\r" })).toBe("run");
-    expect(mapWorkspacePickerKey({ sequence: "c" })).toBe("createWorkspace");
+  });
+
+  it("maps workspace keys", () => {
+    expect(mapWorkspacePickerKey({ sequence: "a" })).toBe("createWorkspace");
     expect(mapWorkspacePickerKey({ sequence: "e" })).toBe("renameWorkspace");
+    expect(mapWorkspacePickerKey({ sequence: "d" })).toBe("deleteWorkspace");
+    expect(mapWorkspacePickerKey({ sequence: "m" })).toBe("startMove");
     expect(mapWorkspacePickerKey({ sequence: "s" })).toBe("stopActiveWorkspace");
     expect(mapWorkspacePickerKey({ sequence: "r" })).toBe("restartActiveWorkspace");
-    expect(mapWorkspacePickerKey({ sequence: "d" })).toBe("deleteWorkspace");
-    expect(mapWorkspacePickerKey({ sequence: "K" })).toBe("moveWorkspaceUp");
-    expect(mapWorkspacePickerKey({ sequence: "J" })).toBe("moveWorkspaceDown");
     expect(mapWorkspacePickerKey({ sequence: "v" })).toBe("view");
     expect(mapWorkspacePickerKey({ sequence: "?" })).toBe("openHelp");
     expect(mapWorkspacePickerKey({ sequence: "q" })).toBe("quit");
   });
 
-  it("ignores service action keys in the picker", () => {
-    expect(mapWorkspacePickerKey({ sequence: "a" })).toBe("none");
-    expect(mapWorkspacePickerKey({ sequence: "S" })).toBe("none");
+  it("keeps pre-0.3 keys as aliases", () => {
+    expect(mapWorkspacePickerKey({ sequence: "j" })).toBe("selectNext");
+    expect(mapWorkspacePickerKey({ sequence: "k" })).toBe("selectPrevious");
+    expect(mapWorkspacePickerKey({ sequence: "c" })).toBe("createWorkspace");
+    expect(mapWorkspacePickerKey({ sequence: "K" })).toBe("moveWorkspaceUp");
+    expect(mapWorkspacePickerKey({ sequence: "J" })).toBe("moveWorkspaceDown");
   });
 
-  it("ignores unknown picker keys", () => {
+  it("does not quit on Escape or unknown keys", () => {
+    expect(mapWorkspacePickerKey({ name: "escape" })).toBe("none");
+    expect(mapWorkspacePickerKey({ sequence: "S" })).toBe("none");
     expect(mapWorkspacePickerKey({ sequence: "x" })).toBe("none");
   });
 });
 
 describe("mapDashboardKey", () => {
-  it("maps down and j to select next", () => {
+  it("maps navigation keys", () => {
     expect(mapDashboardKey({ name: "down" })).toBe("selectNext");
-    expect(mapDashboardKey({ sequence: "j" })).toBe("selectNext");
-  });
-
-  it("maps up and k to select previous", () => {
     expect(mapDashboardKey({ name: "up" })).toBe("selectPrevious");
-    expect(mapDashboardKey({ sequence: "k" })).toBe("selectPrevious");
+    expect(mapDashboardKey({ name: "return" })).toBe("openLogs");
   });
 
-  it("maps escape and q to quit", () => {
-    expect(mapDashboardKey({ name: "escape" })).toBe("quit");
-    expect(mapDashboardKey({ sequence: "q" })).toBe("quit");
+  it("maps Escape and q to back", () => {
+    expect(mapDashboardKey({ name: "escape" })).toBe("back");
+    expect(mapDashboardKey({ sequence: "q" })).toBe("back");
   });
 
-  it("maps service action keys", () => {
-    expect(mapDashboardKey({ sequence: "S" })).toBe("start");
-    expect(mapDashboardKey({ sequence: "s" })).toBe("stop");
+  it("maps item action keys", () => {
+    expect(mapDashboardKey({ sequence: "s" })).toBe("toggle");
     expect(mapDashboardKey({ sequence: "r" })).toBe("restart");
     expect(mapDashboardKey({ sequence: "a" })).toBe("addService");
     expect(mapDashboardKey({ sequence: "e" })).toBe("editService");
     expect(mapDashboardKey({ sequence: "d" })).toBe("deleteService");
+    expect(mapDashboardKey({ sequence: "m" })).toBe("startMove");
+    expect(mapDashboardKey({ sequence: "?" })).toBe("openHelp");
+  });
+
+  it("keeps pre-0.3 keys as aliases", () => {
+    expect(mapDashboardKey({ sequence: "j" })).toBe("selectNext");
+    expect(mapDashboardKey({ sequence: "k" })).toBe("selectPrevious");
+    expect(mapDashboardKey({ sequence: "S" })).toBe("start");
     expect(mapDashboardKey({ sequence: "K" })).toBe("moveServiceUp");
     expect(mapDashboardKey({ sequence: "J" })).toBe("moveServiceDown");
   });
 
-  it("maps enter to open logs", () => {
-    expect(mapDashboardKey({ name: "return" })).toBe("openLogs");
-    expect(mapDashboardKey({ sequence: "\r" })).toBe("openLogs");
-  });
-
-  it("maps question mark to open help", () => {
-    expect(mapDashboardKey({ sequence: "?" })).toBe("openHelp");
-  });
-
-  it("maps colon to open command mode", () => {
-    expect(mapDashboardKey({ sequence: ":" })).toBe("openCommand");
-  });
-
-  it("ignores unknown keys", () => {
-    expect(mapDashboardKey({ sequence: "x" })).toBe("none");
+  it("no longer opens command mode", () => {
+    expect(mapDashboardKey({ sequence: ":" })).toBe("none");
   });
 });
 
 describe("mapLogsKey", () => {
   it("maps scroll keys", () => {
     expect(mapLogsKey({ name: "down" })).toBe("scrollDown");
-    expect(mapLogsKey({ sequence: "j" })).toBe("scrollDown");
     expect(mapLogsKey({ name: "up" })).toBe("scrollUp");
-    expect(mapLogsKey({ sequence: "k" })).toBe("scrollUp");
-  });
-
-  it("maps jump, horizontal scroll, help, command, back, and quit keys", () => {
-    expect(mapLogsKey({ sequence: "g" })).toBe("scrollTop");
-    expect(mapLogsKey({ sequence: "G" })).toBe("scrollBottom");
-    expect(mapLogsKey({ sequence: "h" })).toBe("scrollLeft");
     expect(mapLogsKey({ name: "left" })).toBe("scrollLeft");
-    expect(mapLogsKey({ sequence: "l" })).toBe("scrollRight");
     expect(mapLogsKey({ name: "right" })).toBe("scrollRight");
+    expect(mapLogsKey({ sequence: "g" })).toBe("scrollTop");
+    expect(mapLogsKey({ name: "home" })).toBe("scrollTop");
+    expect(mapLogsKey({ sequence: "G" })).toBe("scrollBottom");
+    expect(mapLogsKey({ name: "end" })).toBe("scrollBottom");
     expect(mapLogsKey({ sequence: "0" })).toBe("resetHorizontalScroll");
-    expect(mapLogsKey({ sequence: "?" })).toBe("openHelp");
-    expect(mapLogsKey({ sequence: ":" })).toBe("openCommand");
-    expect(mapLogsKey({ name: "escape" })).toBe("back");
-    expect(mapLogsKey({ sequence: "q" })).toBe("quit");
   });
 
-  it("ignores unknown log keys", () => {
-    expect(mapLogsKey({ sequence: "x" })).toBe("none");
+  it("maps Escape and q to back and ? to help", () => {
+    expect(mapLogsKey({ name: "escape" })).toBe("back");
+    expect(mapLogsKey({ sequence: "q" })).toBe("back");
+    expect(mapLogsKey({ sequence: "?" })).toBe("openHelp");
+    expect(mapLogsKey({ sequence: ":" })).toBe("none");
+  });
+
+  it("keeps pre-0.3 keys as aliases", () => {
+    expect(mapLogsKey({ sequence: "j" })).toBe("scrollDown");
+    expect(mapLogsKey({ sequence: "k" })).toBe("scrollUp");
+    expect(mapLogsKey({ sequence: "h" })).toBe("scrollLeft");
+    expect(mapLogsKey({ sequence: "l" })).toBe("scrollRight");
   });
 });
 
 describe("mapHelpKey", () => {
-  it("maps escape back, colon command, and q quit", () => {
+  it("closes help with Escape, q, or ?", () => {
     expect(mapHelpKey({ name: "escape" })).toBe("back");
-    expect(mapHelpKey({ sequence: ":" })).toBe("openCommand");
-    expect(mapHelpKey({ sequence: "q" })).toBe("quit");
+    expect(mapHelpKey({ sequence: "q" })).toBe("back");
+    expect(mapHelpKey({ sequence: "?" })).toBe("back");
+    expect(mapHelpKey({ sequence: ":" })).toBe("none");
   });
+});
 
-  it("ignores unknown help keys", () => {
-    expect(mapHelpKey({ sequence: "x" })).toBe("none");
+describe("mapMoveKey", () => {
+  it("maps move, done, and cancel keys", () => {
+    expect(mapMoveKey({ name: "up" })).toBe("moveUp");
+    expect(mapMoveKey({ name: "down" })).toBe("moveDown");
+    expect(mapMoveKey({ name: "return" })).toBe("done");
+    expect(mapMoveKey({ sequence: "m" })).toBe("done");
+    expect(mapMoveKey({ name: "escape" })).toBe("cancel");
+    expect(mapMoveKey({ sequence: "q" })).toBe("cancel");
+    expect(mapMoveKey({ sequence: "x" })).toBe("none");
   });
 });

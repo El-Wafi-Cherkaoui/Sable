@@ -1,5 +1,6 @@
 import type { ServiceLogEntry } from "../process/process-manager.js";
 import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import { formatKeyHints } from "./key-hints.js";
 import { createTuiStyle, type TuiStyle } from "./style.js";
 import { sliceVisibleStart, truncateVisible, visibleLength } from "./width.js";
 export { stripAnsi, truncateVisible, visibleLength } from "./width.js";
@@ -63,7 +64,7 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
     style,
   ));
 
-  lines.push("", style.muted("j/k scroll  h/l sideways  0 reset  Esc back  ? help  q quit"));
+  lines.push("", formatKeyHints([["↑↓", "scroll"], ["←→", "sideways"], ["g", "top"], ["G", "bottom"], ["?", "help"], ["Esc", "back"]], style));
 
   return lines.join("\n");
 }

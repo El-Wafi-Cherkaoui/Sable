@@ -180,12 +180,12 @@ export async function runWorkspaceHome(
         continue;
       }
 
-      if (pickerResult.type === "moveWorkspaceUp" || pickerResult.type === "moveWorkspaceDown") {
+      if (pickerResult.type === "reorderWorkspace") {
         try {
-          const result = await moveWorkspace({
+          const result = await reorderWorkspace({
             store: options.store,
             workspace: pickerResult.workspace,
-            direction: pickerResult.type === "moveWorkspaceUp" ? "up" : "down",
+            index: pickerResult.index,
           });
 
           statusMessage = result.message;
@@ -329,13 +329,13 @@ async function restartActiveSession(
 }
 
 
-type MoveWorkspaceOptions = {
+type ReorderWorkspaceOptions = {
   store: WorkspaceHomeConfigStore;
   workspace: WorkspaceConfig;
-  direction: "up" | "down";
+  index: number;
 };
 
-async function moveWorkspace(options: MoveWorkspaceOptions): Promise<{ message: string }> {
+async function reorderWorkspace(options: ReorderWorkspaceOptions): Promise<{ message: string }> {
   const config = await options.store.load();
   const workspaceIndex = config.workspaces.findIndex((workspace) => workspace.id === options.workspace.id);
 
@@ -343,29 +343,16 @@ async function moveWorkspace(options: MoveWorkspaceOptions): Promise<{ message: 
     return { message: `Workspace "${options.workspace.name}" was not found.` };
   }
 
-  const targetIndex = options.direction === "up" ? workspaceIndex - 1 : workspaceIndex + 1;
-
-  if (targetIndex < 0) {
-    return { message: `Workspace "${options.workspace.name}" is already first.` };
-  }
-
-  if (targetIndex >= config.workspaces.length) {
-    return { message: `Workspace "${options.workspace.name}" is already last.` };
-  }
-
+  const targetIndex = Math.min(Math.max(options.index, 0), config.workspaces.length - 1);
   const nextWorkspaces = [...config.workspaces];
   const [workspace] = nextWorkspaces.splice(workspaceIndex, 1);
 
-  if (workspace === undefined) {
-    return { message: `Workspace "${options.workspace.name}" was not found.` };
-  }
-
-  nextWorkspaces.splice(targetIndex, 0, workspace);
+  nextWorkspaces.splice(targetIndex, 0, workspace!);
 
   await options.store.save({
     ...config,
     workspaces: nextWorkspaces,
   });
 
-  return { message: `Moved workspace "${workspace.name}" ${options.direction}.` };
+  return { message: `Moved workspace "${workspace!.name}".` };
 }

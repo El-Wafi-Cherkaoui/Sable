@@ -80,7 +80,7 @@ describe("runInteractiveDashboard", () => {
 
     await waitForWrite(write, "selected:1:pulse:1\n");
     await waitForWrite(write, "selected:1:pulse:none\n");
-    keyInput.resolveNext({ sequence: "q" });
+    keyInput.resolveNext({ ctrl: true, name: "c" });
     await runPromise;
   });
 
@@ -176,7 +176,7 @@ describe("runInteractiveDashboard", () => {
       await waitForWrite(write, "dashboard:one\n");
       logs = [...logs, { stream: "stdout", line: "two", timestamp: new Date() }];
       await waitForWrite(write, "dashboard:one,two\n");
-      keyInput.resolveNext({ sequence: "q" });
+      keyInput.resolveNext({ ctrl: true, name: "c" });
       await runPromise;
     } finally {
       process.stdout.columns = originalColumns;
@@ -204,7 +204,7 @@ describe("runInteractiveDashboard", () => {
 
       await waitForWrite(write, "dashboard:one\n");
       await new Promise((resolve) => setTimeout(resolve, 20));
-      keyInput.resolveNext({ sequence: "q" });
+      keyInput.resolveNext({ ctrl: true, name: "c" });
       await runPromise;
 
       expect(write).toHaveBeenCalledTimes(1);
@@ -288,7 +288,7 @@ describe("runInteractiveDashboard", () => {
 
     await waitForWrite(write, "logs\n");
     await waitUntil(() => removeAbortListener.mock.calls.length >= 2);
-    keyInput.resolveNext({ sequence: "q" });
+    keyInput.resolveNext({ ctrl: true, name: "c" });
     await runPromise;
 
     expect(removeAbortListener).toHaveBeenCalled();
@@ -344,10 +344,60 @@ describe("runInteractiveDashboard", () => {
       render: () => "dashboard",
     });
 
-    expect(controller.startSelectedService).toHaveBeenCalledOnce();
-    expect(controller.stopSelectedService).toHaveBeenCalledOnce();
+    // S (alias) starts; s on a stopped service also starts.
+    expect(controller.startSelectedService).toHaveBeenCalledTimes(2);
+    expect(controller.stopSelectedService).not.toHaveBeenCalled();
     expect(controller.restartSelectedService).toHaveBeenCalledOnce();
     expect(write).toHaveBeenCalledTimes(4);
+  });
+
+  it("stops a running service with s", async () => {
+    const baseState = createState();
+    const state = {
+      ...baseState,
+      services: baseState.services.map((serviceState, index) =>
+        index === 0 ? { ...serviceState, process: { status: "running" as const } } : serviceState,
+      ),
+    };
+    const controller = createController(state, () => []);
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "s" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: () => "dashboard",
+    });
+
+    expect(controller.stopSelectedService).toHaveBeenCalledOnce();
+    expect(controller.startSelectedService).not.toHaveBeenCalled();
+  });
+
+  it("moves a service in move mode and undoes the move on Escape", async () => {
+    let state = createState();
+    const controller = { ...createController(state, () => []), getState: vi.fn(() => state) };
+    const onMoveServiceDown = vi.fn(async () => {
+      state = { ...state, selectedServiceIndex: 1, selectedItem: { type: "service" as const, index: 1 } };
+      return { type: "continue" as const, message: "moved" };
+    });
+    const onMoveServiceUp = vi.fn(async () => {
+      state = { ...state, selectedServiceIndex: 0, selectedItem: { type: "service" as const, index: 0 } };
+      return { type: "continue" as const, message: "moved" };
+    });
+    const render = vi.fn((_state: RuntimeWorkspaceState, renderOptions?: { moving?: boolean }) =>
+      renderOptions?.moving === true ? "moving" : "dashboard");
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "m" }, { name: "down" }, { name: "escape" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render,
+      onMoveServiceUp,
+      onMoveServiceDown,
+    });
+
+    expect(onMoveServiceDown).toHaveBeenCalledOnce();
+    expect(onMoveServiceUp).toHaveBeenCalledOnce();
+    expect(render.mock.results.map((result) => result.value)).toEqual(["dashboard", "moving", "moving", "dashboard"]);
   });
 
   it("briefly pulses the selected row after service actions", async () => {
@@ -373,7 +423,7 @@ describe("runInteractiveDashboard", () => {
 
     await waitForWrite(write, "selected:0:pulse:0\n");
     await waitForWrite(write, "selected:0:pulse:none\n");
-    keyInput.resolveNext({ sequence: "q" });
+    keyInput.resolveNext({ ctrl: true, name: "c" });
     await runPromise;
 
     expect(controller.startSelectedService).toHaveBeenCalledOnce();
@@ -523,114 +573,22 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenNthCalledWith(3, "dashboard\n");
   });
 
-  it("quits from dashboard help", async () => {
+  it("closes dashboard help with q", async () => {
     const state = createState();
     const controller = createController(state, () => []);
     const write = vi.fn();
 
     await runInteractiveDashboard({
       controller,
-      keyInput: createKeyInput([{ sequence: "?" }, { sequence: "q" }]),
+      keyInput: createKeyInput([{ sequence: "?" }, { sequence: "q" }, { sequence: "q" }]),
       screen: { clear: vi.fn(), write },
       render: () => "dashboard",
       renderHelp: (context) => `help:${context}`,
     });
 
-    expect(write).toHaveBeenCalledTimes(2);
+    expect(write).toHaveBeenCalledTimes(3);
     expect(write).toHaveBeenNthCalledWith(2, "help:dashboard\n");
-  });
-
-  it("cancels command mode back to dashboard", async () => {
-    const state = createState();
-    const controller = createController(state, () => []);
-    const write = vi.fn();
-
-    await runInteractiveDashboard({
-      controller,
-      keyInput: createKeyInput([
-        { sequence: ":" },
-        { sequence: "h" },
-        { name: "escape" },
-        { sequence: "q" },
-      ]),
-      screen: { clear: vi.fn(), write },
-      render: () => "dashboard",
-      renderCommand: ({ input }) => `command:${input}`,
-    });
-
-    expect(write).toHaveBeenNthCalledWith(1, "dashboard\n");
-    expect(write).toHaveBeenNthCalledWith(2, "command:\n");
-    expect(write).toHaveBeenNthCalledWith(3, "command:h\n");
-    expect(write).toHaveBeenNthCalledWith(4, "dashboard\n");
-  });
-
-  it("runs quit from command mode", async () => {
-    const state = createState();
-    const controller = createController(state, () => []);
-    const write = vi.fn();
-
-    await runInteractiveDashboard({
-      controller,
-      keyInput: createKeyInput([
-        { sequence: ":" },
-        { sequence: "q" },
-        { name: "return" },
-      ]),
-      screen: { clear: vi.fn(), write },
-      render: () => "dashboard",
-      renderCommand: ({ input }) => `command:${input}`,
-    });
-
-    expect(write).toHaveBeenNthCalledWith(3, "command:q\n");
-  });
-
-  it("runs help from dashboard command mode", async () => {
-    const state = createState();
-    const controller = createController(state, () => []);
-    const write = vi.fn();
-
-    await runInteractiveDashboard({
-      controller,
-      keyInput: createKeyInput([
-        { sequence: ":" },
-        { sequence: "h" },
-        { name: "return" },
-        { sequence: "q" },
-      ]),
-      screen: { clear: vi.fn(), write },
-      render: () => "dashboard",
-      renderCommand: ({ input }) => `command:${input}`,
-      renderHelp: (context) => `help:${context}`,
-    });
-
-    expect(write).toHaveBeenNthCalledWith(4, "help:dashboard\n");
-  });
-
-  it("edits command input with backspace and shows unknown command errors", async () => {
-    const state = createState();
-    const controller = createController(state, () => []);
-    const write = vi.fn();
-
-    await runInteractiveDashboard({
-      controller,
-      keyInput: createKeyInput([
-        { sequence: ":" },
-        { sequence: "x" },
-        { sequence: "y" },
-        { name: "backspace" },
-        { name: "return" },
-        { name: "escape" },
-        { sequence: "q" },
-      ]),
-      screen: { clear: vi.fn(), write },
-      render: () => "dashboard",
-      renderCommand: ({ input, error }) => `command:${input}:${error ?? ""}`,
-    });
-
-    expect(write).toHaveBeenNthCalledWith(4, "command:xy:\n");
-    expect(write).toHaveBeenNthCalledWith(5, "command:x:\n");
-    expect(write).toHaveBeenNthCalledWith(6, "command:x:Unknown command: x\n");
-    expect(write).toHaveBeenNthCalledWith(7, "dashboard\n");
+    expect(write).toHaveBeenNthCalledWith(3, "dashboard\n");
   });
 
   it("opens logs, scrolls, returns to dashboard, and quits", async () => {
@@ -688,7 +646,7 @@ describe("runInteractiveDashboard", () => {
         { sequence: "l" },
         { sequence: "h" },
         { sequence: "0" },
-        { sequence: "q" },
+        { ctrl: true, name: "c" },
       ]),
       screen: { clear: vi.fn(), write },
       render: () => "dashboard",
@@ -727,7 +685,7 @@ describe("runInteractiveDashboard", () => {
     await waitForWrite(write, "logs:2\n");
     await waitForWrite(write, "logs:4\n");
     await waitForWrite(write, "logs:all\n");
-    keyInput.resolveNext({ sequence: "q" });
+    keyInput.resolveNext({ ctrl: true, name: "c" });
     await runPromise;
   });
 
@@ -741,7 +699,7 @@ describe("runInteractiveDashboard", () => {
     try {
       await runInteractiveDashboard({
         controller,
-        keyInput: createKeyInput([{ name: "return" }, { sequence: "q" }]),
+        keyInput: createKeyInput([{ name: "return" }, { ctrl: true, name: "c" }]),
         screen: { clear: vi.fn(), write },
         render: () => "dashboard",
         renderLogs: ({ visibleLineCount }) => `logs:${visibleLineCount}`,
@@ -770,7 +728,7 @@ describe("runInteractiveDashboard", () => {
         { name: "return" },
         { sequence: "?" },
         { name: "escape" },
-        { sequence: "q" },
+        { ctrl: true, name: "c" },
       ]),
       screen: { clear: vi.fn(), write },
       render: () => "dashboard",
@@ -783,35 +741,6 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenNthCalledWith(2, "logs:0\n");
     expect(write).toHaveBeenNthCalledWith(3, "help:logs\n");
     expect(write).toHaveBeenNthCalledWith(4, "logs:0\n");
-  });
-
-  it("runs help from logs command mode", async () => {
-    const state = createState();
-    const controller = createController(state, () => [
-      { stream: "stdout", line: "one", timestamp: new Date() },
-    ]);
-    const write = vi.fn();
-
-    await runInteractiveDashboard({
-      controller,
-      keyInput: createKeyInput([
-        { name: "return" },
-        { sequence: ":" },
-        { sequence: "h" },
-        { name: "return" },
-        { sequence: "q" },
-      ]),
-      screen: { clear: vi.fn(), write },
-      render: () => "dashboard",
-      renderLogs: ({ scrollOffset }) => `logs:${scrollOffset}`,
-      renderCommand: ({ input }) => `command:${input}`,
-      renderHelp: (context) => `help:${context}`,
-      logVisibleLineCount: 2,
-    });
-
-    expect(write).toHaveBeenNthCalledWith(2, "logs:0\n");
-    expect(write).toHaveBeenNthCalledWith(3, "command:\n");
-    expect(write).toHaveBeenNthCalledWith(5, "help:logs\n");
   });
 
   it("auto-refreshes logs while following the bottom", async () => {
@@ -836,7 +765,7 @@ describe("runInteractiveDashboard", () => {
     await waitForWrite(write, "logs:0\n");
     logs = [...logs, { stream: "stderr", line: "three", timestamp: new Date() }];
     await waitForWrite(write, "logs:1\n");
-    keyInput.resolveNext({ sequence: "q" });
+    keyInput.resolveNext({ ctrl: true, name: "c" });
     await runPromise;
   });
 
@@ -864,7 +793,7 @@ describe("runInteractiveDashboard", () => {
     await waitForWrite(write, "logs:1\n");
     logs = [...logs, { stream: "stderr", line: "five", timestamp: new Date() }];
     await waitForRepeatedWrite(write, "logs:1\n", 2);
-    keyInput.resolveNext({ sequence: "q" });
+    keyInput.resolveNext({ ctrl: true, name: "c" });
     await runPromise;
   });
 });

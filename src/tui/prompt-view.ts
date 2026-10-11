@@ -1,5 +1,6 @@
 import type { Keypress } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
+import { formatKeyHints } from "./key-hints.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
 import { padVisibleEnd, visibleLength } from "./width.js";
 
@@ -246,7 +247,7 @@ function renderTextPrompt(
     ...renderInputValue(value, style, cursorIndex),
     ...(error === undefined ? [] : ["", error]),
     "",
-    "Left/Right edit  Esc back  Enter save  Ctrl+C quit",
+    formatKeyHints([["Enter", "save"], ["Esc", "back"], ["←→", "edit"]], style),
   ].join("\n");
 }
 
@@ -270,7 +271,7 @@ function renderSelectPrompt<T extends string>(
       formatSelectChoice(choice.label, index === selectedIndex, index === pulseIndex, color, style, selectedLineWidth),
     ),
     "",
-    "j/k move  Esc back  Enter select  Ctrl+C quit",
+    formatKeyHints([["↑↓", "choose"], ["Enter", "select"], ["Esc", "back"]], style),
   ].join("\n");
 }
 
@@ -309,7 +310,7 @@ function renderConfirmPrompt(
     "",
     ...renderInputValue(defaultValue ? "yes" : "no", style),
     "",
-    "y yes  n no  Enter default  Esc back  Ctrl+C quit",
+    formatKeyHints([["y", "yes"], ["n", "no"], ["Enter", defaultValue ? "yes" : "no"], ["Esc", "back"]], style),
   ].join("\n");
 }
 

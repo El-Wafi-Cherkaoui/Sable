@@ -578,11 +578,11 @@ describe("runWorkspaceHome", () => {
     expect(keyInput.close).toHaveBeenCalledOnce();
   });
 
-  it("moves a workspace up from the picker", async () => {
+  it("saves a workspace's new position from the picker", async () => {
     const store = createStore(configWithTwoWorkspaces);
     const runPicker = vi
       .fn()
-      .mockResolvedValueOnce({ type: "moveWorkspaceUp", workspace: portfolioWorkspace })
+      .mockResolvedValueOnce({ type: "reorderWorkspace", workspace: portfolioWorkspace, index: 0 })
       .mockResolvedValueOnce({ type: "exit" });
 
     await runWorkspaceHome({
@@ -597,16 +597,16 @@ describe("runWorkspaceHome", () => {
       "ws_ecommerce",
     ]);
     expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      statusMessage: 'Moved workspace "portfolio" up.',
+      statusMessage: 'Moved workspace "portfolio".',
       selectedWorkspaceId: "ws_portfolio",
     }));
   });
 
-  it("moves a workspace down from the picker", async () => {
+  it("moves a workspace down to a later position", async () => {
     const store = createStore(configWithTwoWorkspaces);
     const runPicker = vi
       .fn()
-      .mockResolvedValueOnce({ type: "moveWorkspaceDown", workspace })
+      .mockResolvedValueOnce({ type: "reorderWorkspace", workspace, index: 1 })
       .mockResolvedValueOnce({ type: "exit" });
 
     await runWorkspaceHome({
@@ -621,16 +621,16 @@ describe("runWorkspaceHome", () => {
       "ws_ecommerce",
     ]);
     expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      statusMessage: 'Moved workspace "ecommerce" down.',
+      statusMessage: 'Moved workspace "ecommerce".',
       selectedWorkspaceId: "ws_ecommerce",
     }));
   });
 
-  it("does not move a workspace beyond the list boundary", async () => {
+  it("clamps a workspace position beyond the list boundary", async () => {
     const store = createStore(configWithTwoWorkspaces);
     const runPicker = vi
       .fn()
-      .mockResolvedValueOnce({ type: "moveWorkspaceUp", workspace })
+      .mockResolvedValueOnce({ type: "reorderWorkspace", workspace, index: 5 })
       .mockResolvedValueOnce({ type: "exit" });
 
     await runWorkspaceHome({
@@ -640,11 +640,10 @@ describe("runWorkspaceHome", () => {
       runSession: vi.fn(),
     });
 
-    expect(store.savedConfig).toBeUndefined();
-    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      statusMessage: 'Workspace "ecommerce" is already first.',
-      selectedWorkspaceId: "ws_ecommerce",
-    }));
+    expect(store.savedConfig?.workspaces.map((candidate) => candidate.id)).toEqual([
+      "ws_portfolio",
+      "ws_ecommerce",
+    ]);
   });
 
   it("exits the app when delete workspace flow exits", async () => {
@@ -765,7 +764,7 @@ describe("runWorkspaceHome", () => {
     const runPicker = vi
       .fn()
       .mockResolvedValueOnce({ type: "run" as const, workspace })
-      .mockResolvedValueOnce({ type: "moveWorkspaceUp" as const, workspace: portfolioWorkspace })
+      .mockResolvedValueOnce({ type: "reorderWorkspace" as const, workspace: portfolioWorkspace, index: 0 })
       .mockResolvedValueOnce({ type: "exit" as const });
 
     await runWorkspaceHome({

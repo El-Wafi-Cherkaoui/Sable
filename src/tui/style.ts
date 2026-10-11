@@ -5,6 +5,7 @@ export type TuiStyle = {
   border(text: string): string;
   statusLabel(text: string): string;
   muted(text: string): string;
+  key(text: string): string;
   running(text: string): string;
   failed(text: string): string;
   exited(text: string): string;
@@ -52,6 +53,8 @@ export function createTuiStyle(enabled = false): TuiStyle {
     border: ansi("\x1b[2m", "\x1b[22m"),
     statusLabel: ansi("\x1b[36m\x1b[1m", "\x1b[22m\x1b[39m"),
     muted: ansi("\x1b[2m", "\x1b[22m"),
+    // Light chip with dark text: reads as a key on both dark and light terminal themes.
+    key: (text) => `\x1b[48;5;252m\x1b[38;5;235m\x1b[1m ${text} \x1b[22m\x1b[39m\x1b[49m`,
     running: ansi("\x1b[32m", "\x1b[39m"),
     failed: ansi("\x1b[31m", "\x1b[39m"),
     exited: ansi("\x1b[33m", "\x1b[39m"),
@@ -75,6 +78,7 @@ export const plainStyle: TuiStyle = {
   border: identity,
   statusLabel: identity,
   muted: identity,
+  key: (text) => `[${text}]`,
   running: identity,
   failed: identity,
   exited: identity,

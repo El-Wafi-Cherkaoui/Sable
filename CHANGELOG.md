@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-- No changes yet.
+### Changed
+
+- Redesigned the keymap so the same key means the same thing on every screen: `s` starts or stops the selected item, `a` adds a workspace in the picker (was `c`), and `m` enters a move mode for reordering (was `J`/`K`).
+- `q` in logs and help now goes back instead of quitting Sable; `Esc` and `q` always go back one level, and `Ctrl+C` still quits from anywhere.
+- Footers now show only the keys that work for the selected item, drawn as key chips (`[s] start` without color), with arrow keys instead of `j/k`.
+- The old `S`, `J`/`K`, `c`, `j`/`k` and `h`/`l` keys still work but are hidden from hints; they will be removed in 0.4.0.
+
+### Removed
+
+- Command mode (`:`); its only commands duplicated `?` and `q`.
 
 ## 0.2.3 - Reliability patch
 

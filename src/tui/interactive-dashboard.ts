@@ -1,8 +1,7 @@
-import { mapDashboardKey, mapHelpKey, mapLogsKey } from "../input/keymap.js";
+import { mapDashboardKey, mapHelpKey, mapLogsKey, mapMoveKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
-import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
-import { parseCommand, renderCommandView } from "./command-view.js";
+import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import { renderHelpView, type HelpContext } from "./help-view.js";
 import { clampScrollOffset, maxScrollOffset, renderLogsView } from "./logs-view.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
@@ -35,7 +34,6 @@ export type RunInteractiveDashboardOptions = {
   render?: typeof renderStaticDashboard;
   renderLogs?: typeof renderLogsView;
   renderHelp?: typeof renderHelpView;
-  renderCommand?: typeof renderCommandView;
   dashboardQuitLabel?: string;
   logVisibleLineCount?: number;
   logsRefreshIntervalMs?: number;
@@ -49,9 +47,8 @@ export type RunInteractiveDashboardOptions = {
 
 export type InteractiveDashboardResult = { type: "back" } | { type: "exit" };
 
-type ViewMode = "dashboard" | "logs" | "help" | "command";
+type ViewMode = "dashboard" | "logs" | "help" | "move";
 type HelpReturnMode = "dashboard" | "logs";
-type CommandReturnMode = ViewMode;
 type LoopEvent =
   | { type: "key"; keypress: Awaited<ReturnType<KeyInput["readKey"]>> }
   | { type: "refresh" }
@@ -70,7 +67,6 @@ export async function runInteractiveDashboard(
   const render = options.render ?? renderStaticDashboard;
   const renderLogs = options.renderLogs ?? renderLogsView;
   const renderHelp = options.renderHelp ?? renderHelpView;
-  const renderCommand = options.renderCommand ?? renderCommandView;
   const configuredLogVisibleLineCount = options.logVisibleLineCount;
   const logsRefreshIntervalMs = options.logsRefreshIntervalMs ?? 250;
   const logsRevealIntervalMs = options.logsRevealIntervalMs ?? 55;
@@ -79,10 +75,8 @@ export async function runInteractiveDashboard(
   let pulseTimer: ReturnType<typeof setTimeout> | undefined;
   let mode = "dashboard" as ViewMode;
   let helpReturnMode: HelpReturnMode = "dashboard";
-  let commandReturnMode: CommandReturnMode = "dashboard";
-  let commandHelpContext: HelpContext = "dashboard";
-  let commandInput = "";
-  let commandError: string | undefined;
+  // Net number of positions the service moved in move mode, so Esc can undo it.
+  let moveOffset = 0;
   let logScrollOffset = 0;
   let logHorizontalScrollOffset = 0;
   let followLogTail = true;
@@ -111,39 +105,15 @@ export async function runInteractiveDashboard(
       return { type: "exit" };
     }
 
-    if (currentMode === "command") {
+    if (currentMode === "move") {
       if (event.type === "refresh") {
         continue;
       }
 
-      const commandAction = handleCommandKey(event.keypress);
+      const moveResult = await handleMoveKey(event.keypress);
 
-      switch (commandAction) {
-        case "cancel":
-          clearPulse();
-          mode = commandReturnMode;
-          renderCurrentMode();
-          break;
-        case "submit": {
-          const result = parseCommand(commandInput);
-
-          if (result.type === "quit") {
-            shouldQuit = true;
-          } else if (result.type === "help") {
-            helpReturnMode = commandHelpContext;
-            mode = "help";
-            renderHelpFrame(commandHelpContext);
-          } else {
-            commandError = result.message;
-            renderCommandFrame();
-          }
-          break;
-        }
-        case "edit":
-          renderCommandFrame();
-          break;
-        case "none":
-          break;
+      if (moveResult === "exit") {
+        return { type: "exit" };
       }
 
       continue;
@@ -154,22 +124,10 @@ export async function runInteractiveDashboard(
         continue;
       }
 
-      const action = mapHelpKey(event.keypress);
-
-      switch (action) {
-        case "back":
-          clearPulse();
-          mode = helpReturnMode;
-          renderCurrentMode();
-          break;
-        case "openCommand":
-          openCommandMode("help", helpReturnMode);
-          break;
-        case "quit":
-          shouldQuit = true;
-          break;
-        case "none":
-          break;
+      if (mapHelpKey(event.keypress) === "back") {
+        clearPulse();
+        mode = helpReturnMode;
+        renderCurrentMode();
       }
 
       continue;
@@ -245,19 +203,11 @@ export async function runInteractiveDashboard(
           mode = "help";
           renderHelpFrame("logs");
           break;
-        case "openCommand":
-          clearLogReveal();
-          openCommandMode("logs", "logs");
-          break;
         case "back":
           clearPulse();
           clearLogReveal();
           mode = "dashboard";
           renderDashboardFrame();
-          break;
-        case "quit":
-          clearLogReveal();
-          shouldQuit = true;
           break;
         case "none":
           break;
@@ -299,10 +249,12 @@ export async function runInteractiveDashboard(
         schedulePulseClear();
         renderDashboardFrame();
         break;
-      case "stop":
+      case "toggle":
         clearDashboardMessage();
         clearPulse();
-        await options.controller.stopSelectedService();
+        await (isSelectedItemRunning(options.controller.getState())
+          ? options.controller.stopSelectedService()
+          : options.controller.startSelectedService());
         pulseItem = getPulseItem(options.controller.getState());
         schedulePulseClear();
         renderDashboardFrame();
@@ -418,12 +370,22 @@ export async function runInteractiveDashboard(
         mode = "help";
         renderHelpFrame("dashboard");
         break;
-      case "openCommand":
-        clearDashboardMessage();
+      case "startMove": {
         clearPulse();
-        openCommandMode("dashboard", "dashboard");
+        const state = options.controller.getState();
+
+        if (getSelectedCommand(state) !== undefined) {
+          dashboardMessage = "Only services can be moved.";
+        } else if (getSelectedService(state) !== undefined && state.services.length > 1) {
+          clearDashboardMessage();
+          moveOffset = 0;
+          mode = "move";
+        }
+
+        renderDashboardFrame();
         break;
-      case "quit":
+      }
+      case "back":
         clearPulse();
         shouldQuit = true;
         break;
@@ -501,11 +463,6 @@ export async function runInteractiveDashboard(
     renderFrame(screen, renderHelp(context));
   }
 
-  function renderCommandFrame(): void {
-    lastDashboardContents = undefined;
-    renderFrame(screen, renderCommand({ input: commandInput, error: commandError }));
-  }
-
   function renderCurrentMode(): void {
     if (mode === "logs") {
       renderLogsFrame();
@@ -517,17 +474,13 @@ export async function runInteractiveDashboard(
       return;
     }
 
-    if (mode === "command") {
-      renderCommandFrame();
-      return;
-    }
-
     renderDashboardFrame();
   }
 
   function renderDashboardFrame(renderOptions: { skipUnchanged?: boolean } = {}): void {
     const contents = render(options.controller.getState(), {
       quitLabel: options.dashboardQuitLabel,
+      moving: mode === "move",
       statusMessage: dashboardMessage,
       pulseServiceIndex: pulseItem?.type === "service" ? pulseItem.index : undefined,
       pulseCommandIndex: pulseItem?.type === "command" ? pulseItem.index : undefined,
@@ -546,7 +499,7 @@ export async function runInteractiveDashboard(
   }
 
   function shouldRefreshDashboardPreview(): boolean {
-    return mode === "dashboard" && process.stdout.columns !== undefined && process.stdout.columns >= 100;
+    return (mode === "dashboard" || mode === "move") && process.stdout.columns !== undefined && process.stdout.columns >= 100;
   }
 
   function clearDashboardMessage(): void {
@@ -576,44 +529,68 @@ export async function runInteractiveDashboard(
     }, 110);
   }
 
-  function openCommandMode(
-    returnMode: CommandReturnMode,
-    helpContext: HelpContext,
-  ): void {
-    commandReturnMode = returnMode;
-    commandHelpContext = helpContext;
-    commandInput = "";
-    commandError = undefined;
-    mode = "command";
-    renderCommandFrame();
+  async function handleMoveKey(
+    keypress: Awaited<ReturnType<KeyInput["readKey"]>>,
+  ): Promise<"continue" | "exit"> {
+    const action = mapMoveKey(keypress);
+
+    if (action === "moveUp" || action === "moveDown") {
+      const moved = await moveSelectedService(action === "moveUp" ? "up" : "down");
+
+      if (moved === "exit") {
+        return "exit";
+      }
+
+      renderDashboardFrame();
+      return "continue";
+    }
+
+    if (action === "cancel") {
+      while (moveOffset !== 0) {
+        const moved = await moveSelectedService(moveOffset > 0 ? "up" : "down");
+
+        if (moved !== "moved") {
+          break;
+        }
+      }
+    }
+
+    if (action === "done" || action === "cancel") {
+      const serviceName = getSelectedService(options.controller.getState())?.service.name;
+
+      dashboardMessage = action === "done" && moveOffset !== 0 && serviceName !== undefined
+        ? `Moved service "${serviceName}".`
+        : undefined;
+      moveOffset = 0;
+      mode = "dashboard";
+      renderDashboardFrame();
+    }
+
+    return "continue";
   }
 
-  function handleCommandKey(
-    keypress: Awaited<ReturnType<KeyInput["readKey"]>>,
-  ): "submit" | "cancel" | "edit" | "none" {
-    if (keypress.name === "escape") {
-      return "cancel";
+  async function moveSelectedService(direction: "up" | "down"): Promise<"moved" | "unchanged" | "exit"> {
+    const callback = direction === "up" ? options.onMoveServiceUp : options.onMoveServiceDown;
+
+    if (callback === undefined) {
+      return "unchanged";
     }
 
-    if (keypress.name === "return" || keypress.sequence === "\r") {
-      return "submit";
+    const indexBefore = options.controller.getState().selectedServiceIndex;
+    const result = await callback();
+
+    if (result.type === "exit") {
+      return "exit";
     }
 
-    if (keypress.name === "backspace") {
-      commandInput = commandInput.slice(0, -1);
-      commandError = undefined;
+    const indexAfter = options.controller.getState().selectedServiceIndex;
 
-      return "edit";
+    if (indexBefore === undefined || indexAfter === undefined || indexBefore === indexAfter) {
+      return "unchanged";
     }
 
-    if (keypress.sequence !== undefined && isPrintableCommandCharacter(keypress.sequence)) {
-      commandInput += keypress.sequence;
-      commandError = undefined;
-
-      return "edit";
-    }
-
-    return "none";
+    moveOffset += indexAfter - indexBefore;
+    return "moved";
   }
 
   async function readKeyEvent(): Promise<Awaited<ReturnType<KeyInput["readKey"]>>> {
@@ -688,8 +665,10 @@ function createAbortWait(signal: AbortSignal | undefined): AbortWait {
   };
 }
 
-function isPrintableCommandCharacter(sequence: string): boolean {
-  return sequence.length === 1 && sequence >= " " && sequence !== "\x7f";
+function isSelectedItemRunning(state: RuntimeWorkspaceState): boolean {
+  const selected = getSelectedCommand(state) ?? getSelectedService(state);
+
+  return selected?.process.status === "running";
 }
 
 function getPulseItem(

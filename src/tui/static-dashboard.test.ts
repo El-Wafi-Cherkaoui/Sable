@@ -15,8 +15,8 @@ describe("renderStaticDashboard", () => {
         "  frontend  stopped",
         "  worker    failed: failed",
         "",
-        "Status: Service stays running; use S start, s stop, r restart, Enter for logs.",
-        "j/k select  ? help  q quit",
+        "Status: Service: keeps running until you stop it.",
+        "[s] stop  [r] restart  [Enter] logs  [?] help  [q] quit",
       ].join("\n"),
     );
   });
@@ -39,10 +39,10 @@ describe("renderStaticDashboard", () => {
         "",
         "No services or commands yet.",
         "",
-        "Press a to add a service to this workspace.",
+        "Press a to add a service or command.",
         "",
         "Status: Add services for long-running processes or commands for one-shot work.",
-        "j/k select  ? help  q quit",
+        "[a] add  [?] help  [q] quit",
       ].join("\n"),
     );
   });
@@ -58,9 +58,22 @@ describe("renderStaticDashboard", () => {
         "  worker    failed: failed",
         "",
         "Status: Cannot edit while running.",
-        "j/k select  ? help  q quit",
+        "[s] stop  [r] restart  [Enter] logs  [?] help  [q] quit",
       ].join("\n"),
     );
+  });
+
+  it("shows start for a stopped service and the move keys in move mode", () => {
+    const state = { ...createState(), selectedServiceIndex: 1, selectedItem: { type: "service" as const, index: 1 } };
+
+    expect(renderStaticDashboard(state, { quitLabel: "back" }).split("\n").at(-1)).toBe(
+      "[s] start  [Enter] logs  [e] edit  [a] add  [?] help  [q] back",
+    );
+
+    const moving = renderStaticDashboard(state, { moving: true }).split("\n");
+
+    expect(moving.at(-2)).toBe('Status: Moving service "frontend"');
+    expect(moving.at(-1)).toBe("[↑↓] move  [Enter] done  [Esc] cancel");
   });
 
   it("keeps dashboard frame height stable when status messages appear", () => {
@@ -77,8 +90,8 @@ describe("renderStaticDashboard", () => {
     const lines = rendered.split("\n");
 
     expect(lines).toHaveLength(17);
-    expect(lines.at(-1)).toBe("j/k select  ? help  q quit");
-    expect(lines.at(-2)).toBe("Status: Service stays running; use S start, s stop, r restart, Enter for logs.");
+    expect(lines.at(-1)).toBe("[s] stop  [r] restart  [Enter] logs  [?] help  [q] quit");
+    expect(lines.at(-2)).toBe("Status: Service: keeps running until you stop it.");
   });
 
   it("can render process states with restrained color", () => {
@@ -125,7 +138,8 @@ describe("renderStaticDashboard", () => {
     });
 
     expect(rendered).toContain(["  Command  Status", "  build    success"].join("\n"));
-    expect(rendered).toContain("Status: Command runs once; use r to run, s to stop while running, Enter for output.");
+    expect(rendered).toContain("Status: Command: runs once, then stops.");
+    expect(rendered).toContain("[r] run  [Enter] output  [e] edit  [a] add  [?] help  [q] quit");
   });
 
   it("renders exited status details", () => {
