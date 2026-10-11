@@ -26,23 +26,14 @@ Requirements: Node.js 20+ and npm. Sable is intended to work on Windows, macOS, 
 
 Current capabilities:
 
-- open a workspace picker/home screen with `sable`
-- create, list, rename, reorder, delete, and run saved workspaces
-- create blank workspaces from the picker
-- rename workspaces from the picker
-- reorder workspaces directly from the picker
-- delete workspaces from the picker with typed-name confirmation
-- view workspace details from the picker
-- add services or one-shot commands from the running workspace dashboard
-- edit non-running services or commands from the running workspace dashboard
-- delete non-running services or commands from the running workspace dashboard
-- reorder services directly from the running workspace dashboard
-- preview recent selected-service logs from the dashboard on wide terminals
-- start, stop, and restart selected services; run selected commands
-- show concise failed/exited details in the service dashboard
-- capture stdout, stderr, and lifecycle logs in memory
-- view logs/output, including vertical scroll and horizontal scroll for long lines
-- help overlay on every screen, and key hints that change with the selected item
+- open the workspace picker with `sable`; a welcome screen guides first-time users
+- create a workspace and get services suggested from its `package.json` scripts
+- add, edit, delete, and reorder workspaces, services, and one-shot commands
+- edit everything in one form, including environment variables, even while a service runs
+- start, stop, and restart services; run commands; see status at a glance
+- preview the selected item's latest output beside the list on wide terminals
+- read logs with timestamps, search them, jump to the next error, and wrap long lines
+- help on every screen, and key hints that change with the selected item
 - graceful shutdown on quit or Ctrl+C
 
 
@@ -144,7 +135,7 @@ Enter       show logs or output
 s           start or stop selected item
 r           restart service, or run command
 a           add a service or command
-e           edit selected item (stop it first)
+e           edit selected item (changes apply on restart)
 d           delete selected item (stop it first)
 m           move selected service (↑ ↓, then Enter; Esc cancels)
 ?           help
@@ -155,15 +146,19 @@ Esc, q      back to the picker, or quit when started with sable run
 
 ```text
 ↑ / ↓       scroll
-← / →       scroll long lines sideways
-0           reset sideways scroll
 g / Home    jump to top
 G / End     jump to bottom and follow new output
+w           wrap long lines, or scroll them sideways
+← / →       scroll long lines sideways (when not wrapping)
+0           reset sideways scroll
+/           search, then Enter
+n / N       next / previous match
+e           jump to the next error (stderr) line
 ?           help
-Esc, q      back to the dashboard
+Esc, q      clear the search, or go back to the dashboard
 ```
 
-Logs/output are kept in memory and bounded per service or command. They are not persisted to disk.
+Logs/output are kept in memory, up to 2,000 lines per service or command. They are not persisted to disk.
 
 ## Configuration
 

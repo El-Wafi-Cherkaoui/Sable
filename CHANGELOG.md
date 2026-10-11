@@ -2,7 +2,20 @@
 
 ## Unreleased
 
+### Added
+
+- A welcome screen for new users, and newly created workspaces now open straight away.
+- When a new workspace has a `package.json`, Sable offers its scripts as services and one-shot commands (npm, pnpm, yarn, or bun, picked from the lockfile).
+- One form to add or edit a service, command, or workspace, with every field visible, inline validation, and environment variables.
+- Log search with `/` and `n`/`N`, `e` to jump to the next error line, and `w` to wrap long lines.
+- Timestamps on every log line, a red bar for stderr, and divider lines where a process started or exited.
+
 ### Changed
+
+- Every screen shares one frame: a header saying where you are, status symbols with words (`● running`, `○ stopped`, `✕ exited 1`, `✓ done`), and a `>` marker on the selected row so selection shows without color.
+- The picker shows each workspace's folder and how many of its services are running.
+- Running services and commands can now be edited; changes apply on the next restart.
+- Logs keep 2,000 lines per service instead of 200.
 
 - Redesigned the keymap so the same key means the same thing on every screen: `s` starts or stops the selected item, `a` adds a workspace in the picker (was `c`), and `m` enters a move mode for reordering (was `J`/`K`).
 - `q` in logs and help now goes back instead of quitting Sable; `Esc` and `q` always go back one level, and `Ctrl+C` still quits from anywhere.
@@ -12,6 +25,12 @@
 ### Removed
 
 - Command mode (`:`); its only commands duplicated `?` and `q`.
+
+### Hardened
+
+- Services and commands with a relative folder in `workspaces.json` now run inside the project folder instead of the folder Sable was started from.
+- Workspace details (`v`) now list commands as well as services.
+- Key hints are shortened to fit narrow terminals instead of wrapping.
 
 ## 0.2.3 - Reliability patch
 
