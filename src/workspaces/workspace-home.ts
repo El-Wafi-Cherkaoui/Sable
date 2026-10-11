@@ -29,6 +29,7 @@ import {
   type RenameWorkspaceFlowOptions,
   type RenameWorkspaceFlowResult,
 } from "./rename-workspace-flow.js";
+import { runUpdateDialog } from "../tui/update-dialog.js";
 import { runSuggestServicesFlow, type SuggestServicesFlowOptions, type SuggestServicesFlowResult } from "./suggest-services-flow.js";
 
 export type WorkspaceHomeConfigStore = {
@@ -45,13 +46,22 @@ export type RunWorkspaceHomeOptions = {
   runDeleteWorkspace?: (options: DeleteWorkspaceFlowOptions) => Promise<DeleteWorkspaceFlowResult>;
   runRenameWorkspace?: (options: RenameWorkspaceFlowOptions) => Promise<RenameWorkspaceFlowResult>;
   runSuggestServices?: (options: SuggestServicesFlowOptions) => Promise<SuggestServicesFlowResult>;
-  // Shown in the picker's status line when there is no other message, e.g. a newer Sable version.
-  updateNotice?: () => string | undefined;
+  update?: WorkspaceHomeUpdate;
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   signalSource?: WorkspaceHomeSignalSource;
   warn?: ShutdownWarn;
 };
+
+export type WorkspaceHomeUpdate = {
+  latestVersion(): string | undefined;
+  currentVersion: string;
+  installCommand: string;
+  dismiss(version: string): Promise<void>;
+  dialog?: typeof runUpdateDialog;
+};
+
+export type WorkspaceHomeResult = { type: "quit" } | { type: "update"; version: string };
 
 export type WorkspaceHomeSignalSource = {
   once(signal: NodeJS.Signals, listener: () => void): void;
@@ -60,7 +70,7 @@ export type WorkspaceHomeSignalSource = {
 
 export async function runWorkspaceHome(
   options: RunWorkspaceHomeOptions,
-): Promise<void> {
+): Promise<WorkspaceHomeResult> {
   const keyInput = options.keyInput ?? new TerminalKeyInput();
   const runPicker = options.runPicker ?? runWorkspacePicker;
   const runSession = options.runSession ?? runWorkspaceSession;
@@ -98,19 +108,30 @@ export async function runWorkspaceHome(
         workspaces: config.workspaces,
         keyInput,
         abortSignal: shutdownAbortController.signal,
-        statusMessage: statusMessage ?? options.updateNotice?.(),
+        statusMessage,
         selectedWorkspaceId,
         activeWorkspaceId: activeSession?.workspaceId,
         activeRunningServiceCount: activeSession?.controller.getState().services
           .filter((serviceState) => serviceState.process.status === "running").length,
         startupMomentMs: shouldShowStartupMoment ? 700 : 0,
+        afterStartup: options.update === undefined ? undefined : () => showUpdatePopup(options.update!, keyInput, options.screen),
         screen: options.screen,
       });
 
       shouldShowStartupMoment = false;
 
       if (pickerResult.type === "exit") {
-        return;
+        return { type: "quit" };
+      }
+
+      if (pickerResult.type === "update") {
+        const version = options.update?.latestVersion();
+
+        if (version !== undefined) {
+          return { type: "update", version };
+        }
+
+        continue;
       }
 
       if (pickerResult.type === "createWorkspace") {
@@ -129,7 +150,7 @@ export async function runWorkspaceHome(
         }
 
         if (flowResult.type === "exit") {
-          return;
+          return { type: "quit" };
         }
 
         statusMessage = flowResult.message;
@@ -146,7 +167,7 @@ export async function runWorkspaceHome(
           }
 
           if (suggestion.type === "exit") {
-            return;
+            return { type: "quit" };
           }
 
           workspaceToOpen = {
@@ -181,7 +202,7 @@ export async function runWorkspaceHome(
         }
 
         if (flowResult.type === "exit") {
-          return;
+          return { type: "quit" };
         }
 
         statusMessage = flowResult.message;
@@ -207,7 +228,7 @@ export async function runWorkspaceHome(
         }
 
         if (flowResult.type === "exit") {
-          return;
+          return { type: "quit" };
         }
 
         statusMessage = flowResult.message;
@@ -303,9 +324,11 @@ export async function runWorkspaceHome(
       selectedWorkspaceId = pickerResult.workspace.id;
 
       if (sessionResult.type === "exit") {
-        return;
+        return { type: "quit" };
       }
     }
+
+    return { type: "quit" };
   } finally {
     if (activeSession !== undefined) {
       shutdownFailures.push(...await activeSession.controller.shutdown());
@@ -324,6 +347,33 @@ function formatLingeringProcesses(failures: ShutdownFailure[]): string {
   }
 
   return ` Still running: ${failures.map((failure) => failure.name).join(", ")}.`;
+}
+
+async function showUpdatePopup(
+  update: WorkspaceHomeUpdate,
+  keyInput: KeyInput,
+  screen: RunWorkspaceHomeOptions["screen"],
+): Promise<"continue" | "update" | "exit"> {
+  const version = update.latestVersion();
+
+  if (version === undefined) {
+    return "continue";
+  }
+
+  const choice = await (update.dialog ?? runUpdateDialog)({
+    latestVersion: version,
+    currentVersion: update.currentVersion,
+    installCommand: update.installCommand,
+    keyInput,
+    screen,
+  });
+
+  if (choice === "ok") {
+    await update.dismiss(version);
+    return "continue";
+  }
+
+  return choice;
 }
 
 function configUpdateFailedMessage(error: unknown): string {

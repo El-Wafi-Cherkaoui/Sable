@@ -3,11 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  formatUpdateNotice,
   isNewerVersion,
   isUpdateCheckEnabled,
   startUpdateCheck,
   updateCacheFile,
+  updateInstallCommand,
 } from "./update-check.js";
 
 let directory: string;
@@ -124,8 +124,34 @@ describe("startUpdateCheck", () => {
   });
 });
 
-describe("formatUpdateNotice", () => {
-  it("names the version and the install command", () => {
-    expect(formatUpdateNotice("0.4.0")).toBe("Sable 0.4.0 is available: npm install -g sable-workspaces");
+describe("dismissing a version", () => {
+  it("stops offering that version, but offers a newer one", async () => {
+    const first = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => 1_000, fetchLatest: async () => "0.4.0" });
+
+    await first.done;
+    await first.dismiss("0.4.0");
+
+    expect(first.newerVersion()).toBeUndefined();
+    expect(JSON.parse(await readFile(cacheFile, "utf8"))).toEqual({ checkedAt: 1_000, latest: "0.4.0", dismissed: "0.4.0" });
+
+    const nextLaunch = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => 2_000, fetchLatest: async () => "9.9.9" });
+
+    await nextLaunch.done;
+    expect(nextLaunch.newerVersion()).toBeUndefined();
+
+    const dayLater = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => 1_000 + day, fetchLatest: async () => "0.5.0" });
+
+    await dayLater.done;
+    expect(dayLater.newerVersion()).toBe("0.5.0");
+  });
+});
+
+describe("updateInstallCommand", () => {
+  it("installs the latest published package globally", () => {
+    expect(updateInstallCommand()).toEqual({
+      command: "npm",
+      args: ["install", "-g", "sable-workspaces@latest"],
+      display: "npm install -g sable-workspaces@latest",
+    });
   });
 });

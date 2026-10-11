@@ -396,6 +396,52 @@ describe("runWorkspacePicker", () => {
     ]);
   });
 
+  it("runs the after-startup hook once after the logo, and can hand back an update", async () => {
+    const afterStartup = vi.fn(async () => "update" as const);
+
+    await expect(runWorkspacePicker({
+      workspaces,
+      keyInput: { readKey: () => new Promise(() => {}), close: vi.fn() },
+      screen: { clear: vi.fn(), write: vi.fn() },
+      startupMomentMs: 1,
+      afterStartup,
+    })).resolves.toEqual({ type: "update" });
+    expect(afterStartup).toHaveBeenCalledOnce();
+  });
+
+  it("does not replay a key pressed in the popup to the workspace list", async () => {
+    // Like the real terminal, every pending read receives each key.
+    const waiters: Array<(key: { name?: string; sequence?: string }) => void> = [];
+    const press = (key: { name?: string; sequence?: string }) => waiters.splice(0).forEach((resolve) => resolve(key));
+    const keyInput = { readKey: () => new Promise<{ name?: string; sequence?: string }>((resolve) => waiters.push(resolve)), close: vi.fn() };
+    const afterStartup = vi.fn(async () => {
+      const key = await keyInput.readKey();
+
+      expect(key.name).toBe("return");
+      setTimeout(() => press({ sequence: "q" }), 5);
+      return "continue" as const;
+    });
+    const picking = runWorkspacePicker({ workspaces, keyInput, screen: { clear: vi.fn(), write: vi.fn() }, startupMomentMs: 1, afterStartup });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    press({ name: "return" });
+
+    await expect(picking).resolves.toEqual({ type: "exit" });
+  });
+
+  it("does not run the after-startup hook when there is no logo", async () => {
+    const afterStartup = vi.fn(async () => "continue" as const);
+
+    await runWorkspacePicker({
+      workspaces,
+      keyInput: createKeyInput([{ sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      afterStartup,
+    });
+
+    expect(afterStartup).not.toHaveBeenCalled();
+  });
+
   it("returns the selected workspace on delete", async () => {
     await expect(
       runWorkspacePicker({

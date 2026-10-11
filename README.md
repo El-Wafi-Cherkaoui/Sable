@@ -168,13 +168,22 @@ Workspace commands are treated as trusted local configuration.
 
 ## Updates
 
-Once a day, Sable asks the npm registry in the background whether a newer version exists. If one does, the picker and the line printed when you quit say so:
+Once a day, Sable asks the npm registry in the background whether a newer version exists. If one does, a popup appears after the logo:
 
 ```text
-Sable 0.4.0 is available: npm install -g sable-workspaces
+╭─ Update available ──────────────────────────╮
+│  Sable 0.4.0 is available. You have 0.3.0.  │
+│                                             │
+│  Update now closes Sable and runs:          │
+│  npm install -g sable-workspaces@latest     │
+│                                             │
+│             OK     [Update now]             │
+╰─────────────────────────────────────────────╯
 ```
 
-The check never delays startup or quitting, never updates anything by itself, and is silent when you are offline. It is skipped in CI and when output is not a terminal. To turn it off, set `SABLE_NO_UPDATE_CHECK=1` (or the common `NO_UPDATE_NOTIFIER=1`).
+Choose with ←/→ and press Enter. **Update now** closes Sable and runs the install in your terminal, so you can see npm's output; start `sable` again when it finishes. **OK** (or Esc) skips that version until a newer one is released.
+
+The check never delays startup or quitting, never installs anything unless you choose Update now, and is silent when you are offline. It is skipped in CI and when output is not a terminal. To turn it off, set `SABLE_NO_UPDATE_CHECK=1` (or the common `NO_UPDATE_NOTIFIER=1`).
 
 ## First-user notes
 

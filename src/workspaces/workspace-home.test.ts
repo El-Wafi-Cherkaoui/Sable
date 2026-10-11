@@ -815,24 +815,58 @@ describe("runWorkspaceHome", () => {
     expect(controller.shutdown).toHaveBeenCalledOnce();
   });
 
-  it("shows the update notice in the picker only when there is no other message", async () => {
-    const runPicker = vi
-      .fn()
-      .mockResolvedValueOnce({ type: "reorderWorkspace" as const, workspace, index: 0 })
-      .mockResolvedValueOnce({ type: "exit" as const });
+  it("asks the picker to show the update popup at launch, and remembers OK", async () => {
+    const dismiss = vi.fn(async () => {});
+    const dialog = vi.fn(async () => "ok" as const);
+    let afterStartupOutcome: string | undefined;
+    const runPicker = vi.fn(async (pickerOptions: { afterStartup?: () => Promise<string> }) => {
+      afterStartupOutcome = await pickerOptions.afterStartup?.();
+      return { type: "exit" as const };
+    });
 
-    await runWorkspaceHome({
+    const result = await runWorkspaceHome({
       store: createStore(config),
       keyInput: createKeyInput(),
       runPicker,
       runSession: vi.fn(),
-      updateNotice: () => "Sable 0.4.0 is available: npm install -g sable-workspaces",
+      update: { latestVersion: () => "0.4.0", currentVersion: "0.3.0", installCommand: "npm install -g sable-workspaces@latest", dismiss, dialog },
     });
 
-    expect(runPicker).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      statusMessage: "Sable 0.4.0 is available: npm install -g sable-workspaces",
-    }));
-    expect(runPicker.mock.calls[1]![0].statusMessage).not.toContain("is available");
+    expect(dialog).toHaveBeenCalledWith(expect.objectContaining({ latestVersion: "0.4.0", currentVersion: "0.3.0" }));
+    expect(afterStartupOutcome).toBe("continue");
+    expect(dismiss).toHaveBeenCalledWith("0.4.0");
+    expect(result).toEqual({ type: "quit" });
+  });
+
+  it("returns an update request when the user picks Update now", async () => {
+    const runPicker = vi.fn(async () => ({ type: "update" as const }));
+
+    await expect(runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(),
+      update: { latestVersion: () => "0.4.0", currentVersion: "0.3.0", installCommand: "npm i", dismiss: vi.fn() },
+    })).resolves.toEqual({ type: "update", version: "0.4.0" });
+  });
+
+  it("skips the popup when no newer version is known", async () => {
+    const dialog = vi.fn();
+    let afterStartupOutcome: string | undefined;
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker: vi.fn(async (pickerOptions: { afterStartup?: () => Promise<string> }) => {
+        afterStartupOutcome = await pickerOptions.afterStartup?.();
+        return { type: "exit" as const };
+      }),
+      runSession: vi.fn(),
+      update: { latestVersion: () => undefined, currentVersion: "0.3.0", installCommand: "npm i", dismiss: vi.fn(), dialog },
+    });
+
+    expect(dialog).not.toHaveBeenCalled();
+    expect(afterStartupOutcome).toBe("continue");
   });
 
   it("aborts picker wait on SIGINT and removes signal listeners", async () => {

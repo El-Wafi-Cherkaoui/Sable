@@ -10,7 +10,8 @@ import {
 } from "./config/config-store.js";
 import { resolveConfigPaths } from "./config/config-path.js";
 import { product } from "./shared/product.js";
-import { formatUpdateNotice, startUpdateCheck, updateCacheFile } from "./update/update-check.js";
+import { installUpdate } from "./update/install-update.js";
+import { startUpdateCheck, updateCacheFile, updateInstallCommand } from "./update/update-check.js";
 import {
   DuplicateWorkspaceNameError,
   runCreateWorkspaceCommand,
@@ -34,29 +35,6 @@ function handleConfigError(error: unknown): boolean {
   return false;
 }
 
-// Runs an interactive command with a background check for a newer Sable,
-// printing one line about it after the TUI closes.
-async function withUpdateCheck(run: (updateNotice: () => string | undefined) => Promise<void>): Promise<void> {
-  const updateCheck = startUpdateCheck({ cacheFile: updateCacheFile(resolveConfigPaths().directory) });
-  const updateNotice = () => {
-    const version = updateCheck.newerVersion();
-
-    return version === undefined ? undefined : formatUpdateNotice(version);
-  };
-
-  try {
-    await run(updateNotice);
-  } finally {
-    updateCheck.cancel();
-
-    const notice = updateNotice();
-
-    if (notice !== undefined) {
-      console.log(notice);
-    }
-  }
-}
-
 const program = new Command();
 
 program
@@ -64,17 +42,33 @@ program
   .description("A keyboard-first terminal workspace manager for developers.")
   .version(product.version)
   .action(async () => {
+    const updateCheck = startUpdateCheck({ cacheFile: updateCacheFile(resolveConfigPaths().directory) });
+    let result: Awaited<ReturnType<typeof runWorkspaceHome>>;
+
     try {
-      await withUpdateCheck((updateNotice) => runWorkspaceHome({
+      result = await runWorkspaceHome({
         store: new ConfigStore(),
-        updateNotice,
-      }));
+        update: {
+          latestVersion: () => updateCheck.newerVersion(),
+          currentVersion: product.version,
+          installCommand: updateInstallCommand().display,
+          dismiss: (version) => updateCheck.dismiss(version),
+        },
+      });
     } catch (error) {
       if (handleConfigError(error)) {
         return;
       }
 
       throw error;
+    } finally {
+      updateCheck.cancel();
+    }
+
+    if (result.type === "update") {
+      // Sable's screen is closed by now, so npm's output shows normally.
+      process.stdout.write("\x1b[2J\x1b[H");
+      process.exitCode = await installUpdate({ version: result.version });
     }
   });
 
@@ -109,9 +103,9 @@ program
   .description("run a saved workspace")
   .action(async (workspaceName: string) => {
     try {
-      await withUpdateCheck(() => runWorkspaceCommand(workspaceName, {
+      await runWorkspaceCommand(workspaceName, {
         store: new ConfigStore(),
-      }));
+      });
     } catch (error) {
       if (handleConfigError(error)) {
         return;

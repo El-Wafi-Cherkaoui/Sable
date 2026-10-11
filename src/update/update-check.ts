@@ -10,6 +10,8 @@ export type UpdateCheckEnvironment = Record<string, string | undefined>;
 export type UpdateCache = {
   checkedAt: number;
   latest: string;
+  // The newest version the user already said OK to, so it is not offered again.
+  dismissed?: string;
 };
 
 export type UpdateCheckOptions = {
@@ -22,8 +24,10 @@ export type UpdateCheckOptions = {
 };
 
 export type UpdateCheck = {
-  // A newer version, if one is known right now (from the cache or a finished check).
+  // A newer version the user hasn't dismissed, if one is known right now.
   newerVersion(): string | undefined;
+  // Remembers that the user saw this version, so it is not offered again.
+  dismiss(version: string): Promise<void>;
   // Stops a request still in flight so quitting Sable never waits on the network.
   cancel(): void;
   // Settles when the background check is done; never rejects.
@@ -38,11 +42,26 @@ export function startUpdateCheck(options: UpdateCheckOptions): UpdateCheck {
   const now = options.now ?? Date.now;
   const abort = new AbortController();
   let latest: string | undefined;
+  let checkedAt = 0;
+  let dismissed: string | undefined;
 
-  const newerVersion = () => latest !== undefined && isNewerVersion(latest, currentVersion) ? latest : undefined;
+  const newerVersion = () => latest !== undefined
+    && isNewerVersion(latest, currentVersion)
+    && (dismissed === undefined || isNewerVersion(latest, dismissed))
+    ? latest
+    : undefined;
+  const dismiss = async (version: string) => {
+    dismissed = version;
+
+    try {
+      await writeCache(options.cacheFile, { checkedAt, latest: latest ?? version, dismissed });
+    } catch {
+      // Not remembering a dismissal only means the popup shows again next time.
+    }
+  };
 
   if (!isUpdateCheckEnabled(options.env ?? process.env, options.isInteractive ?? process.stdout.isTTY === true)) {
-    return { newerVersion: () => undefined, cancel() {}, done: Promise.resolve() };
+    return { newerVersion: () => undefined, dismiss: async () => {}, cancel() {}, done: Promise.resolve() };
   }
 
   const done = (async () => {
@@ -50,6 +69,8 @@ export function startUpdateCheck(options: UpdateCheckOptions): UpdateCheck {
 
     if (cache !== undefined) {
       latest = cache.latest;
+      checkedAt = cache.checkedAt;
+      dismissed = cache.dismissed;
 
       if (now() - cache.checkedAt < checkIntervalMs) {
         return;
@@ -67,7 +88,8 @@ export function startUpdateCheck(options: UpdateCheckOptions): UpdateCheck {
 
     try {
       latest = await (options.fetchLatest ?? fetchLatestVersion)(abort.signal);
-      await writeCache(options.cacheFile, { checkedAt: now(), latest });
+      checkedAt = now();
+      await writeCache(options.cacheFile, { checkedAt, latest, ...(dismissed === undefined ? {} : { dismissed }) });
     } catch {
       // Offline, timed out, or cancelled: keep whatever the cache said.
     } finally {
@@ -75,7 +97,7 @@ export function startUpdateCheck(options: UpdateCheckOptions): UpdateCheck {
     }
   })();
 
-  return { newerVersion, cancel: () => abort.abort(), done };
+  return { newerVersion, dismiss, cancel: () => abort.abort(), done };
 }
 
 export function isUpdateCheckEnabled(env: UpdateCheckEnvironment, isInteractive: boolean): boolean {
@@ -85,8 +107,10 @@ export function isUpdateCheckEnabled(env: UpdateCheckEnvironment, isInteractive:
     && (env.CI === undefined || env.CI === "false" || env.CI === "0");
 }
 
-export function formatUpdateNotice(version: string): string {
-  return `Sable ${version} is available: npm install -g ${product.npmPackageName}`;
+export function updateInstallCommand(): { command: string; args: string[]; display: string } {
+  const args = ["install", "-g", `${product.npmPackageName}@latest`];
+
+  return { command: "npm", args, display: `npm ${args.join(" ")}` };
 }
 
 export function updateCacheFile(configDirectory: string): string {
@@ -137,7 +161,7 @@ async function readCache(file: string): Promise<UpdateCache | undefined> {
     const parsed = JSON.parse(await fs.readFile(file, "utf8")) as Partial<UpdateCache>;
 
     return typeof parsed.checkedAt === "number" && typeof parsed.latest === "string"
-      ? { checkedAt: parsed.checkedAt, latest: parsed.latest }
+      ? { checkedAt: parsed.checkedAt, latest: parsed.latest, ...(typeof parsed.dismissed === "string" ? { dismissed: parsed.dismissed } : {}) }
       : undefined;
   } catch {
     return undefined;

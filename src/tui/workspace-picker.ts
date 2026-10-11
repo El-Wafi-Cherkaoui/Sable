@@ -26,6 +26,7 @@ export type WorkspacePickerResult =
   | { type: "stopActiveWorkspace"; workspace: WorkspaceConfig }
   | { type: "restartActiveWorkspace"; workspace: WorkspaceConfig }
   | { type: "reorderWorkspace"; workspace: WorkspaceConfig; index: number }
+  | { type: "update" }
   | { type: "exit" };
 
 export type WorkspacePickerScreen = {
@@ -54,6 +55,8 @@ export type RunWorkspacePickerOptions = {
   activeWorkspaceId?: string;
   activeRunningServiceCount?: number;
   startupMomentMs?: number;
+  // Runs once after the startup logo, before the list appears (e.g. the update popup).
+  afterStartup?: () => Promise<"continue" | "update" | "exit">;
 };
 
 type PickerMode = "picker" | "help" | "details" | "move";
@@ -91,6 +94,23 @@ export async function runWorkspacePicker(
   let stateBeforeMove: WorkspacePickerState | undefined;
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
   let queuedEvent = await runStartupMoment();
+
+  if (options.afterStartup !== undefined && (options.startupMomentMs ?? 0) > 0) {
+    const outcome = await options.afterStartup();
+
+    if (outcome === "update") {
+      return { type: "update" };
+    }
+
+    if (outcome === "exit") {
+      return { type: "exit" };
+    }
+
+    // Keys pressed while the popup was open belonged to it, not the list: drop
+    // the read started during the logo so it can't replay them here.
+    queuedEvent = undefined;
+    pendingKeyRead = undefined;
+  }
 
   renderFrame(screen, render(state));
 
