@@ -98,6 +98,37 @@ describe("TerminalKeyInput", () => {
     expect(input.setRawMode).toHaveBeenNthCalledWith(2, false);
     expect(input.pause).toHaveBeenCalledOnce();
   });
+
+  it("keeps every key when several arrive at once, as in a paste", async () => {
+    const input = createInput({ isTTY: true, isRaw: false });
+    const keyInput = new TerminalKeyInput(input);
+    const firstKey = keyInput.readKey();
+
+    for (const character of "/home/user") {
+      input.emit("keypress", character, { sequence: character, name: character });
+    }
+
+    const received = [await firstKey];
+
+    for (let index = 1; index < "/home/user".length; index += 1) {
+      received.push(await keyInput.readKey());
+    }
+
+    keyInput.close();
+
+    expect(received.map((key) => key.sequence).join("")).toBe("/home/user");
+  });
+
+  it("stops listening for keys on close", () => {
+    const input = createInput({ isTTY: true, isRaw: false });
+    const keyInput = new TerminalKeyInput(input);
+
+    expect(input.listenerCount("keypress")).toBe(1);
+
+    keyInput.close();
+
+    expect(input.listenerCount("keypress")).toBe(0);
+  });
 });
 
 function createInput(options: { isTTY: boolean; isRaw: boolean }): NodeJS.ReadStream {

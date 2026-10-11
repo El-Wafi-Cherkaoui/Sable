@@ -12,6 +12,7 @@
 - Invalid or unparsable config files now print a readable error (with the file path and validation issues) instead of a stack trace.
 - Config save or reload failures during picker and dashboard actions show a status message and keep the TUI and running services alive.
 - Processes that fail to stop are reported: the picker status names them, and Sable prints a warning with their pid when it exits.
+- Pasting text into prompts and command mode now keeps every character instead of only the first.
 
 ## 0.2.2 - Publish prep
 

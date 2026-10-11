@@ -10,6 +10,10 @@ export class TerminalKeyInput implements KeyInput {
   private readonly input: NodeJS.ReadStream;
   private readonly readlineInterface: Interface;
   private readonly wasRaw: boolean;
+  // Keys are queued so none are lost when several arrive at once (e.g. a paste):
+  // readline emits them synchronously, before the next readKey() call.
+  private readonly queuedKeys: Keypress[] = [];
+  private waiters: Array<(keypress: Keypress) => void> = [];
   private closed = false;
 
   constructor(input: NodeJS.ReadStream = process.stdin) {
@@ -20,6 +24,7 @@ export class TerminalKeyInput implements KeyInput {
       escapeCodeTimeout: 10,
     });
     emitKeypressEvents(input, this.readlineInterface);
+    input.on("keypress", this.handleKeypress);
 
     if (input.isTTY) {
       input.setRawMode(true);
@@ -29,12 +34,32 @@ export class TerminalKeyInput implements KeyInput {
   }
 
   readKey(): Promise<Keypress> {
+    const queuedKey = this.queuedKeys.shift();
+
+    if (queuedKey !== undefined) {
+      return Promise.resolve(queuedKey);
+    }
+
     return new Promise((resolve) => {
-      this.input.once("keypress", (_chunk: string, key: Keypress) => {
-        resolve(key);
-      });
+      this.waiters.push(resolve);
     });
   }
+
+  private readonly handleKeypress = (_chunk: string, key: Keypress): void => {
+    if (this.waiters.length === 0) {
+      this.queuedKeys.push(key);
+      return;
+    }
+
+    // Every pending reader sees the key, as with the previous once-listener per read.
+    const waiters = this.waiters;
+
+    this.waiters = [];
+
+    for (const resolve of waiters) {
+      resolve(key);
+    }
+  };
 
   close(): void {
     if (this.closed) {
@@ -42,6 +67,7 @@ export class TerminalKeyInput implements KeyInput {
     }
 
     this.closed = true;
+    this.input.off("keypress", this.handleKeypress);
 
     try {
       if (this.input.isTTY) {
