@@ -1,5 +1,9 @@
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
-import { WorkspaceController } from "../controller/workspace-controller.js";
+import {
+  formatShutdownFailure,
+  WorkspaceController,
+  type ShutdownFailure,
+} from "../controller/workspace-controller.js";
 import { TerminalKeyInput, type KeyInput } from "../input/terminal-key-input.js";
 import {
   ProcessManager,
@@ -43,8 +47,10 @@ export type RunWorkspaceController = {
   removeCommand(commandId: string): ReturnType<WorkspaceController["removeCommand"]>;
   moveService(serviceId: string, direction: "up" | "down"): ReturnType<WorkspaceController["moveService"]>;
   getSelectedServiceLogs(): ServiceLogEntry[];
-  shutdown(): Promise<void>;
+  shutdown(): Promise<ShutdownFailure[]>;
 };
+
+export type ShutdownWarn = (message: string) => void;
 
 export type RunWorkspaceCommandOptions = {
   store: WorkspaceConfigReader;
@@ -54,6 +60,7 @@ export type RunWorkspaceCommandOptions = {
     options: RunInteractiveDashboardOptions,
   ) => Promise<InteractiveDashboardResult>;
   signalSource?: RunWorkspaceSignalSource;
+  warn?: ShutdownWarn;
 };
 
 export type RunWorkspaceSignalSource = {
@@ -75,6 +82,7 @@ export type RunWorkspaceSessionOptions = {
   promptScreen?: PromptScreen;
   startAutoStartServices?: boolean;
   shutdownOnReturn?: boolean;
+  warn?: ShutdownWarn;
 };
 
 export function createRunWorkspaceController(workspace: WorkspaceConfig): RunWorkspaceController {
@@ -106,6 +114,7 @@ export async function runWorkspaceCommand(
       runDashboard: options.runDashboard,
       abortSignal: shutdownAbortController.signal,
       store: options.store,
+      warn: options.warn,
     });
   } finally {
     signalSource.off("SIGINT", abortShutdown);
@@ -328,8 +337,17 @@ export async function runWorkspaceSession(
     });
   } finally {
     if (shouldShutdownOnReturn) {
-      await controller.shutdown();
+      reportShutdownFailures(await controller.shutdown(), options.warn);
     }
+  }
+}
+
+export function reportShutdownFailures(
+  failures: ShutdownFailure[],
+  warn: ShutdownWarn = (message) => console.error(message),
+): void {
+  for (const failure of failures) {
+    warn(`warning: ${formatShutdownFailure(failure)}`);
   }
 }
 

@@ -118,6 +118,27 @@ describe("runWorkspaceSession", () => {
     expect(controller.shutdown).not.toHaveBeenCalled();
   });
 
+  it("warns about processes that failed to stop on shutdown", async () => {
+    const controller = createFakeController(workspace);
+    const warn = vi.fn();
+    controller.shutdown.mockResolvedValueOnce([
+      { name: "api", pid: 1234, message: "Process did not stop." },
+    ]);
+
+    await runWorkspaceSession({
+      workspace,
+      controller,
+      keyInput: createKeyInput(),
+      runDashboard: async () => ({ type: "exit" }),
+      startAutoStartServices: false,
+      warn,
+    });
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      'warning: "api" (pid 1234) may still be running: Process did not stop.',
+    );
+  });
+
   it("adds a command through the dashboard add callback", async () => {
     const controller = createFakeController(workspace);
     const store = createStore(config);
@@ -357,7 +378,7 @@ function createFakeController(workspaceConfig: WorkspaceConfig) {
     removeCommand: vi.fn(() => createRuntimeState(workspaceConfig)),
     moveService: vi.fn(() => createRuntimeState(workspaceConfig)),
     getSelectedServiceLogs: vi.fn(() => []),
-    shutdown: vi.fn(async () => undefined),
+    shutdown: vi.fn(async () => []),
   };
 }
 

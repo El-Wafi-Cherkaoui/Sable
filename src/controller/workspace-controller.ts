@@ -1,5 +1,5 @@
 import type { CommandConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
-import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
+import type { ManagedProcessState, ServiceLogEntry, StopFailure } from "../process/process-manager.js";
 import {
   createRuntimeState,
   addServiceToRuntimeState,
@@ -26,8 +26,20 @@ export type WorkspaceProcessManager = {
   restart(service: ServiceConfig | CommandConfig): Promise<ManagedProcessState>;
   getLogs(serviceId: string): ServiceLogEntry[];
   getState(serviceId: string): ManagedProcessState;
-  stopAll(): Promise<void>;
+  stopAll(): Promise<StopFailure[]>;
 };
+
+export type ShutdownFailure = {
+  name: string;
+  pid?: number;
+  message: string;
+};
+
+export function formatShutdownFailure(failure: ShutdownFailure): string {
+  const pid = failure.pid === undefined ? "" : ` (pid ${failure.pid})`;
+
+  return `"${failure.name}"${pid} may still be running: ${failure.message}`;
+}
 
 export type WorkspaceControllerOptions = {
   workspace: WorkspaceConfig;
@@ -249,8 +261,14 @@ export class WorkspaceController {
     return this.processManager.getLogs(commandId);
   }
 
-  async shutdown(): Promise<void> {
-    await this.processManager.stopAll();
+  async shutdown(): Promise<ShutdownFailure[]> {
+    const failures = await this.processManager.stopAll();
+
+    return failures.map((failure) => ({
+      name: this.findService(failure.id)?.name ?? this.findCommand(failure.id)?.name ?? failure.id,
+      pid: failure.pid,
+      message: failure.error.message,
+    }));
   }
 
   private findService(serviceId: string): ServiceConfig | undefined {

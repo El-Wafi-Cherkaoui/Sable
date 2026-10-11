@@ -2,11 +2,16 @@
 
 ## Unreleased
 
+### Changed
+
+- Restarting a workspace from the picker restarts its services only; one-shot commands are no longer re-run.
+
 ### Hardened
 
 - Deleting the running workspace from the picker is refused with a message until it is stopped, so its processes can no longer be orphaned.
 - Invalid or unparsable config files now print a readable error (with the file path and validation issues) instead of a stack trace.
 - Config save or reload failures during picker and dashboard actions show a status message and keep the TUI and running services alive.
+- Processes that fail to stop are reported: the picker status names them, and Sable prints a warning with their pid when it exits.
 
 ## 0.2.2 - Publish prep
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { ManagedProcessState } from "../process/process-manager.js";
 import {
+  formatShutdownFailure,
   WorkspaceController,
   type WorkspaceProcessManager,
 } from "./workspace-controller.js";
@@ -311,6 +312,32 @@ describe("WorkspaceController", () => {
 
     expect(processManager.stopAll).toHaveBeenCalledOnce();
   });
+
+  it("reports processes that failed to stop by item name", async () => {
+    const processManager = createFakeProcessManager();
+    processManager.stopAll.mockResolvedValueOnce([
+      { id: "svc_backend", pid: 1234, error: new Error("Process did not stop.") },
+      { id: "svc_unknown", error: new Error("tree kill failed") },
+    ]);
+    const controller = new WorkspaceController({
+      workspace: createWorkspace(),
+      processManager,
+    });
+
+    await expect(controller.shutdown()).resolves.toEqual([
+      { name: "backend", pid: 1234, message: "Process did not stop." },
+      { name: "svc_unknown", pid: undefined, message: "tree kill failed" },
+    ]);
+  });
+
+  it("formats shutdown failures for warnings", () => {
+    expect(formatShutdownFailure({ name: "api", pid: 42, message: "Process did not stop." })).toBe(
+      '"api" (pid 42) may still be running: Process did not stop.',
+    );
+    expect(formatShutdownFailure({ name: "api", message: "tree kill failed" })).toBe(
+      '"api" may still be running: tree kill failed',
+    );
+  });
 });
 
 type FakeProcessManager = WorkspaceProcessManager & {
@@ -354,7 +381,7 @@ function createFakeProcessManager(
       return this.states.get(serviceId) ?? { status: "stopped" };
     },
     getLogs: vi.fn(() => []),
-    stopAll: vi.fn(async () => undefined),
+    stopAll: vi.fn(async () => []),
   };
 
   return Object.assign(processManager, overrides);

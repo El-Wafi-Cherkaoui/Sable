@@ -5,11 +5,14 @@ import {
   type RunWorkspacePickerOptions,
   type WorkspacePickerResult,
 } from "../tui/workspace-picker.js";
+import type { ShutdownFailure } from "../controller/workspace-controller.js";
 import {
   createRunWorkspaceController,
+  reportShutdownFailures,
   runWorkspaceSession,
   type RunWorkspaceController,
   type RunWorkspaceSessionOptions,
+  type ShutdownWarn,
 } from "./run-workspace.js";
 import {
   runCreateWorkspaceFlow,
@@ -43,6 +46,7 @@ export type RunWorkspaceHomeOptions = {
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   signalSource?: WorkspaceHomeSignalSource;
+  warn?: ShutdownWarn;
 };
 
 export type WorkspaceHomeSignalSource = {
@@ -65,6 +69,8 @@ export async function runWorkspaceHome(
   let selectedWorkspaceId: string | undefined;
   let shouldShowStartupMoment = true;
   let activeSession: { workspaceId: string; controller: RunWorkspaceController } | undefined;
+  // Processes that failed to stop are reported once Sable leaves the TUI.
+  const shutdownFailures: ShutdownFailure[] = [];
   const abortShutdown = () => shutdownAbortController.abort();
   const createController = options.createController ?? createRunWorkspaceController;
 
@@ -198,9 +204,11 @@ export async function runWorkspaceHome(
         } else if (activeSession.workspaceId !== pickerResult.workspace.id) {
           statusMessage = "Select the running workspace to stop it.";
         } else {
-          await activeSession.controller.shutdown();
+          const failures = await activeSession.controller.shutdown();
+
+          shutdownFailures.push(...failures);
           activeSession = undefined;
-          statusMessage = `Stopped workspace "${pickerResult.workspace.name}".`;
+          statusMessage = `Stopped workspace "${pickerResult.workspace.name}".${formatLingeringProcesses(failures)}`;
         }
 
         selectedWorkspaceId = pickerResult.workspace.id;
@@ -213,12 +221,15 @@ export async function runWorkspaceHome(
         } else if (activeSession.workspaceId !== pickerResult.workspace.id) {
           statusMessage = "Select the running workspace to restart it.";
         } else {
-          activeSession = await restartActiveSession({
+          const restarted = await restartActiveSession({
             workspace: pickerResult.workspace,
             controller: activeSession.controller,
             createController,
           });
-          statusMessage = `Restarted workspace "${pickerResult.workspace.name}".`;
+
+          shutdownFailures.push(...restarted.failures);
+          activeSession = restarted.session;
+          statusMessage = `Restarted workspace "${pickerResult.workspace.name}".${formatLingeringProcesses(restarted.failures)}`;
         }
 
         selectedWorkspaceId = pickerResult.workspace.id;
@@ -228,7 +239,7 @@ export async function runWorkspaceHome(
       let shouldStartAutoStartServices = false;
 
       if (activeSession !== undefined && activeSession.workspaceId !== pickerResult.workspace.id) {
-        await activeSession.controller.shutdown();
+        shutdownFailures.push(...await activeSession.controller.shutdown());
         activeSession = undefined;
       }
 
@@ -259,11 +270,23 @@ export async function runWorkspaceHome(
       }
     }
   } finally {
-    await activeSession?.controller.shutdown();
+    if (activeSession !== undefined) {
+      shutdownFailures.push(...await activeSession.controller.shutdown());
+    }
+
     signalSource.off("SIGINT", abortShutdown);
     signalSource.off("SIGTERM", abortShutdown);
     keyInput.close();
+    reportShutdownFailures(shutdownFailures, options.warn);
   }
+}
+
+function formatLingeringProcesses(failures: ShutdownFailure[]): string {
+  if (failures.length === 0) {
+    return "";
+  }
+
+  return ` Still running: ${failures.map((failure) => failure.name).join(", ")}.`;
 }
 
 function configUpdateFailedMessage(error: unknown): string {
@@ -278,16 +301,16 @@ type RestartActiveSessionOptions = {
 
 async function restartActiveSession(
   options: RestartActiveSessionOptions,
-): Promise<{ workspaceId: string; controller: RunWorkspaceController }> {
+): Promise<{
+  session: { workspaceId: string; controller: RunWorkspaceController };
+  failures: ShutdownFailure[];
+}> {
   const state = options.controller.getState();
   const runningServiceIds = new Set(
     state.services
       .filter((serviceState) => serviceState.process.status === "running")
       .map((serviceState) => serviceState.service.id),
   );
-  const runningCommandIds = state.commands
-    .filter((commandState) => commandState.process.status === "running")
-    .map((commandState) => commandState.command.id);
 
   for (const service of options.workspace.services) {
     if (service.autoStart) {
@@ -295,14 +318,14 @@ async function restartActiveSession(
     }
   }
 
-  await options.controller.shutdown();
-
+  // One-shot commands are not re-run: repeating something like a migration
+  // is rarely what a restart should do.
+  const failures = await options.controller.shutdown();
   const controller = options.createController(options.workspace);
 
   await Promise.all([...runningServiceIds].map((serviceId) => controller.startService(serviceId)));
-  await Promise.all(runningCommandIds.map((commandId) => controller.startCommand(commandId)));
 
-  return { workspaceId: options.workspace.id, controller };
+  return { session: { workspaceId: options.workspace.id, controller }, failures };
 }
 
 

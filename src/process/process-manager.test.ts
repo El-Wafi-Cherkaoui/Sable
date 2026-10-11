@@ -229,6 +229,42 @@ describe("ProcessManager", () => {
     expect(manager.getState(secondService.id)).toEqual({ status: "stopped" });
   });
 
+  it("reports services that fail to stop when stopping all", async () => {
+    const stopError = new Error("tree kill failed");
+    let pidToKill: number | undefined;
+    manager = createManager({
+      processTreeKiller: vi.fn(async () => {
+        if (pidToKill !== undefined) {
+          await killTreeForTest(pidToKill);
+        }
+
+        throw stopError;
+      }),
+    });
+    const service = createService({ command: nodeCommand("setInterval(() => {}, 1000);") });
+    const state = manager.start(service);
+
+    if (state.status !== "running" || state.pid === undefined) {
+      throw new Error("Expected test service to be running.");
+    }
+
+    pidToKill = state.pid;
+
+    await expect(manager.stopAll()).resolves.toEqual([
+      { id: service.id, pid: state.pid, error: stopError },
+    ]);
+  });
+
+  it("does not report services that were not running when stopping all", async () => {
+    manager = createManager();
+    const service = createService({ command: nodeCommand("process.exit(0);") });
+
+    manager.start(service);
+    await waitForStatus(manager, service.id, "exited");
+
+    await expect(manager.stopAll()).resolves.toEqual([]);
+  });
+
   it("captures stdout and stderr logs", async () => {
     manager = createManager();
     const service = createService({

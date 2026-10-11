@@ -28,6 +28,12 @@ export type ProcessManagerOptions = {
   processTreeKiller?: ProcessTreeKiller;
 };
 
+export type StopFailure = {
+  id: string;
+  pid?: number;
+  error: Error;
+};
+
 export type ProcessTreeKiller = (
   pid: number,
   signal: NodeJS.Signals,
@@ -231,8 +237,21 @@ export class ProcessManager {
     return [...(this.logs.get(serviceId) ?? [])];
   }
 
-  async stopAll(): Promise<void> {
-    await Promise.all([...this.processes.keys()].map((serviceId) => this.stop(serviceId)));
+  async stopAll(): Promise<StopFailure[]> {
+    const results = await Promise.all(
+      [...this.processes.entries()].map(async ([serviceId, entry]) => {
+        if (!hasLiveChild(entry)) {
+          return undefined;
+        }
+
+        const pid = entry.child.pid;
+        const state = await this.stop(serviceId);
+
+        return state.status === "failed" ? { id: serviceId, pid, error: state.error } : undefined;
+      }),
+    );
+
+    return results.filter((failure) => failure !== undefined);
   }
 
   private appendLogChunk(

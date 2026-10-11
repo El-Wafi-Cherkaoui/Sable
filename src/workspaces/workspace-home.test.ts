@@ -204,6 +204,61 @@ describe("runWorkspaceHome", () => {
     }));
   });
 
+  it("reports processes that fail to stop from the picker and warns on exit", async () => {
+    const controller = createFakeController();
+    controller.shutdown.mockResolvedValueOnce([
+      { name: "api", pid: 1234, message: "Process did not stop." },
+    ]);
+    const keyInput = createKeyInput();
+    const warn = vi.fn(() => {
+      expect(keyInput.close).toHaveBeenCalledOnce();
+    });
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce({ type: "stopActiveWorkspace" as const, workspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput,
+      runPicker,
+      runSession: vi.fn(async () => ({ type: "back" as const })),
+      createController: () => controller,
+      warn,
+    });
+
+    expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      statusMessage: 'Stopped workspace "ecommerce". Still running: api.',
+    }));
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      'warning: "api" (pid 1234) may still be running: Process did not stop.',
+    );
+  });
+
+  it("warns on exit when the active workspace fails to stop", async () => {
+    const controller = createFakeController();
+    controller.shutdown.mockResolvedValueOnce([
+      { name: "api", message: "tree kill failed" },
+    ]);
+    const warn = vi.fn();
+    const runPicker = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "run" as const, workspace })
+      .mockResolvedValueOnce({ type: "exit" as const });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(async () => ({ type: "back" as const })),
+      createController: () => controller,
+      warn,
+    });
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith('warning: "api" may still be running: tree kill failed');
+  });
+
   it("does not stop a non-selected active workspace", async () => {
     const controller = createFakeController();
     const runPicker = vi
@@ -229,7 +284,7 @@ describe("runWorkspaceHome", () => {
     }));
   });
 
-  it("restarts the selected active workspace with running items and auto-start services", async () => {
+  it("restarts the selected active workspace with running and auto-start services", async () => {
     const oldController = createFakeController(createRuntimeStateForRestart());
     const newController = createFakeController();
     const createController = vi
@@ -256,8 +311,8 @@ describe("runWorkspaceHome", () => {
     expect(newController.startService).toHaveBeenCalledWith("svc_api");
     expect(newController.startService).toHaveBeenCalledWith("svc_worker");
     expect(newController.startService).not.toHaveBeenCalledWith("svc_web");
-    expect(newController.startCommand).toHaveBeenCalledWith("cmd_watch");
-    expect(newController.startCommand).not.toHaveBeenCalledWith("cmd_build");
+    // One-shot commands are not re-run on restart, even if they were running.
+    expect(newController.startCommand).not.toHaveBeenCalled();
     expect(newController.shutdown).toHaveBeenCalledOnce();
     expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
       activeWorkspaceId: restartWorkspace.id,
@@ -825,7 +880,7 @@ function createFakeController(state?: RuntimeWorkspaceState): RunWorkspaceContro
     removeCommand: vi.fn(),
     moveService: vi.fn(),
     getSelectedServiceLogs: vi.fn(() => []),
-    shutdown: vi.fn(async () => undefined),
+    shutdown: vi.fn(async () => []),
   };
 }
 
