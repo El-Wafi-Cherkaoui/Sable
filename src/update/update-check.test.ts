@@ -100,6 +100,17 @@ describe("startUpdateCheck", () => {
     expect(stale.newerVersion()).toBe("0.4.0");
   });
 
+  it("checks again when the cached check time is in the future", async () => {
+    await writeFile(cacheFile, JSON.stringify({ checkedAt: day * 10, latest: "0.4.0" }));
+    const fetchLatest = vi.fn(async () => "0.5.0");
+    const check = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => day, fetchLatest });
+
+    await check.done;
+
+    expect(fetchLatest).toHaveBeenCalledTimes(1);
+    expect(check.newerVersion()).toBe("0.5.0");
+  });
+
   it("does nothing when you are already up to date or checks are off", async () => {
     const current = startUpdateCheck({ currentVersion: "0.4.0", cacheFile, env: {}, isInteractive: true, fetchLatest: async () => "0.4.0" });
     const fetchLatest = vi.fn(async () => "0.5.0");
