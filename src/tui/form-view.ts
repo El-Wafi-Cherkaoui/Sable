@@ -48,6 +48,8 @@ export type FormState = {
   focus: number;
   cursor: number;
   errors: FormErrors;
+  // Which folder suggestion is showing in a folder field (0 = the first).
+  completionIndex?: number;
 };
 
 export async function runForm(options: RunFormOptions): Promise<FormResult> {
@@ -121,8 +123,19 @@ export function applyFormKey(options: Pick<RunFormOptions, "fields" | "completeP
     const nextRows = buildRows(options.fields(state.values), state.values);
     const clamped = Math.max(0, Math.min(focus, nextRows.length - 1));
 
-    return { ...state, focus: clamped, cursor: textOf(state.values, nextRows[clamped])?.length ?? 0 };
+    return { ...state, focus: clamped, cursor: textOf(state.values, nextRows[clamped])?.length ?? 0, completionIndex: 0 };
   };
+
+  const completions = pathCompletions(options, row, state);
+  const completionIndex = Math.min(state.completionIndex ?? 0, Math.max(0, completions.length - 1));
+
+  if (keypress.name === "up" && completionIndex > 0) {
+    return { ...state, completionIndex: completionIndex - 1 };
+  }
+
+  if (keypress.name === "down" && completionIndex < completions.length - 1) {
+    return { ...state, completionIndex: completionIndex + 1 };
+  }
 
   if (keypress.name === "up" || (keypress.name === "tab" && keypress.shift === true)) {
     return moveTo(state.focus - 1);
@@ -159,6 +172,7 @@ export function applyFormKey(options: Pick<RunFormOptions, "fields" | "completeP
   const text = textOf(state.values, row) ?? "";
   const setText = (value: string, cursor: number): FormState => ({
     ...withoutError(state, errorKey),
+    completionIndex: 0,
     values: row.kind === "item"
       ? { ...state.values, [row.field.key]: listOf(state.values, row.field.key).map((item, index) => index === row.index ? value : item) }
       : { ...state.values, [row.field.key]: value },
@@ -169,7 +183,7 @@ export function applyFormKey(options: Pick<RunFormOptions, "fields" | "completeP
     case "left":
       return { ...state, cursor: Math.max(0, state.cursor - 1) };
     case "right": {
-      const completion = pathCompletion(options, row, state);
+      const completion = completions[completionIndex];
 
       if (completion !== undefined) {
         return setText(text + completion, text.length + completion.length);
@@ -220,7 +234,8 @@ export function renderForm(
     const label = row.kind === "field" || (row.kind === "item" && row.index === 0) || (row.kind === "add" && listOf(state.values, row.field.key).length === 0)
       ? row.field.label
       : "";
-    const value = renderRowValue(row, state, focused, style, color, valueWidth, pathCompletion(options, row, state));
+    const completions = pathCompletions(options, row, state);
+    const value = renderRowValue(row, state, focused, style, color, valueWidth, completions[Math.min(state.completionIndex ?? 0, completions.length - 1)]);
     const line = `${focused ? "> " : "  "}${padVisibleEnd(label, labelWidth)}${value}`;
 
     lines.push(focused && color ? style.selected(padVisibleEnd(line, Math.min(columns - 1, labelWidth + valueWidth + 3))) : line);
@@ -236,7 +251,7 @@ export function renderForm(
     }
   }
 
-  lines.push("", formatKeyHints(getFormKeyHints(rows[state.focus], pathCompletion(options, rows[state.focus], state) !== undefined), style, columns - 1));
+  lines.push("", formatKeyHints(getFormKeyHints(rows[state.focus], pathCompletions(options, rows[state.focus], state), state.completionIndex ?? 0), style, columns - 1));
 
   return lines.join("\n");
 }
@@ -269,15 +284,16 @@ function renderRowValue(row: FormRow, state: FormState, focused: boolean, style:
   return completion === undefined ? shown : `${shown}${style.muted(truncateEnd(completion, Math.max(1, width - text.length - 1)))}`;
 }
 
-// The rest of the folder being typed, offered only on a folder field with the cursor at the end.
-function pathCompletion(options: Pick<RunFormOptions, "completePath">, row: FormRow | undefined, state: FormState): string | undefined {
+// The ways to finish the folder being typed, offered only on a folder field with the
+// cursor at the end.
+function pathCompletions(options: Pick<RunFormOptions, "completePath">, row: FormRow | undefined, state: FormState): string[] {
   if (options.completePath === undefined || row?.kind !== "field" || row.field.type !== "text" || row.field.pathBase === undefined) {
-    return undefined;
+    return [];
   }
 
   const text = textOf(state.values, row) ?? "";
 
-  return state.cursor === text.length ? options.completePath(text, row.field.pathBase) : undefined;
+  return state.cursor === text.length ? options.completePath(text, row.field.pathBase) : [];
 }
 
 // Shows a window of the text that keeps the cursor visible, with a block cursor
@@ -300,14 +316,23 @@ function truncateEnd(text: string, width: number): string {
   return text.length <= width ? text : `${text.slice(0, width - 1)}…`;
 }
 
-function getFormKeyHints(row: FormRow | undefined, canComplete: boolean): KeyHint[] {
+function getFormKeyHints(row: FormRow | undefined, completions: string[], completionIndex: number): KeyHint[] {
   const change: KeyHint[] = row?.kind === "field" && (row.field.type === "toggle" || row.field.type === "choice")
     ? [["Space", "change"]]
     : row?.kind === "add"
       ? [["Enter", "add"]]
       : [];
+  const save: KeyHint[] = [["Ctrl+S", "save"], ["Esc", "cancel"]];
 
-  return [["↑↓", "field"], ...(canComplete ? [["→", "complete folder"] as KeyHint] : []), ...change, ["Ctrl+S", "save"], ["Esc", "cancel"]];
+  if (completions.length === 0) {
+    return [["↑↓", "field"], ...change, ...save];
+  }
+
+  const position = Math.min(completionIndex, completions.length - 1) + 1;
+
+  return completions.length === 1
+    ? [["→", "complete folder"], ["↑↓", "field"], ...save]
+    : [["→", "complete folder"], ["↑↓", `other folders ${position}/${completions.length}`], ["Tab", "field"], ...save];
 }
 
 function trySubmit(

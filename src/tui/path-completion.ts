@@ -2,23 +2,25 @@ import { readdirSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export type PathCompleter = (text: string, base: string) => string | undefined;
+export type PathCompleter = (text: string, base: string) => string[];
+
+const maxSuggestions = 50;
 
 export type PathCompletionOptions = {
   listDirectories?: (directory: string) => string[];
   homeDirectory?: string;
 };
 
-// Suggests how to finish a folder path being typed: the first subfolder (alphabetically)
-// that continues what is typed, plus a trailing separator so the next level can follow.
-// Relative paths are read from `base`. Returns only the text to append.
+// Suggests how to finish a folder path being typed: every subfolder (alphabetically) that
+// continues what is typed, each with a trailing separator so the next level can follow.
+// Relative paths are read from `base`. Returns only the text to append, best match first.
 export function createPathCompleter(options: PathCompletionOptions = {}): PathCompleter {
   const listDirectories = options.listDirectories ?? defaultListDirectories;
   const homeDirectory = options.homeDirectory ?? os.homedir();
 
   return (text, base) => {
     if (text === "") {
-      return undefined;
+      return [];
     }
 
     const lastSeparator = Math.max(text.lastIndexOf("/"), text.lastIndexOf(path.sep));
@@ -34,15 +36,13 @@ export function createPathCompleter(options: PathCompletionOptions = {}): PathCo
 
       return left.startsWith(right) && name.length > namePart.length && (namePart.startsWith(".") || !name.startsWith("."));
     };
-    const first = listDirectories(directory).filter(matches).sort((a, b) => a.localeCompare(b))[0];
-
-    if (first === undefined) {
-      return undefined;
-    }
-
     const separator = text.includes("/") || path.sep === "/" ? "/" : path.sep;
 
-    return `${first.slice(namePart.length)}${separator}`;
+    return listDirectories(directory)
+      .filter(matches)
+      .sort((a, b) => a.localeCompare(b))
+      .slice(0, maxSuggestions)
+      .map((name) => `${name.slice(namePart.length)}${separator}`);
   };
 }
 

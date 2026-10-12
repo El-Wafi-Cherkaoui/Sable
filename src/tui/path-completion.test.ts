@@ -19,38 +19,38 @@ describe("createPathCompleter", () => {
   const base = path.resolve("/work");
 
   it("suggests nothing for empty text", () => {
-    expect(completer()("", base)).toBeUndefined();
+    expect(completer()("", base)).toEqual([]);
   });
 
-  it("completes a relative name from the base folder, alphabetically first", () => {
-    expect(completer()("a", base)).toBe("pi/");
+  it("completes a relative name from the base folder, alphabetically", () => {
+    expect(completer()("a", base)).toEqual(["pi/", "pp/"]);
   });
 
   it("completes inside a nested folder", () => {
-    expect(completer()("api/s", base)).toBe("cripts/");
-    expect(completer()(`api${path.sep}s`, base)).toBe("cripts/");
+    expect(completer()("api/s", base)).toEqual(["cripts/", "rc/"]);
+    expect(completer()(`api${path.sep}s`, base)).toEqual(["cripts/", "rc/"]);
   });
 
-  it("offers the first subfolder after a trailing separator", () => {
-    expect(completer()("api/", base)).toBe("scripts/");
+  it("offers every subfolder after a trailing separator, alphabetically", () => {
+    expect(completer()("api/", base)).toEqual(["scripts/", "src/"]);
   });
 
   it("completes absolute paths and ~", () => {
-    expect(completer()(`${path.resolve("/work")}${path.sep}d`, "/elsewhere")).toBe("ocs/");
-    expect(completer()("~/pro", base)).toBe("jects/");
+    expect(completer()(`${path.resolve("/work")}${path.sep}d`, "/elsewhere")).toEqual(["ocs/"]);
+    expect(completer()("~/pro", base)).toEqual(["jects/"]);
   });
 
   it("hides dot folders unless a dot was typed", () => {
-    expect(completer()("", base)).toBeUndefined();
-    expect(completer()(".", base)).toBe("git/");
+    expect(completer()("", base)).toEqual([]);
+    expect(completer()(".", base)).toEqual(["git/"]);
   });
 
   it("suggests nothing when nothing continues the text, or the name is already complete", () => {
-    expect(completer()("zzz", base)).toBeUndefined();
-    expect(completer()("docs", base)).toBeUndefined();
+    expect(completer()("zzz", base)).toEqual([]);
+    expect(completer()("docs", base)).toEqual([]);
   });
 
   it("suggests nothing for a folder that cannot be read", () => {
-    expect(completer()("missing/x", base)).toBeUndefined();
+    expect(completer()("missing/x", base)).toEqual([]);
   });
 });
