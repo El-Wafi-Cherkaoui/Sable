@@ -300,9 +300,13 @@ export async function runInteractiveDashboard(
       case "toggle":
         clearDashboardMessage();
         clearPulse();
-        await (isSelectedItemRunning(options.controller.getState())
-          ? options.controller.stopSelectedService()
-          : options.controller.startSelectedService());
+        if (isSelectedItemRunning(options.controller.getState())) {
+          showBusyMessage("Stopping");
+          await options.controller.stopSelectedService();
+          clearDashboardMessage();
+        } else {
+          await options.controller.startSelectedService();
+        }
         pulseItem = getPulseItem(options.controller.getState());
         schedulePulseClear();
         renderDashboardFrame();
@@ -310,7 +314,12 @@ export async function runInteractiveDashboard(
       case "restart":
         clearDashboardMessage();
         clearPulse();
+        if (isSelectedItemRunning(options.controller.getState())) {
+          showBusyMessage("Restarting");
+        }
+
         await options.controller.restartSelectedService();
+        clearDashboardMessage();
         pulseItem = getPulseItem(options.controller.getState());
         schedulePulseClear();
         renderDashboardFrame();
@@ -574,6 +583,15 @@ export async function runInteractiveDashboard(
 
   function shouldRefreshDashboardPreview(): boolean {
     return (mode === "dashboard" || mode === "move") && process.stdout.columns !== undefined && process.stdout.columns >= 100;
+  }
+
+  // Stopping can take a few seconds while the loop waits, so say what is happening first.
+  function showBusyMessage(verb: string): void {
+    const selected = getSelectedCommand(options.controller.getState()) ?? getSelectedService(options.controller.getState());
+    const name = selected === undefined ? "item" : "command" in selected ? selected.command.name : selected.service.name;
+
+    dashboardMessage = `${verb} ${name}...`;
+    renderDashboardFrame();
   }
 
   function clearDashboardMessage(): void {

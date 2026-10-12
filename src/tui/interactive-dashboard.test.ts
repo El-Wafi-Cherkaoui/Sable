@@ -372,6 +372,40 @@ describe("runInteractiveDashboard", () => {
     expect(controller.startSelectedService).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["s", "Stopping backend...", "stopSelectedService"],
+    ["r", "Restarting backend...", "restartSelectedService"],
+  ] as const)("shows a busy message while %s waits on a running service", async (key, message, method) => {
+    const baseState = createState();
+    const state = {
+      ...baseState,
+      services: baseState.services.map((serviceState, index) =>
+        index === 0 ? { ...serviceState, process: { status: "running" as const } } : serviceState,
+      ),
+    };
+    const controller = createController(state, () => []);
+    const messagesSeenByRenderer: Array<string | undefined> = [];
+    let messageDuringWait: string | undefined;
+
+    controller[method] = vi.fn(async () => {
+      messageDuringWait = messagesSeenByRenderer.at(-1);
+      return { status: "stopped" as const };
+    });
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: key }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: (_state, renderOptions) => {
+        messagesSeenByRenderer.push(renderOptions?.statusMessage);
+        return "dashboard";
+      },
+    });
+
+    expect(messageDuringWait).toBe(message);
+    expect(messagesSeenByRenderer.at(-1)).toBeUndefined();
+  });
+
   it("moves a service in move mode and undoes the move on Escape", async () => {
     let state = createState();
     const controller = { ...createController(state, () => []), getState: vi.fn(() => state) };
