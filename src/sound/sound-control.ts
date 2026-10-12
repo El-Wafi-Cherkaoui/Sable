@@ -21,7 +21,7 @@ export function createSoundControl(player: SoundPlayer, store: SettingsStore): S
       player.setEnabled(enabled);
 
       try {
-        await store.save({ sound: enabled });
+        await store.update({ sound: enabled });
       } catch {
         // The choice still applies for this session; it just isn't remembered.
       }

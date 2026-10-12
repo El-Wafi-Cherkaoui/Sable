@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceConfig } from "../config/config-types.js";
-import { sableLogoAnsiHeight, sableLogoAnsiWidth } from "../generated/sable-logo-ansi.js";
+import { sableLogoAnsi, sableLogoAnsiHeight, sableLogoAnsiWidth } from "../generated/sable-logo-ansi.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { stripAnsi, visibleLength } from "./logs-view.js";
 import {
@@ -9,6 +9,7 @@ import {
   renderWorkspacePicker,
   renderWorkspaceDetails,
   renderWorkspacePickerHelp,
+  describeWorkspaces,
   renderWorkspaceStartupMoment,
   runWorkspacePicker,
   selectNextWorkspace,
@@ -158,10 +159,50 @@ describe("renderWorkspacePicker", () => {
     expect(rendered.split("\n")).toEqual([
       "",
       "",
-      "     · sable ·",
+      "  · sable 0.3.1 ·",
       "",
       "  workspace ready",
     ]);
+  });
+
+  it("shows the version beside the name and a summary line under the banner", () => {
+    const rendered = renderWorkspaceStartupMoment({ columns: 80, rows: 14, summary: "2 workspaces · 3 services" });
+
+    expect(rendered).toContain("Sable 0.3.1");
+    expect(rendered).toContain("2 workspaces · 3 services");
+  });
+
+  it("builds the colored logo up dot by dot without moving it", () => {
+    const frame = (options: Parameters<typeof renderWorkspaceStartupMoment>[0]) =>
+      renderWorkspaceStartupMoment({ color: true, columns: 80, rows: 20, summary: "1 workspace · 2 services", ...options });
+    const early = frame({ stage: 0, reveal: { revealedDots: 40, glowDots: 10 } });
+    const late = frame({ stage: 0, reveal: { revealedDots: 300, glowDots: 10 } });
+    const named = frame({ stage: 1 });
+    const complete = frame({ stage: 2 });
+    const dots = (text: string) => [...stripAnsi(text)].filter((char) => char > "\u2800" && char <= "\u28ff").length;
+
+    expect(dots(early)).toBeLessThan(dots(late));
+    expect(dots(late)).toBeLessThan(dots(complete));
+    expect(stripAnsi(late)).not.toContain("Sable 0.3.1");
+    expect(stripAnsi(named)).toContain("Sable 0.3.1");
+    expect(stripAnsi(named)).not.toContain("Keyboard-first");
+    expect(stripAnsi(complete)).toContain("Keyboard-first Workspace Manager");
+    expect(stripAnsi(complete)).toContain("1 workspace · 2 services");
+    expect(new Set([early, late, named, complete].map((text) => text.split("\n").length)).size).toBe(1);
+    expect(complete).toContain(sableLogoAnsi[0]!.replace("\x1b[0m", ""));
+  });
+
+  it("renders a short launch screen with the version and summary", () => {
+    const rendered = renderWorkspaceStartupMoment({ short: true, columns: 80, rows: 9, summary: "2 workspaces · 3 services" });
+
+    expect(rendered).toContain("· sable 0.3.1 ·");
+    expect(rendered).toContain("2 workspaces · 3 services");
+    expect(rendered).not.toContain("█");
+  });
+
+  it("describes your workspaces in a few words", () => {
+    expect(describeWorkspaces([])).toBe("No workspaces yet · press a to create one");
+    expect(describeWorkspaces(workspaces)).toMatch(/^2 workspaces · \d+ services?$/);
   });
 
   it("highlights the selected row across the table width", () => {
@@ -314,6 +355,82 @@ describe("runWorkspacePicker", () => {
     expect(result).toEqual({ type: "exit" });
     expect(write).toHaveBeenNthCalledWith(1, "intro\n");
     expect(write).toHaveBeenNthCalledWith(2, "picker\n");
+  });
+
+  it("builds the logo up, then shows the name and the rest, and plays the open tone once", async () => {
+    vi.stubEnv("FORCE_COLOR", "1");
+    vi.stubEnv("NO_COLOR", undefined as unknown as string);
+    const frames: Array<{ stage?: number; revealed?: number }> = [];
+    const write = vi.fn();
+    const sound = { play: vi.fn(), isEnabled: () => true, setEnabled: vi.fn(async () => {}), close: vi.fn() };
+
+    const result = await runWorkspacePicker({
+      workspaces,
+      keyInput: { readKey: () => new Promise((resolve) => setTimeout(() => resolve({ sequence: "q" }), 600)), close: vi.fn() },
+      screen: { clear: vi.fn(), write },
+      render: () => "picker",
+      renderStartupMoment: (frameOptions) => {
+        frames.push({ stage: frameOptions?.stage, revealed: frameOptions?.reveal?.revealedDots });
+        return "intro";
+      },
+      startupMomentMs: 200,
+      sound,
+    });
+
+    const build = frames.filter((frame) => frame.stage === 0);
+    const revealed = build.map((frame) => frame.revealed!);
+
+    expect(result).toEqual({ type: "exit" });
+    expect(build.length).toBeGreaterThan(1);
+    expect(revealed).toEqual([...revealed].sort((a, b) => a - b));
+    expect(frames.filter((frame) => frame.stage !== 0).map((frame) => frame.stage)).toEqual([1, 2]);
+    expect(sound.play.mock.calls).toEqual([["open"]]);
+    // After the first frame, frames draw over the last one instead of clearing the screen.
+    expect(write.mock.calls[0]![0]).toBe("intro\n");
+    expect(write.mock.calls[1]![0]).toMatch(/^\x1b\[H/);
+  });
+
+  it("stops fading and goes to the list when a key is pressed during the launch screen", async () => {
+    vi.stubEnv("FORCE_COLOR", "1");
+    vi.stubEnv("NO_COLOR", undefined as unknown as string);
+    const stages: number[] = [];
+
+    const result = await runWorkspacePicker({
+      workspaces,
+      keyInput: createKeyInput([{ sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: () => "picker",
+      renderStartupMoment: (stageOptions) => {
+        stages.push(stageOptions?.stage ?? -1);
+        return "intro";
+      },
+      startupMomentMs: 60_000,
+    });
+
+    expect(result).toEqual({ type: "exit" });
+    expect(stages).toEqual([0]);
+  });
+
+  it("shows the short launch screen without the open tone", async () => {
+    const stages: Array<boolean | undefined> = [];
+    const sound = { play: vi.fn(), isEnabled: () => true, setEnabled: vi.fn(async () => {}), close: vi.fn() };
+
+    await runWorkspacePicker({
+      workspaces,
+      keyInput: createKeyInput([{ sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: () => "picker",
+      renderStartupMoment: (stageOptions) => {
+        stages.push(stageOptions?.short);
+        return "intro";
+      },
+      startupMomentMs: 10,
+      startupShort: true,
+      sound,
+    });
+
+    expect(stages).toEqual([true]);
+    expect(sound.play).not.toHaveBeenCalled();
   });
 
   it("opens help and returns to the picker", async () => {

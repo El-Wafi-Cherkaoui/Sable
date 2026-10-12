@@ -9,6 +9,8 @@ import {
   formatConfigError,
 } from "./config/config-store.js";
 import { resolveConfigPaths } from "./config/config-path.js";
+import { claimFullSplash } from "./settings/launch-splash.js";
+import { createSettingsStore, settingsFile } from "./settings/settings-store.js";
 import { loadSoundControl, type SoundControl } from "./sound/sound-control.js";
 import { product } from "./shared/product.js";
 import { requireTerminal, TerminalRequiredError } from "./shared/require-terminal.js";
@@ -59,12 +61,14 @@ program
     const configDirectory = resolveConfigPaths().directory;
     const updateCheck = startUpdateCheck({ cacheFile: updateCacheFile(configDirectory) });
     const sound = await loadSoundControl(configDirectory);
+    const fullSplash = await claimFullSplash(createSettingsStore(settingsFile(configDirectory)));
     let result: Awaited<ReturnType<typeof runWorkspaceHome>>;
 
     try {
       result = await runWorkspaceHome({
         store: new ConfigStore(),
         sound,
+        startupShort: !fullSplash,
         update: {
           latestVersion: () => updateCheck.newerVersion(),
           currentVersion: product.version,

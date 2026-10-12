@@ -33,7 +33,7 @@ describe("runWorkspaceHome", () => {
       statusMessage: undefined,
       selectedWorkspaceId: undefined,
       activeWorkspaceId: undefined,
-      startupMomentMs: 700,
+      startupMomentMs: 1_800,
       screen: undefined,
     });
     expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
