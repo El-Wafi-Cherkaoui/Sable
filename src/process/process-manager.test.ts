@@ -124,7 +124,7 @@ describe("ProcessManager", () => {
     it("sanitises an unfinished line when the process ends", async () => {
       manager = createManager();
       const service = createService({
-        command: nodeCommand("process.stdout.write('\\x1b[2Jlast words');"),
+        command: nodeCommand("process.stdout.write(String.fromCharCode(27) + '[2Jlast words');"),
       });
 
       manager.start(service);
