@@ -4,6 +4,17 @@
 
 - No changes yet.
 
+## 0.3.2 - Polish
+
+### Added
+
+- Soft sounds, on by default: a quiet tick as you move, tones when you open, go back, start and stop things, and a calm chime when a service or command ends on its own (not when you stop it). Press `,` on the picker or dashboard to open the settings popup and turn sound off; the choice is remembered in `settings.json`. On Linux (including WSL) Sable keeps one audio stream open (`pacat`, `paplay`, `pw-cat` or `aplay`) so every sound starts with the same short delay. On macOS and Windows it plays small files with `afplay` or PowerShell, which can start a little later. If no player works, Sable stays silent.
+- The launch screen shows the version and a one-line summary of your workspaces. The logo builds up dot by dot with a brief glow, and the first launch each day shows it in full while later launches show a short version. Any key skips it.
+
+### Fixed
+
+- A workspace you left with no running services now shows `○ stopped` in the picker instead of `● running`.
+
 ## 0.3.1 - Stability
 
 ### Added

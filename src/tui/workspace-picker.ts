@@ -600,7 +600,7 @@ function shouldRenderAnsiStartupLogo(options: RenderWorkspacePickerOptions): boo
     && (options.columns === undefined || options.columns >= sableLogoAnsiWidth);
 }
 
-// "Sable 0.3.1": the name in the title style, the version quietly beside it.
+// e.g. "Sable 0.3.2": the name in the title style, the version quietly beside it.
 function startupTitle(style: TuiStyle): string {
   return `${style.title(product.displayName)} ${style.muted(product.version)}`;
 }
