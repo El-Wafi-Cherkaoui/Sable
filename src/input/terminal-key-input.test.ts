@@ -57,6 +57,28 @@ describe("TerminalKeyInput", () => {
     expect(input.pause).toHaveBeenCalledOnce();
   });
 
+  it("wakes a waiting reader with a resize key when the output is resized", async () => {
+    const input = createInput({ isTTY: true, isRaw: false });
+    const output = new EventEmitter();
+    const keyInput = new TerminalKeyInput(input, output);
+    const pending = keyInput.readKey();
+
+    output.emit("resize");
+
+    await expect(pending).resolves.toEqual({ name: "resize" });
+    keyInput.close();
+  });
+
+  it("stops listening for resizes after close", () => {
+    const input = createInput({ isTTY: true, isRaw: false });
+    const output = new EventEmitter();
+    const keyInput = new TerminalKeyInput(input, output);
+
+    expect(output.listenerCount("resize")).toBe(1);
+    keyInput.close();
+    expect(output.listenerCount("resize")).toBe(0);
+  });
+
   it("uses a short escape code timeout for faster Esc handling", () => {
     const input = createInput({ isTTY: true, isRaw: false });
 

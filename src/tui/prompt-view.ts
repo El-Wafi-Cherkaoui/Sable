@@ -1,4 +1,4 @@
-import type { Keypress } from "../input/keymap.js";
+import { isResize, type Keypress } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { formatKeyHints } from "./key-hints.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
@@ -37,6 +37,11 @@ export async function runTextPrompt(
 
   while (true) {
     const keypress = await options.keyInput.readKey();
+
+    if (isResize(keypress)) {
+      renderFrame(screen, renderTextPrompt(options, value, cursorIndex, error));
+      continue;
+    }
 
     if (isCtrlC(keypress)) {
       return { type: "exit" };

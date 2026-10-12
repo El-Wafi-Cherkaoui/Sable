@@ -1,4 +1,4 @@
-import { mapDashboardKey, mapHelpKey, mapLogsKey, mapMoveKey } from "../input/keymap.js";
+import { isResize, mapDashboardKey, mapHelpKey, mapLogsKey, mapMoveKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
 import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
@@ -35,6 +35,8 @@ export type InteractiveDashboardController = {
 
 export type InteractiveDashboardScreen = {
   clear(): void;
+  // Wipes the whole terminal, used after a resize left stale text behind.
+  clearAll?(): void;
   write(contents: string): void;
 };
 
@@ -125,6 +127,21 @@ export async function runInteractiveDashboard(
 
     if (event.type === "key" && isCtrlC(event.keypress)) {
       return { type: "exit" };
+    }
+
+    if (event.type === "key" && isResize(event.keypress)) {
+      if (currentMode === "logs") {
+        const logs = options.controller.getSelectedServiceLogs();
+
+        logScrollOffset = followLogTail
+          ? bottomScrollOffset(logs, getLogsLayout())
+          : clampScrollOffset(logScrollOffset, logs, getLogsLayout());
+      }
+
+      screen.clearAll?.();
+      lastDashboardContents = undefined;
+      renderCurrentMode();
+      continue;
     }
 
     if (currentMode === "move") {
@@ -811,6 +828,9 @@ function renderFrame(screen: InteractiveDashboardScreen, contents: string): void
 const terminalScreen: InteractiveDashboardScreen = {
   clear() {
     process.stdout.write("\x1b[H");
+  },
+  clearAll() {
+    process.stdout.write("\x1b[2J\x1b[H");
   },
   write(contents) {
     process.stdout.write(`${clearLineEnds(contents)}\x1b[J`);

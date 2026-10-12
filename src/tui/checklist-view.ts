@@ -1,3 +1,4 @@
+import { isResize } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { formatKeyHints } from "./key-hints.js";
 import type { PromptScreen } from "./prompt-view.js";
@@ -43,6 +44,11 @@ export async function runChecklist(options: RunChecklistOptions): Promise<Checkl
 
   while (true) {
     const keypress = await options.keyInput.readKey();
+
+    if (isResize(keypress)) {
+      render();
+      continue;
+    }
 
     if (keypress.ctrl === true && keypress.name === "c") {
       return { type: "exit" };

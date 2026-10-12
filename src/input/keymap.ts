@@ -4,6 +4,11 @@ export type Keypress = {
   ctrl?: boolean;
 };
 
+// The terminal key input sends this when the window changes size; screens redraw.
+export function isResize(keypress: Keypress): boolean {
+  return keypress.name === "resize";
+}
+
 export type DashboardAction =
   | "selectNext"
   | "selectPrevious"

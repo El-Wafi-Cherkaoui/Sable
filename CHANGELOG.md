@@ -8,6 +8,10 @@
 - The Settings popup keeps the same size whichever setting is selected.
 - Sable now checks for a new version at most once an hour (it was once a day), so a release reaches you sooner.
 
+### Fixed
+
+- Resizing the terminal window now redraws the screen at the new size instead of leaving torn or stale text until the next key press.
+
 ### Removed
 
 - The hidden pre-0.3 keys: `j`/`k` (use `↑↓`), `h`/`l` in logs (use `←→`), `S` (use `s`), `c` (use `a`), and `J`/`K` (use `m` to move).

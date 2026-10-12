@@ -1,5 +1,5 @@
 import type { KeyInput } from "../input/terminal-key-input.js";
-import { mapSettingsKey } from "../input/keymap.js";
+import { isResize, mapSettingsKey } from "../input/keymap.js";
 import type { SettingsControl } from "../settings/settings-control.js";
 import { wrapAnsi } from "./ansi-text.js";
 import { dialogMaxWidth, renderDialogBox, renderDialogScreen } from "./dialog-box.js";
@@ -58,6 +58,11 @@ export async function runSettingsDialog(options: SettingsDialogOptions): Promise
 
   while (true) {
     const keypress = await options.keyInput.readKey();
+
+    if (isResize(keypress)) {
+      render();
+      continue;
+    }
 
     if (keypress.ctrl === true && keypress.name === "c") {
       return "exit";

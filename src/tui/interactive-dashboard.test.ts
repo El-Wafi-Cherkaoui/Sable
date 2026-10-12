@@ -461,6 +461,23 @@ describe("runInteractiveDashboard", () => {
     expect(controller.startSelectedService).toHaveBeenCalledOnce();
   });
 
+  it("clears the screen and redraws when the terminal is resized", async () => {
+    const controller = createController(createState(), () => []);
+    const clearAll = vi.fn();
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ name: "resize" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), clearAll, write },
+      render: () => "dashboard",
+    });
+
+    expect(clearAll).toHaveBeenCalledOnce();
+    expect(write).toHaveBeenCalledTimes(2);
+    expect(controller.selectNextService).not.toHaveBeenCalled();
+  });
+
   it("runs the add service callback from the dashboard", async () => {
     const state = createState();
     const controller = createController(state, () => []);
