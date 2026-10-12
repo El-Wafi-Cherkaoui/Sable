@@ -15,6 +15,10 @@ function completer() {
   });
 }
 
+// The completer ends a suggestion with the separator the text already uses ("/" if one
+// was typed), and otherwise the platform's own.
+const native = path.sep;
+
 describe("createPathCompleter", () => {
   const base = path.resolve("/work");
 
@@ -23,12 +27,12 @@ describe("createPathCompleter", () => {
   });
 
   it("completes a relative name from the base folder, alphabetically", () => {
-    expect(completer()("a", base)).toEqual(["pi/", "pp/"]);
+    expect(completer()("a", base)).toEqual([`pi${native}`, `pp${native}`]);
   });
 
   it("completes inside a nested folder", () => {
     expect(completer()("api/s", base)).toEqual(["cripts/", "rc/"]);
-    expect(completer()(`api${path.sep}s`, base)).toEqual(["cripts/", "rc/"]);
+    expect(completer()(`api${path.sep}s`, base)).toEqual([`cripts${native}`, `rc${native}`]);
   });
 
   it("offers every subfolder after a trailing separator, alphabetically", () => {
@@ -36,13 +40,13 @@ describe("createPathCompleter", () => {
   });
 
   it("completes absolute paths and ~", () => {
-    expect(completer()(`${path.resolve("/work")}${path.sep}d`, "/elsewhere")).toEqual(["ocs/"]);
+    expect(completer()(`${path.resolve("/work")}${path.sep}d`, "/elsewhere")).toEqual([`ocs${native}`]);
     expect(completer()("~/pro", base)).toEqual(["jects/"]);
   });
 
   it("hides dot folders unless a dot was typed", () => {
     expect(completer()("", base)).toEqual([]);
-    expect(completer()(".", base)).toEqual(["git/"]);
+    expect(completer()(".", base)).toEqual([`git${native}`]);
   });
 
   it("suggests nothing when nothing continues the text, or the name is already complete", () => {
