@@ -16,6 +16,7 @@ import {
   type InteractiveDashboardResult,
   type RunInteractiveDashboardOptions,
 } from "../tui/interactive-dashboard.js";
+import type { SoundControl } from "../sound/sound-control.js";
 import type { PromptScreen } from "../tui/prompt-view.js";
 import { requireWorkspaceByName } from "./find-workspace.js";
 import { runAddWorkspaceItemFlow, runDeleteCommandFlow, runDeleteServiceFlow, runEditCommandFlow, runEditServiceFlow } from "./service-flows.js";
@@ -56,6 +57,7 @@ export type RunWorkspaceCommandOptions = {
   store: WorkspaceConfigReader;
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   keyInput?: KeyInput;
+  sound?: SoundControl;
   runDashboard?: (
     options: RunInteractiveDashboardOptions,
   ) => Promise<InteractiveDashboardResult>;
@@ -76,6 +78,7 @@ export type RunWorkspaceSessionOptions = {
   controller?: RunWorkspaceController;
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   keyInput: KeyInput;
+  sound?: SoundControl;
   runDashboard?: (
     options: RunInteractiveDashboardOptions,
   ) => Promise<InteractiveDashboardResult>;
@@ -89,10 +92,14 @@ export type RunWorkspaceSessionOptions = {
   warn?: ShutdownWarn;
 };
 
-export function createRunWorkspaceController(workspace: WorkspaceConfig): RunWorkspaceController {
+export function createRunWorkspaceController(
+  workspace: WorkspaceConfig,
+  options: { sound?: SoundControl } = {},
+): RunWorkspaceController {
   return new WorkspaceController({
     workspace,
-    processManager: new ProcessManager(),
+    // A process that ends on its own gets a chime; one Sable stops does not.
+    processManager: new ProcessManager({ onAttention: () => options.sound?.play("attention") }),
   });
 }
 
@@ -115,6 +122,7 @@ export async function runWorkspaceCommand(
     await runWorkspaceSession({
       workspace,
       createController: options.createController,
+      sound: options.sound,
       keyInput,
       runDashboard: options.runDashboard,
       abortSignal: shutdownAbortController.signal,
@@ -135,7 +143,7 @@ export async function runWorkspaceSession(
   const controller =
     options.controller ??
     options.createController?.(options.workspace) ??
-    createRunWorkspaceController(options.workspace);
+    createRunWorkspaceController(options.workspace, { sound: options.sound });
   const runDashboard = options.runDashboard ?? runInteractiveDashboard;
   const shouldStartAutoStartServices = options.startAutoStartServices ?? true;
   const shouldShutdownOnReturn = options.shutdownOnReturn ?? true;
@@ -148,6 +156,7 @@ export async function runWorkspaceSession(
     return await runDashboard({
       controller,
       keyInput: options.keyInput,
+      sound: options.sound,
       abortSignal: options.abortSignal,
       dashboardQuitLabel: options.dashboardQuitLabel,
       initialMessage: options.initialMessage,

@@ -12,6 +12,7 @@ export type DashboardAction =
   | "selectPrevious"
   | "openLogs"
   | "openHelp"
+  | "openSettings"
   | "toggle"
   | "start"
   | "restart"
@@ -43,6 +44,8 @@ export type LogsAction =
 
 export type HelpAction = "back" | "none";
 
+export type SettingsAction = "toggle" | "close" | "none";
+
 export type MoveAction = "moveUp" | "moveDown" | "done" | "cancel" | "none";
 
 export type WorkspacePickerAction =
@@ -59,6 +62,7 @@ export type WorkspacePickerAction =
   | "moveWorkspaceDown"
   | "view"
   | "openHelp"
+  | "openSettings"
   | "quit"
   | "none";
 
@@ -97,6 +101,8 @@ export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction
       return "view";
     case "?":
       return "openHelp";
+    case ",":
+      return "openSettings";
     case "q":
       return "quit";
     default:
@@ -142,6 +148,8 @@ export function mapDashboardKey(keypress: Keypress): DashboardAction {
       return "moveServiceDown";
     case "?":
       return "openHelp";
+    case ",":
+      return "openSettings";
     case "q":
       return "back";
     default:
@@ -201,6 +209,18 @@ export function mapLogsKey(keypress: Keypress): LogsAction {
 export function mapHelpKey(keypress: Keypress): HelpAction {
   if (keypress.name === "escape" || keypress.sequence === "q" || keypress.sequence === "?") {
     return "back";
+  }
+
+  return "none";
+}
+
+export function mapSettingsKey(keypress: Keypress): SettingsAction {
+  if (keypress.name === "escape" || keypress.sequence === "q" || keypress.sequence === ",") {
+    return "close";
+  }
+
+  if (keypress.sequence === " " || keypress.name === "space" || isEnter(keypress) || keypress.name === "left" || keypress.name === "right") {
+    return "toggle";
   }
 
   return "none";

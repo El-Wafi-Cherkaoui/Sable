@@ -11,6 +11,8 @@ export type RenderStaticDashboardOptions = {
   quitLabel?: string;
   statusMessage?: string;
   moving?: boolean;
+  // Shows the settings key in the footer.
+  settingsAvailable?: boolean;
   color?: boolean;
   style?: TuiStyle;
   pulseServiceIndex?: number;
@@ -221,6 +223,18 @@ function formatStatusLine(
 }
 
 function getDashboardKeyHints(
+  state: RuntimeWorkspaceState,
+  options: RenderStaticDashboardOptions,
+): KeyHint[] {
+  const hints = baseDashboardKeyHints(state, options);
+
+  // Settings sits just before the last hint (back), so narrow terminals trim it first.
+  return options.settingsAvailable === true && options.moving !== true
+    ? [...hints.slice(0, -1), [",", "settings"], ...hints.slice(-1)]
+    : hints;
+}
+
+function baseDashboardKeyHints(
   state: RuntimeWorkspaceState,
   options: RenderStaticDashboardOptions,
 ): KeyHint[] {

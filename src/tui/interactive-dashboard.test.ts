@@ -832,6 +832,73 @@ describe("runInteractiveDashboard", () => {
     keyInput.resolveNext({ ctrl: true, name: "c" });
     await runPromise;
   });
+  it("plays cues for moving, starting, stopping, opening and going back", async () => {
+    const state = createState();
+    const controller = createController(state, () => []);
+    const sound = { play: vi.fn(), isEnabled: () => true, setEnabled: vi.fn(async () => {}) };
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "j" }, { sequence: "s" }, { name: "return" }, { name: "escape" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      sound,
+      render: () => "dashboard",
+      renderLogs: () => "logs",
+    });
+
+    expect(sound.play.mock.calls.map(([cue]) => cue)).toEqual(["move", "started", "open", "back", "back"]);
+  });
+
+  it("plays the stop tone before the stop finishes", async () => {
+    const base = createState();
+    const state: RuntimeWorkspaceState = {
+      ...base,
+      services: base.services.map((service, index) => index === 0
+        ? { ...service, process: { status: "running" as const, pid: 1 } }
+        : service),
+    };
+    let finishStop: () => void = () => {};
+    const controller = {
+      ...createController(state, () => []),
+      stopSelectedService: vi.fn(() => new Promise<{ status: "stopped" }>((resolve) => {
+        finishStop = () => resolve({ status: "stopped" });
+      })),
+    };
+    const sound = { play: vi.fn(), isEnabled: () => true, setEnabled: vi.fn(async () => {}) };
+
+    const run = runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "s" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      sound,
+      render: () => "dashboard",
+    });
+
+    await waitUntil(() => controller.stopSelectedService.mock.calls.length > 0);
+    expect(sound.play).toHaveBeenCalledWith("stopped");
+
+    finishStop();
+    await run;
+  });
+
+  it("opens settings with a comma and returns to the dashboard", async () => {
+    const controller = createController(createState(), () => []);
+    const sound = { play: vi.fn(), isEnabled: () => true, setEnabled: vi.fn(async () => {}) };
+    const runSettings = vi.fn(async () => "close" as const);
+    const write = vi.fn();
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "," }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write },
+      sound,
+      runSettings,
+      render: () => "dashboard",
+    });
+
+    expect(runSettings).toHaveBeenCalledOnce();
+    expect(write).toHaveBeenCalledTimes(2);
+  });
 });
 
 function createKeyInput(

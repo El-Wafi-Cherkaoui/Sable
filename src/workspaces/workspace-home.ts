@@ -30,6 +30,7 @@ import {
   type RenameWorkspaceFlowOptions,
   type RenameWorkspaceFlowResult,
 } from "./rename-workspace-flow.js";
+import type { SoundControl } from "../sound/sound-control.js";
 import { runUpdateDialog } from "../tui/update-dialog.js";
 import { runSuggestServicesFlow, type SuggestServicesFlowOptions, type SuggestServicesFlowResult } from "./suggest-services-flow.js";
 
@@ -50,6 +51,7 @@ export type RunWorkspaceHomeOptions = {
   update?: WorkspaceHomeUpdate;
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
+  sound?: SoundControl;
   signalSource?: WorkspaceHomeSignalSource;
   warn?: ShutdownWarn;
 };
@@ -90,7 +92,8 @@ export async function runWorkspaceHome(
   // Processes that failed to stop are reported once Sable leaves the TUI.
   const shutdownFailures: ShutdownFailure[] = [];
   const abortShutdown = () => shutdownAbortController.abort();
-  const createController = options.createController ?? createRunWorkspaceController;
+  const createController = options.createController
+    ?? ((workspace: WorkspaceConfig) => createRunWorkspaceController(workspace, { sound: options.sound }));
 
   for (const signal of shutdownSignals) {
     signalSource.once(signal, abortShutdown);
@@ -109,6 +112,7 @@ export async function runWorkspaceHome(
       const pickerResult: WorkspacePickerResult = opening !== undefined ? { type: "run", workspace: opening } : await runPicker({
         workspaces: config.workspaces,
         keyInput,
+        sound: options.sound,
         abortSignal: shutdownAbortController.signal,
         statusMessage,
         selectedWorkspaceId,
@@ -315,6 +319,7 @@ export async function runWorkspaceHome(
         workspace: pickerResult.workspace,
         controller: activeSession.controller,
         keyInput,
+        sound: options.sound,
         abortSignal: shutdownAbortController.signal,
         dashboardQuitLabel: "back",
         store: options.store,

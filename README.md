@@ -120,6 +120,7 @@ v           view services in selected workspace
 s           stop the running workspace
 r           restart the running workspace's services
 ?           help
+,           settings (sound on/off)
 q           quit Sable
 ```
 
@@ -141,6 +142,7 @@ e           edit selected item (changes apply on restart)
 d           delete selected item (stop it first)
 m           move selected service (↑ ↓, then Enter; Esc cancels)
 ?           help
+,           settings (sound on/off)
 Esc, q      back to the picker, or quit when started with sable run
 ```
 
@@ -161,6 +163,12 @@ Esc, q      clear the search, or go back to the dashboard
 ```
 
 Logs/output are kept in memory, up to 2,000 lines (and about 2 million characters) per service or command. They are not persisted to disk. Sable keeps a program's colors but drops other terminal control sequences (screen clears, cursor moves) so a noisy tool can't scramble the display, and asks programs for color unless `NO_COLOR` is set.
+
+## Sound
+
+Sable plays soft, quiet tones as you move (`↑↓`), open and go back, start and stop things, and a calm chime when a service or command ends on its own (not when you stop it). Sound is on by default. Press `,` on the picker or dashboard to open the settings popup and turn it off; the choice is saved in `settings.json` next to `workspaces.json`.
+
+Sable has no audio dependency. On Linux (including WSL) it keeps one audio stream open through `pacat`, `paplay`, `pw-cat` or `aplay` and mixes its tones into it, so every sound starts with the same short delay. On macOS and Windows it plays small files from a `sounds/` folder in the config directory with `afplay` or PowerShell, which can start a little later. If no player works, Sable stays silent.
 
 ## Configuration
 

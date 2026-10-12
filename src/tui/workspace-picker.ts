@@ -4,6 +4,8 @@ import { mapHelpKey, mapMoveKey, mapWorkspacePickerKey } from "../input/keymap.j
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { product } from "../shared/product.js";
 import { displayPath } from "./format.js";
+import type { SoundControl } from "../sound/sound-control.js";
+import { runSettingsDialog, type SettingsDialogResult } from "./settings-dialog.js";
 import { renderHelpBox, type HelpViewOptions } from "./help-view.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { appendAnchoredFooter, clipLines } from "./layout.js";
@@ -17,6 +19,8 @@ export type WorkspacePickerState = {
   statusMessage?: string;
   moving?: boolean;
   activeRunningServiceCount?: number;
+  // Shows the settings key in the footer.
+  settingsAvailable?: boolean;
 };
 
 export type WorkspacePickerResult =
@@ -57,6 +61,8 @@ export type RunWorkspacePickerOptions = {
   activeRunningServiceCount?: number;
   startupMomentMs?: number;
   // Runs once after the startup logo, before the list appears (e.g. the update popup).
+  sound?: SoundControl;
+  runSettings?: typeof runSettingsDialog;
   afterStartup?: () => Promise<"continue" | "update" | "exit">;
 };
 
@@ -90,6 +96,7 @@ export async function runWorkspacePicker(
       options.activeWorkspaceId,
     ),
     activeRunningServiceCount: options.activeRunningServiceCount,
+    settingsAvailable: options.sound !== undefined,
   };
   let mode: PickerMode = "picker";
   let stateBeforeMove: WorkspacePickerState | undefined;
@@ -138,6 +145,7 @@ export async function runWorkspacePicker(
 
       if (moveAction === "moveUp" || moveAction === "moveDown") {
         state = moveSelectedWorkspace(state, moveAction === "moveUp" ? "up" : "down");
+        options.sound?.play("move");
         renderFrame(screen, render(state));
         continue;
       }
@@ -169,16 +177,19 @@ export async function runWorkspacePicker(
     switch (action) {
       case "selectNext":
         state = selectNextWorkspace(state);
+        options.sound?.play("move");
         renderFrame(screen, render(state));
         break;
       case "selectPrevious":
         state = selectPreviousWorkspace(state);
+        options.sound?.play("move");
         renderFrame(screen, render(state));
         break;
       case "run": {
         const workspace = getSelectedWorkspace(state);
 
         if (workspace !== undefined) {
+          options.sound?.play("open");
           return { type: "run", workspace };
         }
 
@@ -256,6 +267,27 @@ export async function runWorkspacePicker(
         mode = "help";
         renderFrame(screen, renderHelp({ background: render(state), columns: process.stdout.columns, rows: process.stdout.rows, color }));
         break;
+      case "openSettings": {
+        if (options.sound === undefined) {
+          break;
+        }
+
+        const outcome: SettingsDialogResult = await (options.runSettings ?? runSettingsDialog)({
+          sound: options.sound,
+          keyInput: options.keyInput,
+          background: render(state),
+          screen,
+          columns: process.stdout.columns,
+          rows: process.stdout.rows,
+        });
+
+        if (outcome === "exit") {
+          return { type: "exit" };
+        }
+
+        renderFrame(screen, render(state));
+        break;
+      }
       case "quit":
         return { type: "exit" };
       case "none":
@@ -542,6 +574,15 @@ function centerVisible(value: string, columns: number | undefined): string {
 }
 
 function getPickerKeyHints(state: WorkspacePickerState): KeyHint[] {
+  const hints = baseKeyHints(state);
+
+  // Settings sits just before the last hint (quit), so narrow terminals trim it first.
+  return state.settingsAvailable === true && state.moving !== true
+    ? [...hints.slice(0, -1), [",", "settings"], ...hints.slice(-1)]
+    : hints;
+}
+
+function baseKeyHints(state: WorkspacePickerState): KeyHint[] {
   if (state.moving === true) {
     return [["↑↓", "move"], ["Enter", "done"], ["Esc", "cancel"]];
   }
@@ -589,7 +630,7 @@ export function renderWorkspacePickerHelp(options: HelpViewOptions = {}): string
       rows: ["s           stop it", "r           restart its services"],
     },
     {
-      rows: ["q           quit Sable (from this screen)", "Ctrl+C      quit Sable from anywhere"],
+      rows: [",           settings (turn sound on or off)", "q           quit Sable (from this screen)", "Ctrl+C      quit Sable from anywhere"],
     },
   ], options);
 }
