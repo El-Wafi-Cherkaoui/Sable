@@ -10,6 +10,7 @@ import {
 } from "./config/config-store.js";
 import { resolveConfigPaths } from "./config/config-path.js";
 import { product } from "./shared/product.js";
+import { requireTerminal, TerminalRequiredError } from "./shared/require-terminal.js";
 import { installUpdate } from "./update/install-update.js";
 import { startUpdateCheck, updateCacheFile, updateInstallCommand } from "./update/update-check.js";
 import {
@@ -42,6 +43,18 @@ program
   .description("A keyboard-first terminal workspace manager for developers.")
   .version(product.version)
   .action(async () => {
+    try {
+      requireTerminal();
+    } catch (error) {
+      if (error instanceof TerminalRequiredError) {
+        console.error(error.message);
+        process.exitCode = 1;
+        return;
+      }
+
+      throw error;
+    }
+
     const updateCheck = startUpdateCheck({ cacheFile: updateCacheFile(resolveConfigPaths().directory) });
     let result: Awaited<ReturnType<typeof runWorkspaceHome>>;
 
@@ -103,6 +116,7 @@ program
   .description("run a saved workspace")
   .action(async (workspaceName: string) => {
     try {
+      requireTerminal();
       await runWorkspaceCommand(workspaceName, {
         store: new ConfigStore(),
       });
@@ -111,7 +125,7 @@ program
         return;
       }
 
-      if (error instanceof WorkspaceLookupError) {
+      if (error instanceof WorkspaceLookupError || error instanceof TerminalRequiredError) {
         console.error(error.message);
         process.exitCode = 1;
         return;
