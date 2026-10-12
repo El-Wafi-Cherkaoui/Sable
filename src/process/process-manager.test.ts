@@ -12,6 +12,32 @@ afterEach(async () => {
 });
 
 describe("ProcessManager", () => {
+  describe("attention callback", () => {
+    it("fires when a process ends on its own", async () => {
+      const onAttention = vi.fn();
+
+      manager = createManager({ onAttention });
+      const service = createService({ command: nodeCommand("process.exit(3);") });
+
+      manager.start(service);
+      await waitForStatus(manager, service.id, "exited");
+
+      expect(onAttention).toHaveBeenCalledWith(service.id);
+    });
+
+    it("stays quiet when Sable stops the process", async () => {
+      const onAttention = vi.fn();
+
+      manager = createManager({ onAttention });
+      const service = createService();
+
+      manager.start(service);
+      await manager.stop(service.id);
+
+      expect(onAttention).not.toHaveBeenCalled();
+    });
+  });
+
   describe("child color environment", () => {
     async function readForceColor(env: Record<string, string> = {}): Promise<string> {
       manager = createManager();

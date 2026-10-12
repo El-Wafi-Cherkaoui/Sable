@@ -9,6 +9,7 @@ import {
   formatConfigError,
 } from "./config/config-store.js";
 import { resolveConfigPaths } from "./config/config-path.js";
+import { loadSoundControl, type SoundControl } from "./sound/sound-control.js";
 import { product } from "./shared/product.js";
 import { requireTerminal, TerminalRequiredError } from "./shared/require-terminal.js";
 import { installUpdate } from "./update/install-update.js";
@@ -55,12 +56,15 @@ program
       throw error;
     }
 
-    const updateCheck = startUpdateCheck({ cacheFile: updateCacheFile(resolveConfigPaths().directory) });
+    const configDirectory = resolveConfigPaths().directory;
+    const updateCheck = startUpdateCheck({ cacheFile: updateCacheFile(configDirectory) });
+    const sound = await loadSoundControl(configDirectory);
     let result: Awaited<ReturnType<typeof runWorkspaceHome>>;
 
     try {
       result = await runWorkspaceHome({
         store: new ConfigStore(),
+        sound,
         update: {
           latestVersion: () => updateCheck.newerVersion(),
           currentVersion: product.version,
@@ -76,6 +80,7 @@ program
       throw error;
     } finally {
       updateCheck.cancel();
+      sound.close();
     }
 
     if (result.type === "update") {
@@ -115,10 +120,14 @@ program
   .argument("<workspace-name>", "workspace name")
   .description("run a saved workspace")
   .action(async (workspaceName: string) => {
+    let sound: SoundControl | undefined;
+
     try {
       requireTerminal();
+      sound = await loadSoundControl(resolveConfigPaths().directory);
       await runWorkspaceCommand(workspaceName, {
         store: new ConfigStore(),
+        sound,
       });
     } catch (error) {
       if (handleConfigError(error)) {
@@ -132,6 +141,8 @@ program
       }
 
       throw error;
+    } finally {
+      sound?.close();
     }
   });
 

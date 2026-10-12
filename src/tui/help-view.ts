@@ -36,7 +36,7 @@ const dashboardHelp: HelpSection[] = [
     ],
   },
   {
-    rows: ["Esc, q      back", "Ctrl+C      quit Sable and stop everything"],
+    rows: [",           settings (turn sound on or off)", "Esc, q      back", "Ctrl+C      quit Sable and stop everything"],
   },
 ];
 

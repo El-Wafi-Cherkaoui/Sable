@@ -250,6 +250,55 @@ describe("runWorkspacePicker", () => {
     expect(write).toHaveBeenCalledTimes(2);
   });
 
+  it("plays soft cues when moving and opening", async () => {
+    const sound = { play: vi.fn(), isEnabled: () => true, setEnabled: vi.fn(async () => {}) };
+
+    await runWorkspacePicker({
+      workspaces,
+      keyInput: createKeyInput([{ sequence: "j" }, { name: "return" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      sound,
+    });
+
+    expect(sound.play.mock.calls).toEqual([["move"], ["open"]]);
+  });
+
+  it("opens settings with a comma and redraws the list afterwards", async () => {
+    const sound = { play: vi.fn(), isEnabled: () => true, setEnabled: vi.fn(async () => {}) };
+    const runSettings = vi.fn(async () => "close" as const);
+    const write = vi.fn();
+
+    const result = await runWorkspacePicker({
+      workspaces,
+      keyInput: createKeyInput([{ sequence: "," }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write },
+      render: () => "picker",
+      sound,
+      runSettings,
+    });
+
+    expect(result).toEqual({ type: "exit" });
+    expect(runSettings).toHaveBeenCalledOnce();
+    expect(write).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores the settings key when sound is not available", async () => {
+    const result = await runWorkspacePicker({
+      workspaces,
+      keyInput: createKeyInput([{ sequence: "," }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+    });
+
+    expect(result).toEqual({ type: "exit" });
+  });
+
+  it("shows the settings key in the footer only when available", () => {
+    const base = createWorkspacePickerState(workspaces);
+
+    expect(renderWorkspacePicker(base)).not.toContain("[,] settings");
+    expect(renderWorkspacePicker({ ...base, settingsAvailable: true })).toContain("[?] help  [,] settings  [q] quit");
+  });
+
   it("shows an interruptible startup moment before the picker", async () => {
     const write = vi.fn();
 

@@ -29,6 +29,8 @@ export type ProcessManagerOptions = {
   maxLogLinesPerService?: number;
   maxLogCharactersPerService?: number;
   processTreeKiller?: ProcessTreeKiller;
+  // Called when a process ends or fails on its own, not because Sable stopped it.
+  onAttention?: (id: string) => void;
 };
 
 export type StopFailure = {
@@ -66,8 +68,10 @@ export class ProcessManager {
   private readonly maxLogCharactersPerService: number;
   private readonly logCharacters = new Map<string, number>();
   private readonly processTreeKiller: ProcessTreeKiller;
+  private readonly onAttention: ((id: string) => void) | undefined;
 
   constructor(options: ProcessManagerOptions = {}) {
+    this.onAttention = options.onAttention;
     this.gracefulStopTimeoutMs =
       options.gracefulStopTimeoutMs ?? defaultGracefulStopTimeoutMs;
     this.forceStopTimeoutMs =
@@ -148,6 +152,7 @@ export class ProcessManager {
       };
       this.flushPendingLogs(service.id);
       this.appendSystemLog(service.id, `process error: ${error.message}`);
+      this.onAttention?.(service.id);
     });
 
     child.once("exit", (exitCode, signal) => {
@@ -168,6 +173,10 @@ export class ProcessManager {
           ? "service stopped"
           : formatProcessExitMessage(exitCode, signal),
       );
+
+      if (!entry.stopRequested) {
+        this.onAttention?.(service.id);
+      }
     });
 
     return entry.state;

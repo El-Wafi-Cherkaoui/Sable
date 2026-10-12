@@ -2,6 +2,8 @@ import { mapDashboardKey, mapHelpKey, mapLogsKey, mapMoveKey } from "../input/ke
 import type { KeyInput } from "../input/terminal-key-input.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
 import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import type { SoundControl } from "../sound/sound-control.js";
+import { runSettingsDialog } from "./settings-dialog.js";
 import { renderHelpView, type HelpContext } from "./help-view.js";
 import {
   bottomScrollOffset,
@@ -43,6 +45,8 @@ export type RunInteractiveDashboardOptions = {
   render?: typeof renderStaticDashboard;
   renderLogs?: typeof renderLogsView;
   renderHelp?: typeof renderHelpView;
+  sound?: SoundControl;
+  runSettings?: typeof runSettingsDialog;
   dashboardQuitLabel?: string;
   initialMessage?: string;
   logVisibleLineCount?: number;
@@ -253,6 +257,7 @@ export async function runInteractiveDashboard(
           }
 
           clearPulse();
+          options.sound?.play("back");
           mode = "dashboard";
           renderDashboardFrame();
           continue;
@@ -277,6 +282,7 @@ export async function runInteractiveDashboard(
         clearDashboardMessage();
         clearPulse();
         options.controller.selectNextService();
+        options.sound?.play("move");
         pulseItem = getPulseItem(options.controller.getState());
         schedulePulseClear();
         renderDashboardFrame();
@@ -285,6 +291,7 @@ export async function runInteractiveDashboard(
         clearDashboardMessage();
         clearPulse();
         options.controller.selectPreviousService();
+        options.sound?.play("move");
         pulseItem = getPulseItem(options.controller.getState());
         schedulePulseClear();
         renderDashboardFrame();
@@ -292,6 +299,7 @@ export async function runInteractiveDashboard(
       case "start":
         clearDashboardMessage();
         clearPulse();
+        options.sound?.play("started");
         await options.controller.startSelectedService();
         pulseItem = getPulseItem(options.controller.getState());
         schedulePulseClear();
@@ -301,10 +309,12 @@ export async function runInteractiveDashboard(
         clearDashboardMessage();
         clearPulse();
         if (isSelectedItemRunning(options.controller.getState())) {
+          options.sound?.play("stopped");
           showBusyMessage("Stopping");
           await options.controller.stopSelectedService();
           clearDashboardMessage();
         } else {
+          options.sound?.play("started");
           await options.controller.startSelectedService();
         }
         pulseItem = getPulseItem(options.controller.getState());
@@ -318,6 +328,7 @@ export async function runInteractiveDashboard(
           showBusyMessage("Restarting");
         }
 
+        options.sound?.play("started");
         await options.controller.restartSelectedService();
         clearDashboardMessage();
         pulseItem = getPulseItem(options.controller.getState());
@@ -405,6 +416,7 @@ export async function runInteractiveDashboard(
         break;
       }
       case "openLogs":
+        options.sound?.play("open");
         clearDashboardMessage();
         clearPulse();
         mode = "logs";
@@ -427,6 +439,28 @@ export async function runInteractiveDashboard(
         mode = "help";
         renderHelpFrame("dashboard");
         break;
+      case "openSettings": {
+        if (options.sound === undefined) {
+          break;
+        }
+
+        clearDashboardMessage();
+        clearPulse();
+
+        const outcome = await (options.runSettings ?? runSettingsDialog)({
+          sound: options.sound,
+          keyInput: options.keyInput,
+          background: lastScreenContents,
+          screen,
+        });
+
+        if (outcome === "exit") {
+          return { type: "exit" };
+        }
+
+        renderDashboardFrame();
+        break;
+      }
       case "startMove": {
         clearPulse();
         const state = options.controller.getState();
@@ -444,6 +478,7 @@ export async function runInteractiveDashboard(
       }
       case "back":
         clearPulse();
+        options.sound?.play("back");
         shouldQuit = true;
         break;
       case "none":
@@ -563,6 +598,7 @@ export async function runInteractiveDashboard(
     const contents = render(options.controller.getState(), {
       quitLabel: options.dashboardQuitLabel,
       moving: mode === "move",
+      settingsAvailable: options.sound !== undefined,
       statusMessage: dashboardMessage,
       pulseServiceIndex: pulseItem?.type === "service" ? pulseItem.index : undefined,
       pulseCommandIndex: pulseItem?.type === "command" ? pulseItem.index : undefined,
@@ -631,6 +667,10 @@ export async function runInteractiveDashboard(
 
       if (moved === "exit") {
         return "exit";
+      }
+
+      if (moved === "moved") {
+        options.sound?.play("move");
       }
 
       renderDashboardFrame();
