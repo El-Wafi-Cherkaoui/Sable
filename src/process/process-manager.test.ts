@@ -26,6 +26,31 @@ describe("ProcessManager", () => {
       return manager.getLogs("service-1").map((entry) => entry.line);
     }
 
+    it("drops the oldest lines once the character cap is passed", () => {
+      manager = new ProcessManager({ maxLogCharactersPerService: 10 });
+      const feed = (value: string) =>
+        (manager as unknown as { appendLogChunk(id: string, s: string, c: string): void }).appendLogChunk(
+          "service-1",
+          "stdout",
+          value,
+        );
+
+      feed("aaaa\nbbbb\ncccc\n");
+      feed("dd\n");
+
+      expect(manager.getLogs("service-1").map((entry) => entry.line)).toEqual(["bbbb", "cccc", "dd"]);
+
+      feed(`${"x".repeat(50)}\n`);
+
+      expect(manager.getLogs("service-1").map((entry) => entry.line)).toEqual(["x".repeat(50)]);
+    });
+
+    it("cuts a runaway line that never ends", () => {
+      const lines = pushChunk("stdout", "y".repeat(150_000));
+
+      expect(lines).toEqual(["y".repeat(150_000)]);
+    });
+
     it("strips screen clears and keeps colors", () => {
       expect(pushChunk("stdout", "\x1b[2J\x1b[1;1H\x1b[32mwatching\x1b[0m\n")).toEqual([
         "\x1b[32mwatching\x1b[0m",

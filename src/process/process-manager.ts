@@ -26,6 +26,7 @@ export type ProcessManagerOptions = {
   gracefulStopTimeoutMs?: number;
   forceStopTimeoutMs?: number;
   maxLogLinesPerService?: number;
+  maxLogCharactersPerService?: number;
   processTreeKiller?: ProcessTreeKiller;
 };
 
@@ -50,6 +51,9 @@ type PendingLogChunks = Partial<Record<ProcessOutputStream, string>>;
 const defaultGracefulStopTimeoutMs = 3_000;
 const defaultForceStopTimeoutMs = 1_000;
 const defaultMaxLogLinesPerService = 2_000;
+const defaultMaxLogCharactersPerService = 2_000_000;
+// A line that never ends is cut here so one runaway stream can't grow without limit.
+const maxUnfinishedLineCharacters = 100_000;
 
 export class ProcessManager {
   private readonly processes = new Map<string, ManagedProcessEntry>();
@@ -58,6 +62,8 @@ export class ProcessManager {
   private readonly gracefulStopTimeoutMs: number;
   private readonly forceStopTimeoutMs: number;
   private readonly maxLogLinesPerService: number;
+  private readonly maxLogCharactersPerService: number;
+  private readonly logCharacters = new Map<string, number>();
   private readonly processTreeKiller: ProcessTreeKiller;
 
   constructor(options: ProcessManagerOptions = {}) {
@@ -67,6 +73,8 @@ export class ProcessManager {
       options.forceStopTimeoutMs ?? defaultForceStopTimeoutMs;
     this.maxLogLinesPerService =
       options.maxLogLinesPerService ?? defaultMaxLogLinesPerService;
+    this.maxLogCharactersPerService =
+      options.maxLogCharactersPerService ?? defaultMaxLogCharactersPerService;
     this.processTreeKiller = options.processTreeKiller ?? killProcessTree;
   }
 
@@ -266,7 +274,14 @@ export class ProcessManager {
 
     // The unfinished last line stays raw so escape sequences split across chunks
     // are completed by the next chunk.
-    this.setPendingLogChunk(serviceId, stream, collapsePendingLine(lines.pop() ?? ""));
+    const unfinished = collapsePendingLine(lines.pop() ?? "");
+
+    if (unfinished.length > maxUnfinishedLineCharacters) {
+      lines.push(unfinished);
+      this.setPendingLogChunk(serviceId, stream, undefined);
+    } else {
+      this.setPendingLogChunk(serviceId, stream, unfinished);
+    }
 
     this.appendLogEntries(serviceId, toSanitizedEntries(stream, lines));
   }
@@ -327,13 +342,29 @@ export class ProcessManager {
 
     const serviceLogs = this.logs.get(serviceId) ?? [];
 
-    serviceLogs.push(...entries);
+    let characters = this.logCharacters.get(serviceId) ?? 0;
 
-    if (serviceLogs.length > this.maxLogLinesPerService) {
-      serviceLogs.splice(0, serviceLogs.length - this.maxLogLinesPerService);
+    for (const entry of entries) {
+      serviceLogs.push(entry);
+      characters += entry.line.length;
     }
 
+    // Drop the oldest lines past either cap, but always keep the newest one.
+    let dropCount = Math.max(0, serviceLogs.length - this.maxLogLinesPerService);
+
+    for (let index = 0; index < dropCount; index += 1) {
+      characters -= serviceLogs[index]?.line.length ?? 0;
+    }
+
+    while (characters > this.maxLogCharactersPerService && dropCount < serviceLogs.length - 1) {
+      characters -= serviceLogs[dropCount]?.line.length ?? 0;
+      dropCount += 1;
+    }
+
+    serviceLogs.splice(0, dropCount);
+
     this.logs.set(serviceId, serviceLogs);
+    this.logCharacters.set(serviceId, characters);
   }
 
   private async stopProcessTree(
