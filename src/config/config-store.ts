@@ -3,7 +3,7 @@ import path from "node:path";
 import { ZodError } from "zod";
 import { validateAppConfig } from "./config-schema.js";
 import { resolveConfigPaths, type ConfigPaths } from "./config-path.js";
-import type { AppConfig } from "./config-types.js";
+import type { AppConfig, WorkspaceConfig } from "./config-types.js";
 
 export const defaultConfig: AppConfig = {
   version: 1,
@@ -47,12 +47,23 @@ export type ConfigStoreOptions = {
 
 export class ConfigStore {
   readonly paths: ConfigPaths;
+  // What this store last read or wrote, so a save can tell what changed in the file
+  // since then (another Sable instance) and keep that instead of overwriting it.
+  private lastSeen: AppConfig | undefined;
 
   constructor(options: ConfigStoreOptions = {}) {
     this.paths = resolveConfigPaths(options);
   }
 
   async load(): Promise<AppConfig> {
+    const config = await this.readFile();
+
+    this.lastSeen = config;
+
+    return config;
+  }
+
+  private async readFile(): Promise<AppConfig> {
     let rawConfig: string;
 
     try {
@@ -85,7 +96,7 @@ export class ConfigStore {
   }
 
   async save(config: AppConfig): Promise<void> {
-    const validatedConfig = validateAppConfig(config);
+    const validatedConfig = await this.mergeWithFile(validateAppConfig(config));
 
     await fs.mkdir(this.paths.directory, { recursive: true });
 
@@ -106,11 +117,67 @@ export class ConfigStore {
       }
 
       await fs.rename(tempFile, this.paths.file);
+      this.lastSeen = validatedConfig;
     } catch (error) {
       await removeFileIfExists(tempFile);
       throw error;
     }
   }
+
+  // Two Sable windows can be open on the same file. A save applies only this
+  // instance's own changes (per workspace) on top of what is in the file now, so the other
+  // instance's workspaces survive. If both changed the same workspace, this one wins.
+  private async mergeWithFile(mine: AppConfig): Promise<AppConfig> {
+    const base = this.lastSeen;
+
+    if (base === undefined) {
+      return mine;
+    }
+
+    const current = await this.readFile();
+
+    if (sameValue(current, base)) {
+      return mine;
+    }
+
+    const baseById = new Map(base.workspaces.map((workspace) => [workspace.id, workspace]));
+    const mineById = new Map(mine.workspaces.map((workspace) => [workspace.id, workspace]));
+    const merged: WorkspaceConfig[] = [];
+
+    for (const workspace of current.workspaces) {
+      const mineVersion = mineById.get(workspace.id);
+      const baseVersion = baseById.get(workspace.id);
+
+      if (mineVersion === undefined) {
+        // Gone from mine: deleted here, unless it was never in my copy (added elsewhere).
+        if (baseVersion === undefined) {
+          merged.push(workspace);
+        }
+      } else {
+        merged.push(baseVersion !== undefined && sameValue(mineVersion, baseVersion) ? workspace : mineVersion);
+      }
+    }
+
+    for (const workspace of mine.workspaces) {
+      if (!current.workspaces.some((existing) => existing.id === workspace.id) && !baseById.has(workspace.id)) {
+        merged.push(workspace);
+      }
+    }
+
+    return { ...mine, workspaces: merged };
+  }
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+  return stableStringify(left) === stableStringify(right);
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, nested: unknown) =>
+    isRecord(nested)
+      ? Object.fromEntries(Object.entries(nested).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : nested,
+  );
 }
 
 function migrateConfig(input: unknown): unknown {
