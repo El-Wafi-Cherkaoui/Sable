@@ -4,7 +4,8 @@ import { formatStatus } from "./format.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { formatClockTime } from "./log-lines.js";
 import { createTuiStyle, type TuiStyle } from "./style.js";
-import { sliceVisibleStart, truncateVisible, visibleLength } from "./width.js";
+import { highlightAnsi, sliceAnsi, truncateAnsi, wrapAnsi } from "./ansi-text.js";
+import { stripAnsi, truncateVisible, visibleLength } from "./width.js";
 export { stripAnsi, truncateVisible, visibleLength } from "./width.js";
 
 // How many rows the log body has, how wide they are, and whether long lines wrap.
@@ -84,7 +85,7 @@ export function findMatches(logs: ServiceLogEntry[], query: string): number[] {
     return [];
   }
 
-  return logs.flatMap((entry, index) => entry.stream !== "system" && entry.line.toLowerCase().includes(needle) ? [index] : []);
+  return logs.flatMap((entry, index) => entry.stream !== "system" && stripAnsi(entry.line).toLowerCase().includes(needle) ? [index] : []);
 }
 
 // The next index in `candidates` after `from` (or before, going backwards), wrapping around.
@@ -185,8 +186,12 @@ function renderEntry(
 
   const contentWidth = layout.width - prefixWidth;
   const mark = entry.stream === "stderr" ? `${style.failed("▌")} ` : "  ";
-  const paint = (text: string) => {
-    const marked = color && query !== "" ? markMatches(text, query) : text;
+  // The child's own colors are shown only on plain stdout rows: stderr is painted red as a
+  // whole and the highlighted row is painted as selected, and a child reset would undo both.
+  const keepChildColors = color && entry.stream === "stdout" && !highlighted;
+  const text = keepChildColors ? entry.line : stripAnsi(entry.line);
+  const paint = (piece: string) => {
+    const marked = color && query !== "" ? highlightAnsi(piece, query) : piece;
 
     return entry.stream === "stderr" ? style.failed(marked) : marked;
   };
@@ -194,12 +199,12 @@ function renderEntry(
   const decorate = (row: string) => highlighted && color ? style.selected(row) : row;
 
   if (!layout.wrap) {
-    const shifted = horizontalScrollOffset > 0 ? sliceVisibleStart(entry.line, horizontalScrollOffset) : entry.line;
+    const shifted = horizontalScrollOffset > 0 ? sliceAnsi(text, horizontalScrollOffset) : text;
 
-    return [decorate(`${prefix}${paint(truncateVisible(shifted, contentWidth))}`)];
+    return [decorate(`${prefix}${paint(truncateAnsi(shifted, contentWidth))}`)];
   }
 
-  const chunks = chunkText(entry.line, contentWidth);
+  const chunks = wrapAnsi(text, contentWidth);
   const indent = " ".repeat(prefixWidth);
 
   return chunks.map((chunk, index) => decorate(`${index === 0 ? prefix : indent}${paint(chunk)}`));
@@ -210,53 +215,7 @@ function rowCount(entry: ServiceLogEntry, layout: LogsLayout): number {
     return 1;
   }
 
-  return Math.max(1, Math.ceil(visibleLength(entry.line) / (layout.width - prefixWidth)));
-}
-
-function chunkText(text: string, width: number): string[] {
-  if (text === "") {
-    return [""];
-  }
-
-  const chunks: string[] = [];
-  let rest = text;
-
-  while (rest !== "") {
-    const taken = sliceToWidth(rest, width);
-
-    chunks.push(taken);
-    rest = rest.slice(taken.length);
-  }
-
-  return chunks;
-}
-
-function sliceToWidth(text: string, width: number): string {
-  let result = "";
-
-  for (const character of text) {
-    if (visibleLength(result + character) > width) {
-      break;
-    }
-
-    result += character;
-  }
-
-  return result === "" ? [...text][0] ?? "" : result;
-}
-
-function markMatches(text: string, query: string): string {
-  const lower = text.toLowerCase();
-  const needle = query.toLowerCase();
-  let result = "";
-  let position = 0;
-
-  for (let found = lower.indexOf(needle); found !== -1; found = lower.indexOf(needle, position)) {
-    result += `${text.slice(position, found)}\x1b[7m${text.slice(found, found + needle.length)}\x1b[27m`;
-    position = found + needle.length;
-  }
-
-  return result + text.slice(position);
+  return wrapAnsi(entry.line, layout.width - prefixWidth).length;
 }
 
 function formatSearchLine(options: RenderLogsViewOptions, style: TuiStyle): string {
