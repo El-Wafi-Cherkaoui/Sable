@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { product } from "../shared/product.js";
 
-const checkIntervalMs = 24 * 60 * 60 * 1000;
+const checkIntervalMs = 60 * 60 * 1000;
 const requestTimeoutMs = 1_500;
 
 export type UpdateCheckEnvironment = Record<string, string | undefined>;
@@ -34,7 +34,7 @@ export type UpdateCheck = {
   done: Promise<void>;
 };
 
-// Checks npm for a newer Sable at most once a day, in the background. Every
+// Checks npm for a newer Sable at most once an hour, in the background. Every
 // failure (offline, timeout, bad cache) is silent: an update notice is never
 // worth slowing down or breaking a launch.
 export function startUpdateCheck(options: UpdateCheckOptions): UpdateCheck {

@@ -268,17 +268,6 @@ export async function runWorkspacePicker(
         }
 
         break;
-      case "moveWorkspaceUp":
-      case "moveWorkspaceDown": {
-        const workspace = getSelectedWorkspace(state);
-        const index = (state.selectedWorkspaceIndex ?? 0) + (action === "moveWorkspaceUp" ? -1 : 1);
-
-        if (workspace !== undefined && index >= 0 && index < state.workspaces.length) {
-          return { type: "reorderWorkspace", workspace, index };
-        }
-
-        break;
-      }
       case "openHelp":
         mode = "help";
         renderFrame(screen, renderHelp({ background: render(state), columns: process.stdout.columns, rows: process.stdout.rows, color }));

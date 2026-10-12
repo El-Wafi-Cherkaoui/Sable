@@ -6,6 +6,11 @@
 
 - The welcome screen now shows on every launch (it was once a day). Turn it off with the new "Welcome screen" row in Settings (`,`, then `↑↓` and `Space`) to go straight to your workspaces; the new-version popup still appears first when there is an update.
 - The Settings popup keeps the same size whichever setting is selected.
+- Sable now checks for a new version at most once an hour (it was once a day), so a release reaches you sooner.
+
+### Removed
+
+- The hidden pre-0.3 keys: `j`/`k` (use `↑↓`), `h`/`l` in logs (use `←→`), `S` (use `s`), `c` (use `a`), and `J`/`K` (use `m` to move).
 
 ## 0.3.2 - Polish
 

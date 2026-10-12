@@ -298,15 +298,6 @@ export async function runInteractiveDashboard(
         schedulePulseClear();
         renderDashboardFrame();
         break;
-      case "start":
-        clearDashboardMessage();
-        clearPulse();
-        options.sound?.play("started");
-        await options.controller.startSelectedService();
-        pulseItem = getPulseItem(options.controller.getState());
-        schedulePulseClear();
-        renderDashboardFrame();
-        break;
       case "toggle":
         clearDashboardMessage();
         clearPulse();
@@ -374,38 +365,6 @@ export async function runInteractiveDashboard(
 
         if (options.onDeleteService !== undefined) {
           const result = await options.onDeleteService({ background: lastScreenContents });
-
-          if (result.type === "exit") {
-            return { type: "exit" };
-          }
-
-          dashboardMessage = result.message;
-        }
-
-        renderDashboardFrame();
-        break;
-      }
-      case "moveServiceUp": {
-        clearPulse();
-
-        if (options.onMoveServiceUp !== undefined) {
-          const result = await options.onMoveServiceUp();
-
-          if (result.type === "exit") {
-            return { type: "exit" };
-          }
-
-          dashboardMessage = result.message;
-        }
-
-        renderDashboardFrame();
-        break;
-      }
-      case "moveServiceDown": {
-        clearPulse();
-
-        if (options.onMoveServiceDown !== undefined) {
-          const result = await options.onMoveServiceDown();
 
           if (result.type === "exit") {
             return { type: "exit" };
