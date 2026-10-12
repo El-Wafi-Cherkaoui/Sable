@@ -4,6 +4,7 @@ import { mapHelpKey, mapMoveKey, mapWorkspacePickerKey } from "../input/keymap.j
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { product } from "../shared/product.js";
 import { displayPath } from "./format.js";
+import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import { runSettingsDialog, type SettingsDialogResult } from "./settings-dialog.js";
 import { logoDotCount, renderRevealedLogo } from "./logo-reveal.js";
@@ -51,8 +52,6 @@ export type LogoReveal = { revealedDots: number; glowDots: number };
 export type RenderWorkspacePickerOptions = {
   stage?: StartupStage;
   reveal?: LogoReveal;
-  // The brief version for later launches in a day: no big logo.
-  short?: boolean;
   // One line under the logo, such as "3 workspaces · 7 services".
   summary?: string;
   color?: boolean;
@@ -75,10 +74,9 @@ export type RunWorkspacePickerOptions = {
   activeWorkspaceId?: string;
   activeRunningServiceCount?: number;
   startupMomentMs?: number;
-  // Show the short launch screen instead of the full logo.
-  startupShort?: boolean;
-  // Runs once after the startup logo, before the list appears (e.g. the update popup).
+  // Runs once at launch, after the startup logo if there is one and before the list appears (e.g. the update popup).
   sound?: SoundControl;
+  settings?: SettingsControl;
   runSettings?: typeof runSettingsDialog;
   afterStartup?: () => Promise<"continue" | "update" | "exit">;
 };
@@ -114,14 +112,14 @@ export async function runWorkspacePicker(
       options.activeWorkspaceId,
     ),
     activeRunningServiceCount: options.activeRunningServiceCount,
-    settingsAvailable: options.sound !== undefined,
+    settingsAvailable: options.settings !== undefined,
   };
   let mode: PickerMode = "picker";
   let stateBeforeMove: WorkspacePickerState | undefined;
   let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
   let queuedEvent = await runStartupMoment();
 
-  if (options.afterStartup !== undefined && (options.startupMomentMs ?? 0) > 0) {
+  if (options.afterStartup !== undefined) {
     const outcome = await options.afterStartup();
 
     if (outcome === "update") {
@@ -286,12 +284,12 @@ export async function runWorkspacePicker(
         renderFrame(screen, renderHelp({ background: render(state), columns: process.stdout.columns, rows: process.stdout.rows, color }));
         break;
       case "openSettings": {
-        if (options.sound === undefined) {
+        if (options.settings === undefined) {
           break;
         }
 
         const outcome: SettingsDialogResult = await (options.runSettings ?? runSettingsDialog)({
-          sound: options.sound,
+          settings: options.settings,
           keyInput: options.keyInput,
           background: render(state),
           screen,
@@ -320,11 +318,10 @@ export async function runWorkspacePicker(
       return undefined;
     }
 
-    const short = options.startupShort === true;
     const summary = describeWorkspaces(options.workspaces);
     let firstFrame = true;
     const show = (frame: RenderWorkspacePickerOptions) => {
-      const contents = renderStartupMoment({ ...frame, short, summary });
+      const contents = renderStartupMoment({ ...frame, summary });
 
       if (firstFrame) {
         renderFrame(screen, contents);
@@ -336,7 +333,7 @@ export async function runWorkspacePicker(
       }
     };
 
-    if (short || !color) {
+    if (!color) {
       show({ stage: 2 });
 
       const event = await readKeyAbortOrTimeout(durationMs);
@@ -572,9 +569,7 @@ export function renderWorkspaceStartupMoment(
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
   const stage = options.stage ?? 2;
-  const body = options.short === true
-    ? renderCompactStartupMoment(style, options.columns, options.summary)
-    : shouldRenderAnsiStartupLogo(options)
+  const body = shouldRenderAnsiStartupLogo(options)
     ? renderAnsiStartupBanner(style, options.columns, stage, options.summary, options.reveal)
     : shouldRenderTextStartupBanner(options.columns)
     ? renderTextStartupBanner(style, options.columns, options.summary)
@@ -731,7 +726,7 @@ export function renderWorkspacePickerHelp(options: HelpViewOptions = {}): string
       rows: ["s           stop it", "r           restart its services"],
     },
     {
-      rows: [",           settings (turn sound on or off)", "q           quit Sable (from this screen)", "Ctrl+C      quit Sable from anywhere"],
+      rows: [",           settings (sound, welcome screen)", "q           quit Sable (from this screen)", "Ctrl+C      quit Sable from anywhere"],
     },
   ], options);
 }

@@ -16,6 +16,7 @@ import {
   type InteractiveDashboardResult,
   type RunInteractiveDashboardOptions,
 } from "../tui/interactive-dashboard.js";
+import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import type { PromptScreen } from "../tui/prompt-view.js";
 import { requireWorkspaceByName } from "./find-workspace.js";
@@ -58,6 +59,7 @@ export type RunWorkspaceCommandOptions = {
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   keyInput?: KeyInput;
   sound?: SoundControl;
+  settings?: SettingsControl;
   runDashboard?: (
     options: RunInteractiveDashboardOptions,
   ) => Promise<InteractiveDashboardResult>;
@@ -79,6 +81,7 @@ export type RunWorkspaceSessionOptions = {
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   keyInput: KeyInput;
   sound?: SoundControl;
+  settings?: SettingsControl;
   runDashboard?: (
     options: RunInteractiveDashboardOptions,
   ) => Promise<InteractiveDashboardResult>;
@@ -123,6 +126,7 @@ export async function runWorkspaceCommand(
       workspace,
       createController: options.createController,
       sound: options.sound,
+      settings: options.settings,
       keyInput,
       runDashboard: options.runDashboard,
       abortSignal: shutdownAbortController.signal,
@@ -157,6 +161,7 @@ export async function runWorkspaceSession(
       controller,
       keyInput: options.keyInput,
       sound: options.sound,
+      settings: options.settings,
       abortSignal: options.abortSignal,
       dashboardQuitLabel: options.dashboardQuitLabel,
       initialMessage: options.initialMessage,

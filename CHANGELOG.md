@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-- No changes yet.
+### Changed
+
+- The welcome screen now shows on every launch (it was once a day). Turn it off with the new "Welcome screen" row in Settings (`,`, then `↑↓` and `Space`) to go straight to your workspaces; the new-version popup still appears first when there is an update.
+- The Settings popup keeps the same size whichever setting is selected.
 
 ## 0.3.2 - Polish
 

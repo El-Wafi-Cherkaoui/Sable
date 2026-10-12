@@ -9,9 +9,7 @@ import {
   formatConfigError,
 } from "./config/config-store.js";
 import { resolveConfigPaths } from "./config/config-path.js";
-import { claimFullSplash } from "./settings/launch-splash.js";
-import { createSettingsStore, settingsFile } from "./settings/settings-store.js";
-import { loadSoundControl, type SoundControl } from "./sound/sound-control.js";
+import { loadSettingsControl, type SettingsControl } from "./settings/settings-control.js";
 import { product } from "./shared/product.js";
 import { requireTerminal, TerminalRequiredError } from "./shared/require-terminal.js";
 import { installUpdate } from "./update/install-update.js";
@@ -60,15 +58,16 @@ program
 
     const configDirectory = resolveConfigPaths().directory;
     const updateCheck = startUpdateCheck({ cacheFile: updateCacheFile(configDirectory) });
-    const sound = await loadSoundControl(configDirectory);
-    const fullSplash = await claimFullSplash(createSettingsStore(settingsFile(configDirectory)));
+    const settings = await loadSettingsControl(configDirectory);
+    const { sound } = settings;
     let result: Awaited<ReturnType<typeof runWorkspaceHome>>;
 
     try {
       result = await runWorkspaceHome({
         store: new ConfigStore(),
         sound,
-        startupShort: !fullSplash,
+        settings,
+        welcomeScreen: settings.welcomeScreen.isEnabled(),
         update: {
           latestVersion: () => updateCheck.newerVersion(),
           currentVersion: product.version,
@@ -124,14 +123,15 @@ program
   .argument("<workspace-name>", "workspace name")
   .description("run a saved workspace")
   .action(async (workspaceName: string) => {
-    let sound: SoundControl | undefined;
+    let settings: SettingsControl | undefined;
 
     try {
       requireTerminal();
-      sound = await loadSoundControl(resolveConfigPaths().directory);
+      settings = await loadSettingsControl(resolveConfigPaths().directory);
       await runWorkspaceCommand(workspaceName, {
         store: new ConfigStore(),
-        sound,
+        sound: settings.sound,
+        settings,
       });
     } catch (error) {
       if (handleConfigError(error)) {
@@ -146,7 +146,7 @@ program
 
       throw error;
     } finally {
-      sound?.close();
+      settings?.sound.close();
     }
   });
 

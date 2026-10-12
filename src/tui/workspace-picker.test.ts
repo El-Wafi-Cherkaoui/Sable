@@ -193,14 +193,6 @@ describe("renderWorkspacePicker", () => {
     expect(complete).toContain(sableLogoAnsi[0]!.replace("\x1b[0m", ""));
   });
 
-  it("renders a short launch screen with the version and summary", () => {
-    const rendered = renderWorkspaceStartupMoment({ short: true, columns: 80, rows: 9, summary: "2 workspaces · 3 services" });
-
-    expect(rendered).toContain(`· sable ${product.version} ·`);
-    expect(rendered).toContain("2 workspaces · 3 services");
-    expect(rendered).not.toContain("█");
-  });
-
   it("describes your workspaces in a few words", () => {
     expect(describeWorkspaces([])).toBe("No workspaces yet · press a to create one");
     expect(describeWorkspaces(workspaces)).toMatch(/^2 workspaces · \d+ services?$/);
@@ -306,7 +298,7 @@ describe("runWorkspacePicker", () => {
   });
 
   it("opens settings with a comma and redraws the list afterwards", async () => {
-    const sound = { play: vi.fn(), isEnabled: () => true, setEnabled: vi.fn(async () => {}) };
+    const settings = fakeSettings();
     const runSettings = vi.fn(async () => "close" as const);
     const write = vi.fn();
 
@@ -315,7 +307,7 @@ describe("runWorkspacePicker", () => {
       keyInput: createKeyInput([{ sequence: "," }, { sequence: "q" }]),
       screen: { clear: vi.fn(), write },
       render: () => "picker",
-      sound,
+      settings,
       runSettings,
     });
 
@@ -324,7 +316,7 @@ describe("runWorkspacePicker", () => {
     expect(write).toHaveBeenCalledTimes(2);
   });
 
-  it("ignores the settings key when sound is not available", async () => {
+  it("ignores the settings key when settings are not available", async () => {
     const result = await runWorkspacePicker({
       workspaces,
       keyInput: createKeyInput([{ sequence: "," }, { sequence: "q" }]),
@@ -410,28 +402,6 @@ describe("runWorkspacePicker", () => {
 
     expect(result).toEqual({ type: "exit" });
     expect(stages).toEqual([0]);
-  });
-
-  it("shows the short launch screen without the open tone", async () => {
-    const stages: Array<boolean | undefined> = [];
-    const sound = { play: vi.fn(), isEnabled: () => true, setEnabled: vi.fn(async () => {}), close: vi.fn() };
-
-    await runWorkspacePicker({
-      workspaces,
-      keyInput: createKeyInput([{ sequence: "q" }]),
-      screen: { clear: vi.fn(), write: vi.fn() },
-      render: () => "picker",
-      renderStartupMoment: (stageOptions) => {
-        stages.push(stageOptions?.short);
-        return "intro";
-      },
-      startupMomentMs: 10,
-      startupShort: true,
-      sound,
-    });
-
-    expect(stages).toEqual([true]);
-    expect(sound.play).not.toHaveBeenCalled();
   });
 
   it("opens help and returns to the picker", async () => {
@@ -601,17 +571,21 @@ describe("runWorkspacePicker", () => {
     await expect(picking).resolves.toEqual({ type: "exit" });
   });
 
-  it("does not run the after-startup hook when there is no logo", async () => {
+  it("still runs the after-startup hook when there is no logo, then shows the list", async () => {
     const afterStartup = vi.fn(async () => "continue" as const);
+    const write = vi.fn();
 
     await runWorkspacePicker({
       workspaces,
       keyInput: createKeyInput([{ sequence: "q" }]),
-      screen: { clear: vi.fn(), write: vi.fn() },
+      screen: { clear: vi.fn(), write },
+      render: () => "picker",
+      startupMomentMs: 0,
       afterStartup,
     });
 
-    expect(afterStartup).not.toHaveBeenCalled();
+    expect(afterStartup).toHaveBeenCalledOnce();
+    expect(write).toHaveBeenNthCalledWith(1, "picker\n");
   });
 
   it("returns the selected workspace on delete", async () => {
@@ -659,6 +633,13 @@ function createKeyInput(keys: Awaited<ReturnType<KeyInput["readKey"]>>[]): KeyIn
     close: vi.fn(),
   };
 }
+
+const toggle = (enabled = true) => {
+  let on = enabled;
+
+  return { isEnabled: () => on, setEnabled: vi.fn(async (next: boolean) => { on = next; }) };
+};
+const fakeSettings = () => ({ sound: { play: vi.fn(), close: vi.fn(), ...toggle() }, welcomeScreen: toggle() });
 
 const workspaces: WorkspaceConfig[] = [
   {

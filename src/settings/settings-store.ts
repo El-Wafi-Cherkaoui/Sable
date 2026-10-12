@@ -3,8 +3,8 @@ import path from "node:path";
 
 export type Settings = {
   sound: boolean;
-  // The local day (YYYY-MM-DD) the full launch logo last appeared.
-  lastSplashDay?: string;
+  // The full welcome screen at launch; off shows a short version.
+  welcomeScreen: boolean;
 };
 
 export type SettingsStore = {
@@ -14,7 +14,7 @@ export type SettingsStore = {
   update(changes: Partial<Settings>): Promise<void>;
 };
 
-const defaultSettings: Settings = { sound: true };
+const defaultSettings: Settings = { sound: true, welcomeScreen: true };
 
 export function settingsFile(configDirectory: string): string {
   return path.join(configDirectory, "settings.json");
@@ -28,11 +28,11 @@ export function createSettingsStore(file: string): SettingsStore {
     async load() {
       try {
         const parsed: unknown = JSON.parse(await fs.readFile(file, "utf8"));
-        const fields = typeof parsed === "object" && parsed !== null ? parsed as { sound?: unknown; lastSplashDay?: unknown } : {};
+        const fields = typeof parsed === "object" && parsed !== null ? parsed as { sound?: unknown; welcomeScreen?: unknown } : {};
 
         return {
           sound: typeof fields.sound === "boolean" ? fields.sound : defaultSettings.sound,
-          ...(typeof fields.lastSplashDay === "string" ? { lastSplashDay: fields.lastSplashDay } : {}),
+          welcomeScreen: typeof fields.welcomeScreen === "boolean" ? fields.welcomeScreen : defaultSettings.welcomeScreen,
         };
       } catch {
         return { ...defaultSettings };

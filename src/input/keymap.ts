@@ -44,7 +44,7 @@ export type LogsAction =
 
 export type HelpAction = "back" | "none";
 
-export type SettingsAction = "toggle" | "close" | "none";
+export type SettingsAction = "selectNext" | "selectPrevious" | "toggle" | "close" | "none";
 
 export type MoveAction = "moveUp" | "moveDown" | "done" | "cancel" | "none";
 
@@ -217,6 +217,14 @@ export function mapHelpKey(keypress: Keypress): HelpAction {
 export function mapSettingsKey(keypress: Keypress): SettingsAction {
   if (keypress.name === "escape" || keypress.sequence === "q" || keypress.sequence === ",") {
     return "close";
+  }
+
+  if (keypress.name === "down") {
+    return "selectNext";
+  }
+
+  if (keypress.name === "up") {
+    return "selectPrevious";
   }
 
   if (keypress.sequence === " " || keypress.name === "space" || isEnter(keypress) || keypress.name === "left" || keypress.name === "right") {

@@ -120,11 +120,11 @@ v           view services in selected workspace
 s           stop the running workspace
 r           restart the running workspace's services
 ?           help
-,           settings (sound on/off)
+,           settings (sound, welcome screen)
 q           quit Sable
 ```
 
-The first launch each day shows the full logo, fading in with the version and a one-line summary of your workspaces; later launches show a short version. Any key skips it.
+Launch shows a welcome screen: the logo builds up dot by dot, with the version and a one-line summary of your workspaces. Any key skips it. Turn it off in Settings (`,`) to go straight to the workspace list; a new-version popup still appears.
 
 Deleting a workspace from the picker requires typing the workspace name exactly.
 
@@ -144,7 +144,7 @@ e           edit selected item (changes apply on restart)
 d           delete selected item (stop it first)
 m           move selected service (↑ ↓, then Enter; Esc cancels)
 ?           help
-,           settings (sound on/off)
+,           settings (sound, welcome screen)
 Esc, q      back to the picker, or quit when started with sable run
 ```
 
@@ -168,7 +168,7 @@ Logs/output are kept in memory, up to 2,000 lines (and about 2 million character
 
 ## Sound
 
-Sable plays soft, quiet tones as you move (`↑↓`), open and go back, start and stop things, and a calm chime when a service or command ends on its own (not when you stop it). Sound is on by default. Press `,` on the picker or dashboard to open the settings popup and turn it off; the choice is saved in `settings.json` next to `workspaces.json`.
+Sable plays soft, quiet tones as you move (`↑↓`), open and go back, start and stop things, and a calm chime when a service or command ends on its own (not when you stop it). Sound is on by default. Press `,` on the picker or dashboard to open the Settings popup (`↑↓` to choose, `Space` to switch) and turn it off; settings are saved in `settings.json` next to `workspaces.json`.
 
 Sable has no audio dependency. On Linux (including WSL) it keeps one audio stream open through `pacat`, `paplay`, `pw-cat` or `aplay` and mixes its tones into it, so every sound starts with the same short delay. On macOS and Windows it plays small files from a `sounds/` folder in the config directory with `afplay` or PowerShell, which can start a little later. If no player works, Sable stays silent.
 
