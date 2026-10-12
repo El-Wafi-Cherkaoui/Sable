@@ -12,6 +12,45 @@ afterEach(async () => {
 });
 
 describe("ProcessManager", () => {
+  describe("child color environment", () => {
+    async function readForceColor(env: Record<string, string> = {}): Promise<string> {
+      manager = createManager();
+      const service = createService({
+        command: nodeCommand("console.log('FC=' + process.env.FORCE_COLOR);"),
+        env,
+      });
+
+      manager.start(service);
+      await waitForStatus(manager, service.id, "exited");
+
+      return manager.getLogs(service.id).find((entry) => entry.line.startsWith("FC="))?.line ?? "";
+    }
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("asks children for color", async () => {
+      vi.stubEnv("FORCE_COLOR", undefined as unknown as string);
+      vi.stubEnv("NO_COLOR", undefined as unknown as string);
+
+      expect(await readForceColor()).toBe("FC=1");
+    });
+
+    it("lets the service env override it", async () => {
+      vi.stubEnv("NO_COLOR", undefined as unknown as string);
+
+      expect(await readForceColor({ FORCE_COLOR: "0" })).toBe("FC=0");
+    });
+
+    it("does not ask for color when NO_COLOR is set", async () => {
+      vi.stubEnv("FORCE_COLOR", undefined as unknown as string);
+      vi.stubEnv("NO_COLOR", "1");
+
+      expect(await readForceColor()).toBe("FC=undefined");
+    });
+  });
+
   describe("log sanitising", () => {
     function pushChunk(stream: "stdout" | "stderr", chunk: string): string[] {
       manager = createManager();

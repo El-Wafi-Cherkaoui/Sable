@@ -92,6 +92,7 @@ export class ProcessManager {
       child = spawn(service.command, {
         cwd: service.cwd,
         env: {
+          ...colorEnvironment(),
           ...process.env,
           ...service.env,
         },
@@ -442,6 +443,12 @@ function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
 
     child.once("exit", onExit);
   });
+}
+
+// Children get pipes, not a terminal, so most tools turn color off. Ask for it, unless
+// the user opted out with NO_COLOR; their own FORCE_COLOR or service env still wins.
+function colorEnvironment(): NodeJS.ProcessEnv {
+  return process.env.NO_COLOR === undefined ? { FORCE_COLOR: "1" } : {};
 }
 
 function toError(error: unknown): Error {
