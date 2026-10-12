@@ -32,4 +32,13 @@ describe("settings store", () => {
     writeFileSync(file, JSON.stringify({ sound: "no" }));
     expect(await store.load()).toEqual({ sound: true });
   });
+
+  it("keeps other settings when one changes", async () => {
+    const store = createSettingsStore(tempFile());
+
+    await store.update({ lastSplashDay: "2026-10-12" });
+    await store.update({ sound: false });
+
+    expect(await store.load()).toEqual({ sound: false, lastSplashDay: "2026-10-12" });
+  });
 });

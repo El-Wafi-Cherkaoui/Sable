@@ -39,6 +39,10 @@ export type WorkspaceHomeConfigStore = {
   save(config: AppConfig): Promise<void>;
 };
 
+// How long the launch screen stays up (any key skips it).
+const fullStartupMs = 1_800;
+const shortStartupMs = 300;
+
 export type RunWorkspaceHomeOptions = {
   store: WorkspaceHomeConfigStore;
   keyInput?: KeyInput;
@@ -52,6 +56,8 @@ export type RunWorkspaceHomeOptions = {
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   sound?: SoundControl;
+  // Show the brief launch screen (not the first launch of the day).
+  startupShort?: boolean;
   signalSource?: WorkspaceHomeSignalSource;
   warn?: ShutdownWarn;
 };
@@ -119,7 +125,8 @@ export async function runWorkspaceHome(
         activeWorkspaceId: activeSession?.workspaceId,
         activeRunningServiceCount: activeSession?.controller.getState().services
           .filter((serviceState) => serviceState.process.status === "running").length,
-        startupMomentMs: shouldShowStartupMoment ? 700 : 0,
+        startupMomentMs: shouldShowStartupMoment ? (options.startupShort === true ? shortStartupMs : fullStartupMs) : 0,
+        startupShort: options.startupShort,
         afterStartup: options.update === undefined ? undefined : () => showUpdatePopup(options.update!, keyInput, options.screen),
         screen: options.screen,
       });

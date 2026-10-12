@@ -6,6 +6,7 @@ import { product } from "../shared/product.js";
 import { displayPath } from "./format.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import { runSettingsDialog, type SettingsDialogResult } from "./settings-dialog.js";
+import { logoDotCount, renderRevealedLogo } from "./logo-reveal.js";
 import { renderHelpBox, type HelpViewOptions } from "./help-view.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { appendAnchoredFooter, clipLines } from "./layout.js";
@@ -39,7 +40,21 @@ export type WorkspacePickerScreen = {
   write(contents: string): void;
 };
 
+// How much of the launch screen is drawn: 0 the logo (building up dot by dot),
+// 1 the finished logo and name, 2 everything.
+export type StartupStage = 0 | 1 | 2;
+
+// While the logo is still building: how many of its dots are lit, and how many
+// of the newest ones still glow.
+export type LogoReveal = { revealedDots: number; glowDots: number };
+
 export type RenderWorkspacePickerOptions = {
+  stage?: StartupStage;
+  reveal?: LogoReveal;
+  // The brief version for later launches in a day: no big logo.
+  short?: boolean;
+  // One line under the logo, such as "3 workspaces · 7 services".
+  summary?: string;
   color?: boolean;
   style?: TuiStyle;
   columns?: number;
@@ -60,6 +75,8 @@ export type RunWorkspacePickerOptions = {
   activeWorkspaceId?: string;
   activeRunningServiceCount?: number;
   startupMomentMs?: number;
+  // Show the short launch screen instead of the full logo.
+  startupShort?: boolean;
   // Runs once after the startup logo, before the list appears (e.g. the update popup).
   sound?: SoundControl;
   runSettings?: typeof runSettingsDialog;
@@ -81,7 +98,8 @@ export async function runWorkspacePicker(
     columns: process.stdout.columns,
     rows: process.stdout.rows,
   }));
-  const renderStartupMoment = options.renderStartupMoment ?? (() => renderWorkspaceStartupMoment({
+  const renderStartupMoment = options.renderStartupMoment ?? ((stage: RenderWorkspacePickerOptions) => renderWorkspaceStartupMoment({
+    ...stage,
     color,
     columns: process.stdout.columns,
     rows: process.stdout.rows,
@@ -302,11 +320,64 @@ export async function runWorkspacePicker(
       return undefined;
     }
 
-    renderFrame(screen, renderStartupMoment());
+    const short = options.startupShort === true;
+    const summary = describeWorkspaces(options.workspaces);
+    let firstFrame = true;
+    const show = (frame: RenderWorkspacePickerOptions) => {
+      const contents = renderStartupMoment({ ...frame, short, summary });
 
-    const event = await readKeyAbortOrTimeout(durationMs);
+      if (firstFrame) {
+        renderFrame(screen, contents);
+        firstFrame = false;
+      } else {
+        // Every frame only adds to the last one, so draw over it from the top
+        // instead of clearing the screen, which would flicker.
+        screen.write(`\x1b[H${contents.split("\n").map((line) => `${line}\x1b[K`).join("\n")}\n`);
+      }
+    };
 
-    return event.type === "timeout" ? undefined : event;
+    if (short || !color) {
+      show({ stage: 2 });
+
+      const event = await readKeyAbortOrTimeout(durationMs);
+
+      return event.type === "timeout" ? undefined : event;
+    }
+
+    // The logo builds up dot by dot for the first half, then the name appears,
+    // then the rest. The three parts always add up to the launch time.
+    const buildMs = durationMs * 0.55;
+    const frames = Math.max(1, Math.ceil(buildMs / revealFrameMs));
+
+    for (let frame = 0; frame < frames; frame += 1) {
+      const elapsed = frame * revealFrameMs;
+      const revealedDots = Math.floor(easeOut(elapsed / buildMs) * logoDotCount);
+      const glowDots = revealedDots - Math.floor(easeOut(Math.max(0, elapsed - glowMs) / buildMs) * logoDotCount);
+
+      show({ stage: 0, reveal: { revealedDots, glowDots } });
+
+      const event = await readKeyAbortOrTimeout(Math.min(revealFrameMs, buildMs));
+
+      if (event.type !== "timeout") {
+        return event;
+      }
+    }
+
+    for (const { stage, ms } of [{ stage: 1 as const, ms: durationMs * 0.15 }, { stage: 2 as const, ms: durationMs * 0.3 }]) {
+      show({ stage });
+
+      if (stage === 1) {
+        options.sound?.play("open");
+      }
+
+      const event = await readKeyAbortOrTimeout(ms);
+
+      if (event.type !== "timeout") {
+        return event;
+      }
+    }
+
+    return undefined;
   }
 
   async function readKeyEvent(): Promise<Awaited<ReturnType<KeyInput["readKey"]>>> {
@@ -500,11 +571,14 @@ export function renderWorkspaceStartupMoment(
   options: RenderWorkspacePickerOptions = {},
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
-  const body = shouldRenderAnsiStartupLogo(options)
-    ? renderAnsiStartupBanner(style, options.columns)
+  const stage = options.stage ?? 2;
+  const body = options.short === true
+    ? renderCompactStartupMoment(style, options.columns, options.summary)
+    : shouldRenderAnsiStartupLogo(options)
+    ? renderAnsiStartupBanner(style, options.columns, stage, options.summary, options.reveal)
     : shouldRenderTextStartupBanner(options.columns)
-    ? renderTextStartupBanner(style, options.columns)
-    : renderCompactStartupMoment(style, options.columns);
+    ? renderTextStartupBanner(style, options.columns, options.summary)
+    : renderCompactStartupMoment(style, options.columns, options.summary);
   const leadingBlankLines = options.rows === undefined || options.rows <= body.length
     ? 1
     : Math.max(1, Math.floor((options.rows - body.length) / 2));
@@ -526,32 +600,59 @@ function shouldRenderAnsiStartupLogo(options: RenderWorkspacePickerOptions): boo
     && (options.columns === undefined || options.columns >= sableLogoAnsiWidth);
 }
 
-function renderAnsiStartupBanner(style: TuiStyle, columns: number | undefined): string[] {
+// "Sable 0.3.1": the name in the title style, the version quietly beside it.
+function startupTitle(style: TuiStyle): string {
+  return `${style.title(product.displayName)} ${style.muted(product.version)}`;
+}
+
+// Every stage has the same number of lines, so the logo never jumps while it builds.
+function renderAnsiStartupBanner(
+  style: TuiStyle,
+  columns: number | undefined,
+  stage: StartupStage,
+  summary: string | undefined,
+  reveal: LogoReveal | undefined,
+): string[] {
+  const logo = stage === 0 && reveal !== undefined ? renderRevealedLogo(reveal.revealedDots, reveal.glowDots) : sableLogoAnsi;
+
   return [
-    ...sableLogoAnsi.map((line) => centerVisible(line, columns)),
+    ...logo.map((line) => centerVisible(line, columns)),
     "",
-    centerVisible(style.title(product.displayName), columns),
-    centerVisible(style.muted("Keyboard-first Workspace Manager"), columns),
-    centerVisible(style.muted("─".repeat(sableLogoAnsiWidth)), columns),
+    stage >= 1 ? centerVisible(startupTitle(style), columns) : "",
+    stage >= 2 ? centerVisible(style.muted("Keyboard-first Workspace Manager"), columns) : "",
+    stage >= 2 ? centerVisible(style.muted("─".repeat(sableLogoAnsiWidth)), columns) : "",
+    stage >= 2 && summary !== undefined ? centerVisible(style.muted(summary), columns) : "",
   ];
 }
 
-function renderTextStartupBanner(style: TuiStyle, columns: number | undefined): string[] {
+function renderTextStartupBanner(style: TuiStyle, columns: number | undefined, summary: string | undefined): string[] {
   return [
     ...startupBannerLines.map((line) => centerVisible(style.title(padVisibleEnd(line, startupBannerWidth)), columns)),
     "",
-    centerVisible(style.title(product.displayName), columns),
+    centerVisible(startupTitle(style), columns),
     centerVisible(style.muted("Keyboard-first Workspace Manager"), columns),
     centerVisible(style.muted("─".repeat(startupBannerWidth)), columns),
+    ...(summary === undefined ? [] : [centerVisible(style.muted(summary), columns)]),
   ];
 }
 
-function renderCompactStartupMoment(style: TuiStyle, columns: number | undefined): string[] {
+function renderCompactStartupMoment(style: TuiStyle, columns: number | undefined, summary: string | undefined): string[] {
   return [
-    centerVisible(style.title(`· ${product.binaryName} ·`), columns),
+    centerVisible(style.title(`· ${product.binaryName} ${product.version} ·`), columns),
     "",
-    centerVisible(style.muted("workspace ready"), columns),
+    centerVisible(style.muted(summary ?? "workspace ready"), columns),
   ];
+}
+
+// What the launch screen says about your setup, in a few words.
+export function describeWorkspaces(workspaces: WorkspaceConfig[]): string {
+  if (workspaces.length === 0) {
+    return "No workspaces yet · press a to create one";
+  }
+
+  const services = workspaces.reduce((total, workspace) => total + workspace.services.length, 0);
+
+  return `${workspaces.length} ${workspaces.length === 1 ? "workspace" : "workspaces"} · ${services} ${services === 1 ? "service" : "services"}`;
 }
 
 const startupBannerLines = [
@@ -702,6 +803,16 @@ function waitForAbort(signal: AbortSignal | undefined): Promise<void> {
 
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+// Frames of the logo build-up (about 25 per second), and how long a new dot glows.
+const revealFrameMs = 40;
+const glowMs = 100;
+
+function easeOut(progress: number): number {
+  const clamped = Math.min(1, Math.max(0, progress));
+
+  return 1 - (1 - clamped) * (1 - clamped);
 }
 
 function renderFrame(screen: WorkspacePickerScreen, contents: string): void {

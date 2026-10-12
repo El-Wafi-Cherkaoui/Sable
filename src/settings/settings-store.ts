@@ -3,11 +3,15 @@ import path from "node:path";
 
 export type Settings = {
   sound: boolean;
+  // The local day (YYYY-MM-DD) the full launch logo last appeared.
+  lastSplashDay?: string;
 };
 
 export type SettingsStore = {
   load(): Promise<Settings>;
   save(settings: Settings): Promise<void>;
+  // Changes some settings and keeps the rest.
+  update(changes: Partial<Settings>): Promise<void>;
 };
 
 const defaultSettings: Settings = { sound: true };
@@ -20,13 +24,16 @@ export function settingsFile(configDirectory: string): string {
 // problem can never affect saved workspaces. A missing or unreadable file
 // just means the defaults.
 export function createSettingsStore(file: string): SettingsStore {
-  return {
+  const store: SettingsStore = {
     async load() {
       try {
         const parsed: unknown = JSON.parse(await fs.readFile(file, "utf8"));
-        const sound = typeof parsed === "object" && parsed !== null ? (parsed as { sound?: unknown }).sound : undefined;
+        const fields = typeof parsed === "object" && parsed !== null ? parsed as { sound?: unknown; lastSplashDay?: unknown } : {};
 
-        return { sound: typeof sound === "boolean" ? sound : defaultSettings.sound };
+        return {
+          sound: typeof fields.sound === "boolean" ? fields.sound : defaultSettings.sound,
+          ...(typeof fields.lastSplashDay === "string" ? { lastSplashDay: fields.lastSplashDay } : {}),
+        };
       } catch {
         return { ...defaultSettings };
       }
@@ -38,5 +45,10 @@ export function createSettingsStore(file: string): SettingsStore {
       await fs.writeFile(temp, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
       await fs.rename(temp, file);
     },
+    async update(changes) {
+      await store.save({ ...await store.load(), ...changes });
+    },
   };
+
+  return store;
 }

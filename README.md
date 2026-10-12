@@ -124,6 +124,8 @@ r           restart the running workspace's services
 q           quit Sable
 ```
 
+The first launch each day shows the full logo, fading in with the version and a one-line summary of your workspaces; later launches show a short version. Any key skips it.
+
 Deleting a workspace from the picker requires typing the workspace name exactly.
 
 Only one workspace is active at a time. When you open a workspace from the picker, `q` in the dashboard returns to the picker and keeps that workspace running. The picker marks the active workspace as `running`. Quitting Sable from the picker stops the active workspace; opening a different workspace stops the previous active workspace first.
