@@ -134,6 +134,49 @@ describe("runForm", () => {
   });
 });
 
+describe("folder completion", () => {
+  const folderFields = (): FormField[] => [
+    { type: "text", key: "name", label: "Name" },
+    { type: "text", key: "cwd", label: "Directory", pathBase: "/work" },
+  ];
+  const completePath = vi.fn((text: string) => (text === "ap" ? "i/" : undefined));
+  const folderOptions = { fields: folderFields, completePath };
+  const folderState = (cwd: string, cursor = cwd.length): FormState => ({
+    values: { name: "ap", cwd },
+    focus: 1,
+    cursor,
+    errors: {},
+  });
+
+  it("shows the suggestion after the text and offers the → hint", () => {
+    const rendered = renderForm({ title: "t", ...folderOptions }, folderState("ap"));
+
+    expect(rendered).toContain("▏i/");
+    expect(rendered).toContain("[→] complete folder");
+  });
+
+  it("accepts the suggestion with → at the end of the text", () => {
+    const state = applyFormKey(folderOptions, folderState("ap"), { name: "right" });
+
+    expect(state.values.cwd).toBe("api/");
+    expect(state.cursor).toBe(4);
+  });
+
+  it("does not suggest while the cursor is inside the text", () => {
+    const state = folderState("ap", 1);
+
+    expect(renderForm({ title: "t", ...folderOptions }, state)).not.toContain("i/");
+    expect(applyFormKey(folderOptions, state, { name: "right" }).cursor).toBe(2);
+  });
+
+  it("does not suggest on ordinary text fields or without a completer", () => {
+    const onName: FormState = { ...folderState("ap"), focus: 0 };
+
+    expect(renderForm({ title: "t", ...folderOptions }, onName)).not.toContain("complete folder");
+    expect(renderForm({ title: "t", fields: folderFields }, folderState("ap"))).not.toContain("complete folder");
+  });
+});
+
 function stateAt(focus: number, cursor = 0): FormState {
   return { values, focus, cursor, errors: {} };
 }

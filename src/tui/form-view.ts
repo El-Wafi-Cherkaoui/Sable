@@ -1,12 +1,15 @@
 import type { Keypress } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
+import { createPathCompleter, type PathCompleter } from "./path-completion.js";
 import type { PromptScreen } from "./prompt-view.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
 import { padVisibleEnd } from "./width.js";
 
 export type FormField =
-  | { type: "text"; key: string; label: string; hint?: string }
+  // `pathBase` marks a folder field: typing shows a completion, and → accepts it.
+  // Relative paths are read from that folder.
+  | { type: "text"; key: string; label: string; hint?: string; pathBase?: string }
   | { type: "toggle"; key: string; label: string }
   | { type: "choice"; key: string; label: string; choices: Array<{ value: string; label: string }> }
   | { type: "list"; key: string; label: string; hint?: string; addLabel: string };
@@ -23,6 +26,7 @@ export type RunFormOptions = {
   fields: (values: FormValues) => FormField[];
   values: FormValues;
   validate?: (values: FormValues) => FormErrors;
+  completePath?: PathCompleter;
   keyInput: KeyInput;
   screen?: PromptScreen;
   color?: boolean;
@@ -56,7 +60,8 @@ export async function runForm(options: RunFormOptions): Promise<FormResult> {
     cursor: textOf(options.values, firstRow(options))?.length ?? 0,
     errors: {},
   };
-  const render = () => renderFrame(screen, renderForm(options, state, style, color, options.columns ?? process.stdout.columns));
+  const formOptions = { ...options, completePath: options.completePath ?? createPathCompleter() };
+  const render = () => renderFrame(screen, renderForm(formOptions, state, style, color, options.columns ?? process.stdout.columns));
 
   render();
 
@@ -98,13 +103,13 @@ export async function runForm(options: RunFormOptions): Promise<FormResult> {
       continue;
     }
 
-    state = applyFormKey(options, state, keypress);
+    state = applyFormKey(formOptions, state, keypress);
     render();
   }
 }
 
 // Pure state transition for one key, so editing behavior is testable without a terminal.
-export function applyFormKey(options: Pick<RunFormOptions, "fields">, state: FormState, keypress: Keypress & { shift?: boolean }): FormState {
+export function applyFormKey(options: Pick<RunFormOptions, "fields" | "completePath">, state: FormState, keypress: Keypress & { shift?: boolean }): FormState {
   const rows = buildRows(options.fields(state.values), state.values);
   const row = rows[state.focus];
 
@@ -163,8 +168,15 @@ export function applyFormKey(options: Pick<RunFormOptions, "fields">, state: For
   switch (keypress.name) {
     case "left":
       return { ...state, cursor: Math.max(0, state.cursor - 1) };
-    case "right":
+    case "right": {
+      const completion = pathCompletion(options, row, state);
+
+      if (completion !== undefined) {
+        return setText(text + completion, text.length + completion.length);
+      }
+
       return { ...state, cursor: Math.min(text.length, state.cursor + 1) };
+    }
     case "home":
       return { ...state, cursor: 0 };
     case "end":
@@ -191,7 +203,7 @@ export function applyFormKey(options: Pick<RunFormOptions, "fields">, state: For
 }
 
 export function renderForm(
-  options: Pick<RunFormOptions, "title" | "subtitle" | "fields">,
+  options: Pick<RunFormOptions, "title" | "subtitle" | "fields" | "completePath">,
   state: FormState,
   style: TuiStyle = createTuiStyle(false),
   color = false,
@@ -208,7 +220,7 @@ export function renderForm(
     const label = row.kind === "field" || (row.kind === "item" && row.index === 0) || (row.kind === "add" && listOf(state.values, row.field.key).length === 0)
       ? row.field.label
       : "";
-    const value = renderRowValue(row, state, focused, style, color, valueWidth);
+    const value = renderRowValue(row, state, focused, style, color, valueWidth, pathCompletion(options, row, state));
     const line = `${focused ? "> " : "  "}${padVisibleEnd(label, labelWidth)}${value}`;
 
     lines.push(focused && color ? style.selected(padVisibleEnd(line, Math.min(columns - 1, labelWidth + valueWidth + 3))) : line);
@@ -224,12 +236,12 @@ export function renderForm(
     }
   }
 
-  lines.push("", formatKeyHints(getFormKeyHints(rows[state.focus]), style, columns - 1));
+  lines.push("", formatKeyHints(getFormKeyHints(rows[state.focus], pathCompletion(options, rows[state.focus], state) !== undefined), style, columns - 1));
 
   return lines.join("\n");
 }
 
-function renderRowValue(row: FormRow, state: FormState, focused: boolean, style: TuiStyle, color: boolean, width: number): string {
+function renderRowValue(row: FormRow, state: FormState, focused: boolean, style: TuiStyle, color: boolean, width: number, completion: string | undefined): string {
   if (row.kind === "add") {
     return focused ? `+ ${row.field.addLabel}` : style.muted(`+ ${row.field.addLabel}`);
   }
@@ -248,7 +260,24 @@ function renderRowValue(row: FormRow, state: FormState, focused: boolean, style:
 
   const text = textOf(state.values, row) ?? "";
 
-  return focused ? renderWithCursor(text, state.cursor, color, width) : truncateEnd(text, width);
+  if (!focused) {
+    return truncateEnd(text, width);
+  }
+
+  const shown = renderWithCursor(text, state.cursor, color, width);
+
+  return completion === undefined ? shown : `${shown}${style.muted(truncateEnd(completion, Math.max(1, width - text.length - 1)))}`;
+}
+
+// The rest of the folder being typed, offered only on a folder field with the cursor at the end.
+function pathCompletion(options: Pick<RunFormOptions, "completePath">, row: FormRow | undefined, state: FormState): string | undefined {
+  if (options.completePath === undefined || row?.kind !== "field" || row.field.type !== "text" || row.field.pathBase === undefined) {
+    return undefined;
+  }
+
+  const text = textOf(state.values, row) ?? "";
+
+  return state.cursor === text.length ? options.completePath(text, row.field.pathBase) : undefined;
 }
 
 // Shows a window of the text that keeps the cursor visible, with a block cursor
@@ -271,14 +300,14 @@ function truncateEnd(text: string, width: number): string {
   return text.length <= width ? text : `${text.slice(0, width - 1)}…`;
 }
 
-function getFormKeyHints(row: FormRow | undefined): KeyHint[] {
+function getFormKeyHints(row: FormRow | undefined, canComplete: boolean): KeyHint[] {
   const change: KeyHint[] = row?.kind === "field" && (row.field.type === "toggle" || row.field.type === "choice")
     ? [["Space", "change"]]
     : row?.kind === "add"
       ? [["Enter", "add"]]
       : [];
 
-  return [["↑↓", "field"], ...change, ["Ctrl+S", "save"], ["Esc", "cancel"]];
+  return [["↑↓", "field"], ...(canComplete ? [["→", "complete folder"] as KeyHint] : []), ...change, ["Ctrl+S", "save"], ["Esc", "cancel"]];
 }
 
 function trySubmit(
