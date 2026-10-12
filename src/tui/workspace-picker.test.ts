@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceConfig } from "../config/config-types.js";
+import { product } from "../shared/product.js";
 import { sableLogoAnsi, sableLogoAnsiHeight, sableLogoAnsiWidth } from "../generated/sable-logo-ansi.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { stripAnsi, visibleLength } from "./logs-view.js";
@@ -159,7 +160,7 @@ describe("renderWorkspacePicker", () => {
     expect(rendered.split("\n")).toEqual([
       "",
       "",
-      "  · sable 0.3.1 ·",
+      `  · sable ${product.version} ·`,
       "",
       "  workspace ready",
     ]);
@@ -168,7 +169,7 @@ describe("renderWorkspacePicker", () => {
   it("shows the version beside the name and a summary line under the banner", () => {
     const rendered = renderWorkspaceStartupMoment({ columns: 80, rows: 14, summary: "2 workspaces · 3 services" });
 
-    expect(rendered).toContain("Sable 0.3.1");
+    expect(rendered).toContain(`Sable ${product.version}`);
     expect(rendered).toContain("2 workspaces · 3 services");
   });
 
@@ -183,8 +184,8 @@ describe("renderWorkspacePicker", () => {
 
     expect(dots(early)).toBeLessThan(dots(late));
     expect(dots(late)).toBeLessThan(dots(complete));
-    expect(stripAnsi(late)).not.toContain("Sable 0.3.1");
-    expect(stripAnsi(named)).toContain("Sable 0.3.1");
+    expect(stripAnsi(late)).not.toContain(`Sable ${product.version}`);
+    expect(stripAnsi(named)).toContain(`Sable ${product.version}`);
     expect(stripAnsi(named)).not.toContain("Keyboard-first");
     expect(stripAnsi(complete)).toContain("Keyboard-first Workspace Manager");
     expect(stripAnsi(complete)).toContain("1 workspace · 2 services");
@@ -195,7 +196,7 @@ describe("renderWorkspacePicker", () => {
   it("renders a short launch screen with the version and summary", () => {
     const rendered = renderWorkspaceStartupMoment({ short: true, columns: 80, rows: 9, summary: "2 workspaces · 3 services" });
 
-    expect(rendered).toContain("· sable 0.3.1 ·");
+    expect(rendered).toContain(`· sable ${product.version} ·`);
     expect(rendered).toContain("2 workspaces · 3 services");
     expect(rendered).not.toContain("█");
   });
