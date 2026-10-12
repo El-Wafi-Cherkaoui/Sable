@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import treeKill from "tree-kill";
 import type { CommandConfig, ServiceConfig } from "../config/config-types.js";
+import { lastCarriageReturnSegment, sanitizeLogLine } from "./sanitize-output.js";
 
 export type ProcessStatus = "stopped" | "running" | "exited" | "failed";
 
@@ -260,28 +261,14 @@ export class ProcessManager {
     chunk: Buffer | string,
   ): void {
     const pendingChunk = this.pendingLogChunks.get(serviceId)?.[stream] ?? "";
-    const contents = normalizeLogContents(`${pendingChunk}${chunk.toString()}`);
+    const contents = `${pendingChunk}${chunk.toString()}`.replace(/\r\n/g, "\n");
     const lines = contents.split("\n");
 
-    if (contents.endsWith("\n")) {
-      lines.pop();
-      this.setPendingLogChunk(serviceId, stream, undefined);
-    } else {
-      this.setPendingLogChunk(serviceId, stream, lines.pop() ?? "");
-    }
+    // The unfinished last line stays raw so escape sequences split across chunks
+    // are completed by the next chunk.
+    this.setPendingLogChunk(serviceId, stream, collapsePendingLine(lines.pop() ?? ""));
 
-    if (lines.length === 0) {
-      return;
-    }
-
-    this.appendLogEntries(
-      serviceId,
-      lines.map((line) => ({
-        stream,
-        line,
-        timestamp: new Date(),
-      })),
-    );
+    this.appendLogEntries(serviceId, toSanitizedEntries(stream, lines));
   }
 
   private setPendingLogChunk(
@@ -315,12 +302,11 @@ export class ProcessManager {
     this.pendingLogChunks.delete(serviceId);
     this.appendLogEntries(
       serviceId,
-      (["stdout", "stderr"] as const)
-        .flatMap((stream) => {
-          const line = pendingChunks[stream];
+      (["stdout", "stderr"] as const).flatMap((stream) => {
+        const line = pendingChunks[stream];
 
-          return line === undefined ? [] : [{ stream, line, timestamp: new Date() }];
-        }),
+        return line === undefined ? [] : toSanitizedEntries(stream, [line]);
+      }),
     );
   }
 
@@ -335,6 +321,10 @@ export class ProcessManager {
   }
 
   private appendLogEntries(serviceId: string, entries: ServiceLogEntry[]): void {
+    if (entries.length === 0) {
+      return;
+    }
+
     const serviceLogs = this.logs.get(serviceId) ?? [];
 
     serviceLogs.push(...entries);
@@ -365,8 +355,22 @@ export class ProcessManager {
   }
 }
 
-function normalizeLogContents(contents: string): string {
-  return contents.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+// Lines that held only control sequences (a screen clear, a cursor move) are dropped.
+function toSanitizedEntries(stream: ProcessOutputStream, lines: string[]): ServiceLogEntry[] {
+  return lines.flatMap((rawLine) => {
+    const line = sanitizeLogLine(rawLine);
+
+    return line === "" && rawLine !== "" ? [] : [{ stream, line, timestamp: new Date() }];
+  });
+}
+
+// A progress bar can redraw forever without a newline; keep only its latest frame,
+// plus a trailing "\r" that may still turn out to be half of "\r\n".
+function collapsePendingLine(line: string): string {
+  const endsWithReturn = line.endsWith("\r");
+  const collapsed = lastCarriageReturnSegment(endsWithReturn ? line.slice(0, -1) : line);
+
+  return endsWithReturn ? `${collapsed}\r` : collapsed;
 }
 
 function formatProcessExitMessage(

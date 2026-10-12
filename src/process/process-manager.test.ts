@@ -12,6 +12,64 @@ afterEach(async () => {
 });
 
 describe("ProcessManager", () => {
+  describe("log sanitising", () => {
+    function pushChunk(stream: "stdout" | "stderr", chunk: string): string[] {
+      manager = createManager();
+      const feed = (value: string) =>
+        (manager as unknown as { appendLogChunk(id: string, s: string, c: string): void }).appendLogChunk(
+          "service-1",
+          stream,
+          value,
+        );
+
+      feed(chunk);
+      return manager.getLogs("service-1").map((entry) => entry.line);
+    }
+
+    it("strips screen clears and keeps colors", () => {
+      expect(pushChunk("stdout", "\x1b[2J\x1b[1;1H\x1b[32mwatching\x1b[0m\n")).toEqual([
+        "\x1b[32mwatching\x1b[0m",
+      ]);
+    });
+
+    it("drops lines made only of control sequences but keeps blank lines", () => {
+      expect(pushChunk("stdout", "\x1b[2J\n\nafter\n")).toEqual(["", "after"]);
+    });
+
+    it("keeps the last frame of a carriage-return progress bar", () => {
+      expect(pushChunk("stderr", "10%\r50%\r100%\n")).toEqual(["100%"]);
+      expect(pushChunk("stderr", "a\r\nb\n")).toEqual(["a", "b"]);
+    });
+
+    it("completes escape sequences and CRLF split across chunks", () => {
+      manager = createManager();
+      const feed = (value: string) =>
+        (manager as unknown as { appendLogChunk(id: string, s: string, c: string): void }).appendLogChunk(
+          "service-1",
+          "stdout",
+          value,
+        );
+
+      feed("one\x1b[");
+      feed("2Ktwo\r");
+      feed("\nthree\n");
+
+      expect(manager.getLogs("service-1").map((entry) => entry.line)).toEqual(["onetwo", "three"]);
+    });
+
+    it("sanitises an unfinished line when the process ends", async () => {
+      manager = createManager();
+      const service = createService({
+        command: nodeCommand("process.stdout.write('\\x1b[2Jlast words');"),
+      });
+
+      manager.start(service);
+      await waitForStatus(manager, service.id, "exited");
+
+      expect(manager.getLogs(service.id).map((entry) => entry.line)).toContain("last words");
+    });
+  });
+
   it("starts a service command", () => {
     manager = createManager();
 
