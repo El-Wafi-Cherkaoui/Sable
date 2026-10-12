@@ -45,6 +45,13 @@ describe("renderDialogScreen", () => {
     expect(lines.find((line) => line.includes("[Esc] close"))).toBe(`${" ".repeat(13)}[Esc] close`);
   });
 
+  it("cuts a background drawn for a wider terminal so it cannot wrap", () => {
+    const background = Array.from({ length: 6 }, () => "x".repeat(60)).join("\n");
+    const lines = renderDialogScreen({ box: ["╭──╮", "╰──╯"], style: plainStyle, columns: 30, rows: 7, background }).split("\n");
+
+    expect(Math.max(...lines.map((line) => visibleLength(line)))).toBeLessThanOrEqual(30);
+  });
+
   it("keeps the background visible around the box without passing the last column", () => {
     const background = Array.from({ length: 6 }, () => "x".repeat(30)).join("\n");
     const lines = renderDialogScreen({ box: ["╭──╮", "╰──╯"], style: plainStyle, columns: 30, rows: 7, background }).split("\n");

@@ -6,8 +6,11 @@ export type KeyInput = {
   close(): void;
 };
 
+export const resizeKeyName = "resize";
+
 export class TerminalKeyInput implements KeyInput {
   private readonly input: NodeJS.ReadStream;
+  private readonly output: NodeJS.EventEmitter;
   private readonly readlineInterface: Interface;
   private readonly wasRaw: boolean;
   // Keys are queued so none are lost when several arrive at once (e.g. a paste):
@@ -16,8 +19,9 @@ export class TerminalKeyInput implements KeyInput {
   private waiters: Array<(keypress: Keypress) => void> = [];
   private closed = false;
 
-  constructor(input: NodeJS.ReadStream = process.stdin) {
+  constructor(input: NodeJS.ReadStream = process.stdin, output: NodeJS.EventEmitter = process.stdout) {
     this.input = input;
+    this.output = output;
     this.wasRaw = Boolean(input.isRaw);
     this.readlineInterface = createInterface({
       input,
@@ -25,6 +29,7 @@ export class TerminalKeyInput implements KeyInput {
     });
     emitKeypressEvents(input, this.readlineInterface);
     input.on("keypress", this.handleKeypress);
+    output.on("resize", this.handleResize);
 
     if (input.isTTY) {
       input.setRawMode(true);
@@ -61,6 +66,11 @@ export class TerminalKeyInput implements KeyInput {
     }
   };
 
+  // A resize wakes the screen that is waiting for a key so it can redraw at the new size.
+  private readonly handleResize = (): void => {
+    this.handleKeypress("", { name: resizeKeyName });
+  };
+
   close(): void {
     if (this.closed) {
       return;
@@ -68,6 +78,7 @@ export class TerminalKeyInput implements KeyInput {
 
     this.closed = true;
     this.input.off("keypress", this.handleKeypress);
+    this.output.off("resize", this.handleResize);
 
     try {
       if (this.input.isTTY) {

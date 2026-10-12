@@ -446,6 +446,19 @@ describe("runWorkspacePicker", () => {
     expect(write).toHaveBeenNthCalledWith(3, "picker\n");
   });
 
+  it("redraws the list when the terminal is resized", async () => {
+    const write = vi.fn();
+
+    await expect(
+      runWorkspacePicker({
+        workspaces,
+        keyInput: createKeyInput([{ name: "resize" }, { sequence: "q" }]),
+        screen: { clear: vi.fn(), write },
+      }),
+    ).resolves.toEqual({ type: "exit" });
+    expect(write).toHaveBeenCalledTimes(2);
+  });
+
   it("returns create workspace on a", async () => {
     await expect(
       runWorkspacePicker({

@@ -1,6 +1,6 @@
 import type { WorkspaceConfig } from "../config/config-types.js";
 import { sableLogoAnsi, sableLogoAnsiWidth } from "../generated/sable-logo-ansi.js";
-import { mapHelpKey, mapMoveKey, mapWorkspacePickerKey } from "../input/keymap.js";
+import { isResize, mapHelpKey, mapMoveKey, mapWorkspacePickerKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { product } from "../shared/product.js";
 import { displayPath } from "./format.js";
@@ -145,6 +145,11 @@ export async function runWorkspacePicker(
 
     if (event.type === "abort" || isCtrlC(event.keypress)) {
       return { type: "exit" };
+    }
+
+    if (isResize(event.keypress)) {
+      redraw();
+      continue;
     }
 
     if (mode === "help" || mode === "details") {
@@ -297,6 +302,21 @@ export async function runWorkspacePicker(
         return { type: "exit" };
       case "none":
         break;
+    }
+  }
+
+  // Draws the current screen again at the terminal's new size.
+  function redraw(): void {
+    const workspace = getSelectedWorkspace(state);
+
+    screen.clear();
+
+    if (mode === "help") {
+      screen.write(`${renderHelp({ background: render(state), columns: process.stdout.columns, rows: process.stdout.rows, color })}\n`);
+    } else if (mode === "details" && workspace !== undefined) {
+      screen.write(`${renderDetails(workspace)}\n`);
+    } else {
+      screen.write(`${render(state)}\n`);
     }
   }
 

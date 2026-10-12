@@ -1,3 +1,4 @@
+import { isResize } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { dialogMaxWidth, renderDialogBox, renderDialogScreen } from "./dialog-box.js";
 import { formatKeyHints } from "./key-hints.js";
@@ -38,6 +39,11 @@ export async function runUpdateDialog(options: UpdateDialogOptions): Promise<Upd
 
   while (true) {
     const keypress = await options.keyInput.readKey();
+
+    if (isResize(keypress)) {
+      render();
+      continue;
+    }
 
     if (keypress.ctrl === true && keypress.name === "c") {
       return "exit";

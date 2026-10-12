@@ -69,7 +69,8 @@ export function renderDialogScreen(options: DialogScreenOptions): string {
     const overlayLine = overlay[row - top];
 
     if (overlayLine === undefined) {
-      lines.push(background === "" ? "" : style.muted(background));
+      // A background drawn for an older, wider terminal must not wrap.
+      lines.push(background === "" ? "" : style.muted(sliceVisible(background, 0, columns)));
       continue;
     }
 

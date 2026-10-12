@@ -1,4 +1,4 @@
-import type { Keypress } from "../input/keymap.js";
+import { isResize, type Keypress } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { clipLines } from "./layout.js";
@@ -70,6 +70,11 @@ export async function runForm(options: RunFormOptions): Promise<FormResult> {
 
   while (true) {
     const keypress = await options.keyInput.readKey();
+
+    if (isResize(keypress)) {
+      render();
+      continue;
+    }
 
     if (keypress.ctrl === true && keypress.name === "c") {
       return { type: "exit" };
