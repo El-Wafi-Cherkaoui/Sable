@@ -898,6 +898,30 @@ describe("runWorkspaceHome", () => {
     expect(keyInput.close).toHaveBeenCalledOnce();
     expect(signalSource.listenerCount("SIGINT")).toBe(0);
     expect(signalSource.listenerCount("SIGTERM")).toBe(0);
+    expect(signalSource.listenerCount("SIGHUP")).toBe(0);
+  });
+
+  it("aborts picker wait on SIGHUP", async () => {
+    const signalSource = createSignalSource();
+    const runPicker = vi.fn(
+      async ({ abortSignal }: { abortSignal?: AbortSignal }) =>
+        new Promise<{ type: "exit" }>((resolve) => {
+          abortSignal?.addEventListener("abort", () => resolve({ type: "exit" }), { once: true });
+        }),
+    );
+
+    const runPromise = runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(),
+      signalSource,
+    });
+
+    await waitUntil(() => runPicker.mock.calls.length === 1);
+    signalSource.emit("SIGHUP");
+
+    await expect(runPromise).resolves.toEqual({ type: "quit" });
   });
 });
 

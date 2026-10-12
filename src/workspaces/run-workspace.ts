@@ -63,6 +63,9 @@ export type RunWorkspaceCommandOptions = {
   warn?: ShutdownWarn;
 };
 
+// Closing the terminal sends SIGHUP; handling it stops the services instead of leaving them behind.
+export const shutdownSignals = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+
 export type RunWorkspaceSignalSource = {
   once(signal: NodeJS.Signals, listener: () => void): void;
   off(signal: NodeJS.Signals, listener: () => void): void;
@@ -104,8 +107,9 @@ export async function runWorkspaceCommand(
   const signalSource = options.signalSource ?? process;
   const abortShutdown = () => shutdownAbortController.abort();
 
-  signalSource.once("SIGINT", abortShutdown);
-  signalSource.once("SIGTERM", abortShutdown);
+  for (const signal of shutdownSignals) {
+    signalSource.once(signal, abortShutdown);
+  }
 
   try {
     await runWorkspaceSession({
@@ -118,8 +122,9 @@ export async function runWorkspaceCommand(
       warn: options.warn,
     });
   } finally {
-    signalSource.off("SIGINT", abortShutdown);
-    signalSource.off("SIGTERM", abortShutdown);
+    for (const signal of shutdownSignals) {
+      signalSource.off(signal, abortShutdown);
+    }
     keyInput.close();
   }
 }

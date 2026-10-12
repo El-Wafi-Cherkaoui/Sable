@@ -10,6 +10,7 @@ import {
   createRunWorkspaceController,
   reportShutdownFailures,
   runWorkspaceSession,
+  shutdownSignals,
   type RunWorkspaceController,
   type RunWorkspaceSessionOptions,
   type ShutdownWarn,
@@ -91,8 +92,9 @@ export async function runWorkspaceHome(
   const abortShutdown = () => shutdownAbortController.abort();
   const createController = options.createController ?? createRunWorkspaceController;
 
-  signalSource.once("SIGINT", abortShutdown);
-  signalSource.once("SIGTERM", abortShutdown);
+  for (const signal of shutdownSignals) {
+    signalSource.once(signal, abortShutdown);
+  }
 
   try {
     while (!shutdownAbortController.signal.aborted) {
@@ -335,8 +337,9 @@ export async function runWorkspaceHome(
       shutdownFailures.push(...await activeSession.controller.shutdown());
     }
 
-    signalSource.off("SIGINT", abortShutdown);
-    signalSource.off("SIGTERM", abortShutdown);
+    for (const signal of shutdownSignals) {
+      signalSource.off(signal, abortShutdown);
+    }
     keyInput.close();
     reportShutdownFailures(shutdownFailures, options.warn);
   }
