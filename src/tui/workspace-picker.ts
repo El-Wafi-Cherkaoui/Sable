@@ -446,7 +446,8 @@ function renderPickerLines(
   const pathStart = 2 + nameWidth + 2 + statusWidth + 2 + servicesWidth + 2;
   const rows = state.workspaces.map((workspace, index) => {
     const selected = index === state.selectedWorkspaceIndex;
-    const status = workspace.id === state.activeWorkspaceId ? style.running("● running") : style.muted("○ stopped");
+    const isRunning = workspace.id === state.activeWorkspaceId && state.activeRunningServiceCount !== 0;
+    const status = isRunning ? style.running("● running") : style.muted("○ stopped");
     const moving = state.moving === true && selected ? `  ${style.muted("↕ moving")}` : "";
     const folder = truncateVisible(displayPath(workspace.projectDirectory), Math.max(8, maxWidth - pathStart - visibleLength(moving)));
 

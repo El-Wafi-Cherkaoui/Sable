@@ -84,6 +84,11 @@ describe("renderWorkspacePicker", () => {
     expect(rendered).toContain("  portfolio  ○ stopped  1 service     /srv/portfolio");
     expect(rendered.split("\n").at(-1)).toBe("[↑↓] select  [Enter] open  [s] stop  [r] restart  [?] help  [q] quit");
   });
+  it("marks the active workspace as stopped when none of its services run", () => {
+    const state = { ...createWorkspacePickerState(workspaces, undefined, undefined, "ws_ecommerce"), activeRunningServiceCount: 0 };
+
+    expect(renderWorkspacePicker(state)).toContain("> ecommerce  ○ stopped  0/2 services  /srv/ecommerce");
+  });
   it("keeps picker frame height stable when status messages appear", () => {
     const withoutMessage = renderWorkspacePicker(createWorkspacePickerState(workspaces));
     const withMessage = renderWorkspacePicker(
