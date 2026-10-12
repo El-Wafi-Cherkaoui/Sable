@@ -168,17 +168,16 @@ describe("ProcessManager", () => {
     });
   });
 
-  it("records failed state when a service cannot spawn", async () => {
+  it("names the missing folder when the working directory does not exist", () => {
     manager = createManager();
-    const service = createService({ cwd: path.join(os.tmpdir(), "sable-missing-cwd") });
+    const missing = path.join(os.tmpdir(), "sable-missing-cwd");
+    const service = createService({ cwd: missing });
 
-    manager.start(service);
+    const state = manager.start(service);
 
-    await waitForStatus(manager, service.id, "failed");
-
-    expect(manager.getState(service.id).status).toBe("failed");
-    expect(manager.getLogs(service.id).map((entry) => entry.line)).toContainEqual(
-      expect.stringMatching(/^process error: /),
+    expect(state.status).toBe("failed");
+    expect(manager.getLogs(service.id).map((entry) => entry.line)).toContain(
+      `service failed to start: working folder not found: ${missing}`,
     );
   });
 

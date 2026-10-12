@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { statSync } from "node:fs";
 import treeKill from "tree-kill";
 import type { CommandConfig, ServiceConfig } from "../config/config-types.js";
 import { lastCarriageReturnSegment, sanitizeLogLine } from "./sanitize-output.js";
@@ -89,6 +90,8 @@ export class ProcessManager {
     let child: ChildProcess;
 
     try {
+      assertDirectoryExists(service.cwd);
+
       child = spawn(service.command, {
         cwd: service.cwd,
         env: {
@@ -449,6 +452,20 @@ function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
 // the user opted out with NO_COLOR; their own FORCE_COLOR or service env still wins.
 function colorEnvironment(): NodeJS.ProcessEnv {
   return process.env.NO_COLOR === undefined ? { FORCE_COLOR: "1" } : {};
+}
+
+// Node reports a missing working folder as "spawn /bin/sh ENOENT", which points at the
+// shell instead of the folder, so check first and say what is actually wrong.
+function assertDirectoryExists(directory: string): void {
+  try {
+    if (statSync(directory).isDirectory()) {
+      return;
+    }
+  } catch {
+    // Falls through to the error below.
+  }
+
+  throw new Error(`working folder not found: ${directory}`);
 }
 
 function toError(error: unknown): Error {
