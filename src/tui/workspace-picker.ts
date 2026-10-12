@@ -6,7 +6,7 @@ import { product } from "../shared/product.js";
 import { displayPath } from "./format.js";
 import { renderHelpBox, type HelpViewOptions } from "./help-view.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
-import { appendAnchoredFooter } from "./layout.js";
+import { appendAnchoredFooter, clipLines } from "./layout.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
 import { padVisibleEnd, truncateVisible, visibleLength } from "./width.js";
 
@@ -399,6 +399,13 @@ export function getSelectedWorkspace(
 export function renderWorkspacePicker(
   state: WorkspacePickerState,
   options: RenderWorkspacePickerOptions = {},
+): string {
+  return clipLines(renderPickerLines(state, options), options.columns);
+}
+
+function renderPickerLines(
+  state: WorkspacePickerState,
+  options: RenderWorkspacePickerOptions,
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
   const color = options.color === true;

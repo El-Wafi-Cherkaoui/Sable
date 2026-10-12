@@ -1,4 +1,4 @@
-import { renderDialogBox, renderDialogScreen } from "./dialog-box.js";
+import { dialogMaxWidth, renderDialogBox, renderDialogScreen } from "./dialog-box.js";
 import { formatKeyHints } from "./key-hints.js";
 import { createTuiStyle } from "./style.js";
 
@@ -75,11 +75,29 @@ export function renderHelpBox(title: string, sections: HelpSection[], options: H
   ]);
 
   return renderDialogScreen({
-    box: renderDialogBox({ title, lines, style }),
-    hints: formatKeyHints([["Esc", "close"]], style),
+    box: renderDialogBox({ title, lines: fitToRows(lines, options.rows), style, maxWidth: dialogMaxWidth(options.columns) }),
+    hints: formatKeyHints([["Esc", "close"]], style, dialogMaxWidth(options.columns)),
     style,
     columns: options.columns,
     rows: options.rows,
     background: options.background,
   });
+}
+
+// Box chrome around the text: two border rows and a blank row of padding above and below,
+// plus the hints under the box.
+const dialogChromeRows = 5;
+
+// On a short terminal, drop the blank lines between sections first, then cut what still
+// doesn't fit, so the box is never taller than the screen.
+function fitToRows(lines: string[], rows: number | undefined): string[] {
+  const available = rows === undefined ? Number.POSITIVE_INFINITY : Math.max(1, rows - 1 - dialogChromeRows);
+
+  if (lines.length <= available) {
+    return lines;
+  }
+
+  const compact = lines.filter((line) => line !== "");
+
+  return compact.length <= available ? compact : [...compact.slice(0, Math.max(0, available - 1)), "..."];
 }

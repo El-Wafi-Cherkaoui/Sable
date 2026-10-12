@@ -1,6 +1,7 @@
 import type { Keypress } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
+import { clipLines } from "./layout.js";
 import { createPathCompleter, type PathCompleter } from "./path-completion.js";
 import type { PromptScreen } from "./prompt-view.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
@@ -253,7 +254,7 @@ export function renderForm(
 
   lines.push("", formatKeyHints(getFormKeyHints(rows[state.focus], pathCompletions(options, rows[state.focus], state), state.completionIndex ?? 0), style, columns - 1));
 
-  return lines.join("\n");
+  return clipLines(lines.join("\n"), columns);
 }
 
 function renderRowValue(row: FormRow, state: FormState, focused: boolean, style: TuiStyle, color: boolean, width: number, completion: string | undefined): string {

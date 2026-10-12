@@ -3,6 +3,7 @@ import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } fr
 import { formatStatus } from "./format.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { formatClockTime } from "./log-lines.js";
+import { clipLines } from "./layout.js";
 import { createTuiStyle, type TuiStyle } from "./style.js";
 import { highlightAnsi, sliceAnsi, truncateAnsi, wrapAnsi } from "./ansi-text.js";
 import { stripAnsi, truncateVisible, visibleLength } from "./width.js";
@@ -53,7 +54,7 @@ export function renderLogsView(options: RenderLogsViewOptions): string {
   lines.push(...body, ...Array.from({ length: Math.max(0, layout.height - body.length) }, () => ""));
   lines.push("", formatSearchLine(options, style), formatKeyHints(getLogsKeyHints(options), style, layout.width));
 
-  return lines.join("\n");
+  return clipLines(lines.join("\n"), layout.width + 1);
 }
 
 export function bottomScrollOffset(logs: ServiceLogEntry[], layout: LogsLayout): number {
