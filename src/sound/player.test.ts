@@ -1,4 +1,4 @@
-import { mkdtempSync, existsSync, readdirSync } from "node:fs";
+import { mkdtempSync, existsSync, readdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -152,7 +152,12 @@ describe("createSoundPlayer", () => {
 
   it("never throws when the cue file cannot be written", () => {
     const { spawn, calls } = fakeSpawn();
-    const player = createSoundPlayer({ enabled: true, directory: "/dev/null/nope", platform: "linux", spawn, streamBackends: [] });
+    // A folder inside a regular file can't be created on any platform.
+    const file = path.join(mkdtempSync(path.join(os.tmpdir(), "sable-sound-")), "plain-file");
+
+    writeFileSync(file, "");
+
+    const player = createSoundPlayer({ enabled: true, directory: path.join(file, "sounds"), platform: "linux", spawn, streamBackends: [] });
 
     expect(() => player.play("open")).not.toThrow();
     expect(calls).toHaveLength(0);
