@@ -2,6 +2,7 @@ import { mapDashboardKey, mapHelpKey, mapLogsKey, mapMoveKey } from "../input/ke
 import type { KeyInput } from "../input/terminal-key-input.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
 import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import { runSettingsDialog } from "./settings-dialog.js";
 import { renderHelpView, type HelpContext } from "./help-view.js";
@@ -46,6 +47,7 @@ export type RunInteractiveDashboardOptions = {
   renderLogs?: typeof renderLogsView;
   renderHelp?: typeof renderHelpView;
   sound?: SoundControl;
+  settings?: SettingsControl;
   runSettings?: typeof runSettingsDialog;
   dashboardQuitLabel?: string;
   initialMessage?: string;
@@ -440,7 +442,7 @@ export async function runInteractiveDashboard(
         renderHelpFrame("dashboard");
         break;
       case "openSettings": {
-        if (options.sound === undefined) {
+        if (options.settings === undefined) {
           break;
         }
 
@@ -448,7 +450,7 @@ export async function runInteractiveDashboard(
         clearPulse();
 
         const outcome = await (options.runSettings ?? runSettingsDialog)({
-          sound: options.sound,
+          settings: options.settings,
           keyInput: options.keyInput,
           background: lastScreenContents,
           screen,
@@ -598,7 +600,7 @@ export async function runInteractiveDashboard(
     const contents = render(options.controller.getState(), {
       quitLabel: options.dashboardQuitLabel,
       moving: mode === "move",
-      settingsAvailable: options.sound !== undefined,
+      settingsAvailable: options.settings !== undefined,
       statusMessage: dashboardMessage,
       pulseServiceIndex: pulseItem?.type === "service" ? pulseItem.index : undefined,
       pulseCommandIndex: pulseItem?.type === "command" ? pulseItem.index : undefined,

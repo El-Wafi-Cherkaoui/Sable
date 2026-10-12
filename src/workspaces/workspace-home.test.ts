@@ -838,6 +838,34 @@ describe("runWorkspaceHome", () => {
     expect(result).toEqual({ type: "quit" });
   });
 
+  it("goes straight to the list when the welcome screen is off, but still offers an update once", async () => {
+    const dialog = vi.fn(async () => "ok" as const);
+    const pickerOptions: Array<{ startupMomentMs?: number; afterStartup?: unknown }> = [];
+    const runPicker = vi.fn(async (options: { startupMomentMs?: number; afterStartup?: () => Promise<string> }) => {
+      pickerOptions.push({ startupMomentMs: options.startupMomentMs, afterStartup: options.afterStartup });
+      await options.afterStartup?.();
+
+      return pickerOptions.length === 1
+        ? { type: "run" as const, workspace: config.workspaces[0]! }
+        : { type: "exit" as const };
+    });
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(async () => ({ type: "back" as const })),
+      createController: vi.fn(() => createFakeController()),
+      welcomeScreen: false,
+      update: { latestVersion: () => "0.4.0", currentVersion: "0.3.0", installCommand: "npm i", dismiss: vi.fn(), dialog },
+    });
+
+    expect(pickerOptions[0]!.startupMomentMs).toBe(0);
+    expect(pickerOptions[0]!.afterStartup).toBeDefined();
+    expect(pickerOptions[1]!.afterStartup).toBeUndefined();
+    expect(dialog).toHaveBeenCalledOnce();
+  });
+
   it("returns an update request when the user picks Update now", async () => {
     const runPicker = vi.fn(async () => ({ type: "update" as const }));
 

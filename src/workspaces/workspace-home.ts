@@ -30,6 +30,7 @@ import {
   type RenameWorkspaceFlowOptions,
   type RenameWorkspaceFlowResult,
 } from "./rename-workspace-flow.js";
+import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import { runUpdateDialog } from "../tui/update-dialog.js";
 import { runSuggestServicesFlow, type SuggestServicesFlowOptions, type SuggestServicesFlowResult } from "./suggest-services-flow.js";
@@ -39,9 +40,8 @@ export type WorkspaceHomeConfigStore = {
   save(config: AppConfig): Promise<void>;
 };
 
-// How long the launch screen stays up (any key skips it).
-const fullStartupMs = 1_800;
-const shortStartupMs = 300;
+// How long the welcome screen stays up (any key skips it).
+const welcomeScreenMs = 1_800;
 
 export type RunWorkspaceHomeOptions = {
   store: WorkspaceHomeConfigStore;
@@ -56,8 +56,9 @@ export type RunWorkspaceHomeOptions = {
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   sound?: SoundControl;
-  // Show the brief launch screen (not the first launch of the day).
-  startupShort?: boolean;
+  settings?: SettingsControl;
+  // Show the welcome screen at launch (default); off goes straight to the workspace list.
+  welcomeScreen?: boolean;
   signalSource?: WorkspaceHomeSignalSource;
   warn?: ShutdownWarn;
 };
@@ -119,15 +120,15 @@ export async function runWorkspaceHome(
         workspaces: config.workspaces,
         keyInput,
         sound: options.sound,
+        settings: options.settings,
         abortSignal: shutdownAbortController.signal,
         statusMessage,
         selectedWorkspaceId,
         activeWorkspaceId: activeSession?.workspaceId,
         activeRunningServiceCount: activeSession?.controller.getState().services
           .filter((serviceState) => serviceState.process.status === "running").length,
-        startupMomentMs: shouldShowStartupMoment ? (options.startupShort === true ? shortStartupMs : fullStartupMs) : 0,
-        startupShort: options.startupShort,
-        afterStartup: options.update === undefined ? undefined : () => showUpdatePopup(options.update!, keyInput, options.screen),
+        startupMomentMs: shouldShowStartupMoment && options.welcomeScreen !== false ? welcomeScreenMs : 0,
+        afterStartup: options.update === undefined || !shouldShowStartupMoment ? undefined : () => showUpdatePopup(options.update!, keyInput, options.screen),
         screen: options.screen,
       });
 
@@ -327,6 +328,7 @@ export async function runWorkspaceHome(
         controller: activeSession.controller,
         keyInput,
         sound: options.sound,
+        settings: options.settings,
         abortSignal: shutdownAbortController.signal,
         dashboardQuitLabel: "back",
         store: options.store,

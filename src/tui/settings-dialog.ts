@@ -1,14 +1,16 @@
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { mapSettingsKey } from "../input/keymap.js";
-import type { SoundControl } from "../sound/sound-control.js";
+import type { SettingsControl } from "../settings/settings-control.js";
+import { wrapAnsi } from "./ansi-text.js";
 import { dialogMaxWidth, renderDialogBox, renderDialogScreen } from "./dialog-box.js";
 import { formatKeyHints } from "./key-hints.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
+import { padVisibleEnd } from "./width.js";
 
 export type SettingsDialogResult = "close" | "exit";
 
 export type SettingsDialogOptions = {
-  sound: SoundControl;
+  settings: SettingsControl;
   keyInput: KeyInput;
   // The screen the popup opened from; it stays visible, dimmed, around the box.
   background?: string;
@@ -18,15 +20,33 @@ export type SettingsDialogOptions = {
   rows?: number;
 };
 
-// A popup over the current screen, in the same box as help. Today it holds
-// one setting, so the single row is always selected.
+export type SettingsRow = {
+  label: string;
+  enabled: boolean;
+  // Shown under the list while this row is selected.
+  description: string;
+};
+
+const labelWidth = "Welcome screen".length;
+// Descriptions wrap at this width, so the box is the same size whichever setting is selected.
+const descriptionWidth = 48;
+
+// A popup over the current screen, in the same box as help. ↑↓ picks a
+// setting and Space switches it; each change applies and is saved at once.
 export async function runSettingsDialog(options: SettingsDialogOptions): Promise<SettingsDialogResult> {
   const screen = options.screen ?? terminalScreen;
   const style = createTuiStyle(options.color ?? shouldUseColor());
+  const { settings } = options;
+  let selected = 0;
+  const items = (): SettingsRow[] => [
+    { label: "Sound", enabled: settings.sound.isEnabled(), description: "Soft tones as you move, open, start and stop, and a chime when a process ends on its own." },
+    { label: "Welcome screen", enabled: settings.welcomeScreen.isEnabled(), description: "The logo animation at launch. Off goes straight to your workspaces." },
+  ];
   const render = () => {
     screen.clear();
     screen.write(`${renderSettingsDialog({
-      soundEnabled: options.sound.isEnabled(),
+      items: items(),
+      selected,
       background: options.background,
       columns: options.columns ?? process.stdout.columns,
       rows: options.rows ?? process.stdout.rows,
@@ -49,13 +69,22 @@ export async function runSettingsDialog(options: SettingsDialogOptions): Promise
       return "close";
     }
 
+    if (action === "selectNext" || action === "selectPrevious") {
+      selected = (selected + (action === "selectNext" ? 1 : -1) + items().length) % items().length;
+      render();
+    }
+
     if (action === "toggle") {
-      const next = !options.sound.isEnabled();
+      if (selected === 0) {
+        const next = !settings.sound.isEnabled();
 
-      await options.sound.setEnabled(next);
+        await settings.sound.setEnabled(next);
 
-      if (next) {
-        options.sound.play("open");
+        if (next) {
+          settings.sound.play("open");
+        }
+      } else {
+        await settings.welcomeScreen.setEnabled(!settings.welcomeScreen.isEnabled());
       }
 
       render();
@@ -64,29 +93,36 @@ export async function runSettingsDialog(options: SettingsDialogOptions): Promise
 }
 
 export function renderSettingsDialog(options: {
-  soundEnabled: boolean;
+  items: SettingsRow[];
+  selected: number;
   background?: string;
   columns?: number;
   rows?: number;
   style?: TuiStyle;
 }): string {
   const style = options.style ?? createTuiStyle(false);
-  const value = options.soundEnabled ? style.running("● on") : style.muted("○ off");
   const maxWidth = dialogMaxWidth(options.columns);
+  const lines = options.items.map((row, index) => {
+    const value = row.enabled ? style.running("● on") : style.muted("○ off");
+
+    return `${index === options.selected ? ">" : " "} ${row.label.padEnd(labelWidth)}   ${value}`;
+  });
+
+  // Room for the longest description, wrapped, so the box never grows or shrinks.
+  const textWidth = Math.min(descriptionWidth, Math.max(8, (maxWidth ?? Number.POSITIVE_INFINITY) - 6));
+  const wrapped = options.items.map((item) => wrapAnsi(item.description, textWidth));
+  const height = Math.max(...wrapped.map((description) => description.length));
+  const description = Array.from({ length: height }, (_, index) =>
+    style.muted(padVisibleEnd(wrapped[options.selected]?.[index] ?? "", textWidth)));
 
   return renderDialogScreen({
     box: renderDialogBox({
       title: "Settings",
-      lines: [
-        `> Sound   ${value}`,
-        "",
-        style.muted("Soft tones as you move, open, start and stop."),
-        style.muted("A chime when a process ends on its own."),
-      ],
+      lines: [...lines, "", ...description],
       style,
       maxWidth,
     }),
-    hints: formatKeyHints([["Space", "toggle"], ["Esc", "close"]], style, maxWidth),
+    hints: formatKeyHints([["↑↓", "select"], ["Space", "toggle"], ["Esc", "close"]], style, maxWidth),
     background: options.background,
     style,
     columns: options.columns,

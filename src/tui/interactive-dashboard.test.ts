@@ -883,7 +883,7 @@ describe("runInteractiveDashboard", () => {
 
   it("opens settings with a comma and returns to the dashboard", async () => {
     const controller = createController(createState(), () => []);
-    const sound = { play: vi.fn(), isEnabled: () => true, setEnabled: vi.fn(async () => {}) };
+    const settings = fakeSettings();
     const runSettings = vi.fn(async () => "close" as const);
     const write = vi.fn();
 
@@ -891,7 +891,7 @@ describe("runInteractiveDashboard", () => {
       controller,
       keyInput: createKeyInput([{ sequence: "," }, { sequence: "q" }]),
       screen: { clear: vi.fn(), write },
-      sound,
+      settings,
       runSettings,
       render: () => "dashboard",
     });
@@ -900,6 +900,13 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenCalledTimes(2);
   });
 });
+
+const toggle = (enabled = true) => {
+  let on = enabled;
+
+  return { isEnabled: () => on, setEnabled: vi.fn(async (next: boolean) => { on = next; }) };
+};
+const fakeSettings = () => ({ sound: { play: vi.fn(), close: vi.fn(), ...toggle() }, welcomeScreen: toggle() });
 
 function createKeyInput(
   keys: Array<{ sequence?: string; name?: string; ctrl?: boolean }>,
