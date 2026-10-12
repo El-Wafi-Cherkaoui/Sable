@@ -276,7 +276,7 @@ describe("runWorkspacePicker", () => {
 
     const result = await runWorkspacePicker({
       workspaces,
-      keyInput: createKeyInput([{ sequence: "j" }, { name: "return" }]),
+      keyInput: createKeyInput([{ name: "down" }, { name: "return" }]),
       screen: { clear: vi.fn(), write },
     });
 
@@ -289,7 +289,7 @@ describe("runWorkspacePicker", () => {
 
     await runWorkspacePicker({
       workspaces,
-      keyInput: createKeyInput([{ sequence: "j" }, { name: "return" }]),
+      keyInput: createKeyInput([{ name: "down" }, { name: "return" }]),
       screen: { clear: vi.fn(), write: vi.fn() },
       sound,
     });
@@ -446,11 +446,11 @@ describe("runWorkspacePicker", () => {
     expect(write).toHaveBeenNthCalledWith(3, "picker\n");
   });
 
-  it("returns create workspace on c", async () => {
+  it("returns create workspace on a", async () => {
     await expect(
       runWorkspacePicker({
         workspaces,
-        keyInput: createKeyInput([{ sequence: "c" }]),
+        keyInput: createKeyInput([{ sequence: "a" }]),
         screen: { clear: vi.fn(), write: vi.fn() },
       }),
     ).resolves.toEqual({ type: "createWorkspace" });
@@ -484,26 +484,6 @@ describe("runWorkspacePicker", () => {
         screen: { clear: vi.fn(), write: vi.fn() },
       }),
     ).resolves.toEqual({ type: "restartActiveWorkspace", workspace: workspaces[0] });
-  });
-
-  it("returns the selected workspace on move up", async () => {
-    await expect(
-      runWorkspacePicker({
-        workspaces,
-        keyInput: createKeyInput([{ name: "down" }, { sequence: "K" }]),
-        screen: { clear: vi.fn(), write: vi.fn() },
-      }),
-    ).resolves.toEqual({ type: "reorderWorkspace", workspace: workspaces[1], index: 0 });
-  });
-
-  it("returns the selected workspace on move down", async () => {
-    await expect(
-      runWorkspacePicker({
-        workspaces,
-        keyInput: createKeyInput([{ sequence: "J" }]),
-        screen: { clear: vi.fn(), write: vi.fn() },
-      }),
-    ).resolves.toEqual({ type: "reorderWorkspace", workspace: workspaces[0], index: 1 });
   });
 
   it("reorders a workspace with move mode and returns its new position on Enter", async () => {
@@ -601,7 +581,7 @@ describe("runWorkspacePicker", () => {
   it("ignores service action keys in the picker", async () => {
     const result = await runWorkspacePicker({
       workspaces,
-      keyInput: createKeyInput([{ sequence: "S" }, { sequence: "x" }, { sequence: "q" }]),
+      keyInput: createKeyInput([{ sequence: "x" }, { sequence: "q" }]),
       screen: { clear: vi.fn(), write: vi.fn() },
     });
 

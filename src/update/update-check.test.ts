@@ -12,7 +12,7 @@ import {
 
 let directory: string;
 let cacheFile: string;
-const day = 24 * 60 * 60 * 1000;
+const hour = 60 * 60 * 1000;
 
 beforeEach(async () => {
   directory = await mkdtemp(path.join(os.tmpdir(), "sable-update-"));
@@ -64,7 +64,7 @@ describe("startUpdateCheck", () => {
   it("uses a fresh cache without asking npm, and shows it immediately", async () => {
     await writeFile(cacheFile, JSON.stringify({ checkedAt: 1_000, latest: "0.4.0" }));
     const fetchLatest = vi.fn(async () => "9.9.9");
-    const check = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => 1_000 + day - 1, fetchLatest });
+    const check = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => 1_000 + hour - 1, fetchLatest });
 
     await check.done;
 
@@ -72,10 +72,10 @@ describe("startUpdateCheck", () => {
     expect(check.newerVersion()).toBe("0.4.0");
   });
 
-  it("asks npm again once the cache is a day old", async () => {
+  it("asks npm again once the cache is an hour old", async () => {
     await writeFile(cacheFile, JSON.stringify({ checkedAt: 1_000, latest: "0.4.0" }));
     const fetchLatest = vi.fn(async () => "0.5.0");
-    const check = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => 1_000 + day, fetchLatest });
+    const check = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => 1_000 + hour, fetchLatest });
 
     await check.done;
 
@@ -93,7 +93,7 @@ describe("startUpdateCheck", () => {
 
     await writeFile(cacheFile, JSON.stringify({ checkedAt: 0, latest: "0.4.0" }));
     const stale = startUpdateCheck({
-      currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => day * 2, fetchLatest: async () => { throw new Error("ENOTFOUND"); },
+      currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => hour * 2, fetchLatest: async () => { throw new Error("ENOTFOUND"); },
     });
 
     await stale.done;
@@ -101,9 +101,9 @@ describe("startUpdateCheck", () => {
   });
 
   it("checks again when the cached check time is in the future", async () => {
-    await writeFile(cacheFile, JSON.stringify({ checkedAt: day * 10, latest: "0.4.0" }));
+    await writeFile(cacheFile, JSON.stringify({ checkedAt: hour * 10, latest: "0.4.0" }));
     const fetchLatest = vi.fn(async () => "0.5.0");
-    const check = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => day, fetchLatest });
+    const check = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => hour, fetchLatest });
 
     await check.done;
 
@@ -150,10 +150,10 @@ describe("dismissing a version", () => {
     await nextLaunch.done;
     expect(nextLaunch.newerVersion()).toBeUndefined();
 
-    const dayLater = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => 1_000 + day, fetchLatest: async () => "0.5.0" });
+    const hourLater = startUpdateCheck({ currentVersion: "0.3.0", cacheFile, env: {}, isInteractive: true, now: () => 1_000 + hour, fetchLatest: async () => "0.5.0" });
 
-    await dayLater.done;
-    expect(dayLater.newerVersion()).toBe("0.5.0");
+    await hourLater.done;
+    expect(hourLater.newerVersion()).toBe("0.5.0");
   });
 });
 

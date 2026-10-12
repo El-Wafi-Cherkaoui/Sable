@@ -4,9 +4,6 @@ export type Keypress = {
   ctrl?: boolean;
 };
 
-// Keys marked "0.3 alias" are pre-0.3.0 bindings kept working but no longer
-// shown in footers or help. Remove them in 0.4.0.
-
 export type DashboardAction =
   | "selectNext"
   | "selectPrevious"
@@ -14,14 +11,11 @@ export type DashboardAction =
   | "openHelp"
   | "openSettings"
   | "toggle"
-  | "start"
   | "restart"
   | "addService"
   | "editService"
   | "deleteService"
   | "startMove"
-  | "moveServiceUp"
-  | "moveServiceDown"
   | "back"
   | "none";
 
@@ -58,8 +52,6 @@ export type WorkspacePickerAction =
   | "stopActiveWorkspace"
   | "restartActiveWorkspace"
   | "startMove"
-  | "moveWorkspaceUp"
-  | "moveWorkspaceDown"
   | "view"
   | "openHelp"
   | "openSettings"
@@ -81,7 +73,6 @@ export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction
 
   switch (keypress.sequence) {
     case "a":
-    case "c": // 0.3 alias
       return "createWorkspace";
     case "e":
       return "renameWorkspace";
@@ -89,10 +80,6 @@ export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction
       return "deleteWorkspace";
     case "m":
       return "startMove";
-    case "K": // 0.3 alias
-      return "moveWorkspaceUp";
-    case "J": // 0.3 alias
-      return "moveWorkspaceDown";
     case "s":
       return "stopActiveWorkspace";
     case "r":
@@ -130,8 +117,6 @@ export function mapDashboardKey(keypress: Keypress): DashboardAction {
   switch (keypress.sequence) {
     case "s":
       return "toggle";
-    case "S": // 0.3 alias
-      return "start";
     case "r":
       return "restart";
     case "a":
@@ -142,10 +127,6 @@ export function mapDashboardKey(keypress: Keypress): DashboardAction {
       return "deleteService";
     case "m":
       return "startMove";
-    case "K": // 0.3 alias
-      return "moveServiceUp";
-    case "J": // 0.3 alias
-      return "moveServiceDown";
     case "?":
       return "openHelp";
     case ",":
@@ -166,11 +147,11 @@ export function mapLogsKey(keypress: Keypress): LogsAction {
     return "scrollUp";
   }
 
-  if (keypress.name === "left" || keypress.sequence === "h") { // h: 0.3 alias
+  if (keypress.name === "left") {
     return "scrollLeft";
   }
 
-  if (keypress.name === "right" || keypress.sequence === "l") { // l: 0.3 alias
+  if (keypress.name === "right") {
     return "scrollRight";
   }
 
@@ -255,11 +236,11 @@ export function mapMoveKey(keypress: Keypress): MoveAction {
 }
 
 function isDown(keypress: Keypress): boolean {
-  return keypress.name === "down" || keypress.sequence === "j"; // j: 0.3 alias
+  return keypress.name === "down";
 }
 
 function isUp(keypress: Keypress): boolean {
-  return keypress.name === "up" || keypress.sequence === "k"; // k: 0.3 alias
+  return keypress.name === "up";
 }
 
 function isEnter(keypress: Keypress): boolean {

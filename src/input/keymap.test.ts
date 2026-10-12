@@ -27,12 +27,12 @@ describe("mapWorkspacePickerKey", () => {
     expect(mapWorkspacePickerKey({ sequence: "q" })).toBe("quit");
   });
 
-  it("keeps pre-0.3 keys as aliases", () => {
-    expect(mapWorkspacePickerKey({ sequence: "j" })).toBe("selectNext");
-    expect(mapWorkspacePickerKey({ sequence: "k" })).toBe("selectPrevious");
-    expect(mapWorkspacePickerKey({ sequence: "c" })).toBe("createWorkspace");
-    expect(mapWorkspacePickerKey({ sequence: "K" })).toBe("moveWorkspaceUp");
-    expect(mapWorkspacePickerKey({ sequence: "J" })).toBe("moveWorkspaceDown");
+  it("no longer maps the pre-0.3 keys", () => {
+    expect(mapWorkspacePickerKey({ sequence: "j" })).toBe("none");
+    expect(mapWorkspacePickerKey({ sequence: "k" })).toBe("none");
+    expect(mapWorkspacePickerKey({ sequence: "c" })).toBe("none");
+    expect(mapWorkspacePickerKey({ sequence: "K" })).toBe("none");
+    expect(mapWorkspacePickerKey({ sequence: "J" })).toBe("none");
   });
 
   it("does not quit on Escape or unknown keys", () => {
@@ -64,12 +64,12 @@ describe("mapDashboardKey", () => {
     expect(mapDashboardKey({ sequence: "?" })).toBe("openHelp");
   });
 
-  it("keeps pre-0.3 keys as aliases", () => {
-    expect(mapDashboardKey({ sequence: "j" })).toBe("selectNext");
-    expect(mapDashboardKey({ sequence: "k" })).toBe("selectPrevious");
-    expect(mapDashboardKey({ sequence: "S" })).toBe("start");
-    expect(mapDashboardKey({ sequence: "K" })).toBe("moveServiceUp");
-    expect(mapDashboardKey({ sequence: "J" })).toBe("moveServiceDown");
+  it("no longer maps the pre-0.3 keys", () => {
+    expect(mapDashboardKey({ sequence: "j" })).toBe("none");
+    expect(mapDashboardKey({ sequence: "k" })).toBe("none");
+    expect(mapDashboardKey({ sequence: "S" })).toBe("none");
+    expect(mapDashboardKey({ sequence: "K" })).toBe("none");
+    expect(mapDashboardKey({ sequence: "J" })).toBe("none");
   });
 
   it("no longer opens command mode", () => {
@@ -105,11 +105,11 @@ describe("mapLogsKey", () => {
     expect(mapLogsKey({ sequence: ":" })).toBe("none");
   });
 
-  it("keeps pre-0.3 keys as aliases", () => {
-    expect(mapLogsKey({ sequence: "j" })).toBe("scrollDown");
-    expect(mapLogsKey({ sequence: "k" })).toBe("scrollUp");
-    expect(mapLogsKey({ sequence: "h" })).toBe("scrollLeft");
-    expect(mapLogsKey({ sequence: "l" })).toBe("scrollRight");
+  it("no longer maps the pre-0.3 keys", () => {
+    expect(mapLogsKey({ sequence: "j" })).toBe("none");
+    expect(mapLogsKey({ sequence: "k" })).toBe("none");
+    expect(mapLogsKey({ sequence: "h" })).toBe("none");
+    expect(mapLogsKey({ sequence: "l" })).toBe("none");
   });
 });
 

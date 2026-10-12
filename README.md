@@ -180,7 +180,7 @@ Workspace commands are treated as trusted local configuration.
 
 ## Updates
 
-Once a day, Sable asks the npm registry in the background whether a newer version exists. If one does, a popup appears after the logo:
+At most once an hour, Sable asks the npm registry in the background whether a newer version exists. If one does, a popup appears after the logo:
 
 ```text
 ╭─ Update available ──────────────────────────╮

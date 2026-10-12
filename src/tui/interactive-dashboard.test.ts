@@ -23,8 +23,8 @@ describe("runInteractiveDashboard", () => {
       getSelectedServiceLogs: vi.fn(() => []),
     };
     const keyInput = createKeyInput([
-      { sequence: "j" },
-      { sequence: "k" },
+      { name: "down" },
+      { name: "up" },
       { sequence: "q" },
     ]);
     const clear = vi.fn();
@@ -68,7 +68,7 @@ describe("runInteractiveDashboard", () => {
       restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
       getSelectedServiceLogs: vi.fn(() => []),
     };
-    const keyInput = createControlledKeyInput([{ sequence: "j" }]);
+    const keyInput = createControlledKeyInput([{ name: "down" }]);
     const write = vi.fn();
     const runPromise = runInteractiveDashboard({
       controller,
@@ -104,7 +104,7 @@ describe("runInteractiveDashboard", () => {
       restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
       getSelectedServiceLogs: vi.fn(() => []),
     };
-    const keyInput = createControlledKeyInput([{ sequence: "j" }]);
+    const keyInput = createControlledKeyInput([{ name: "down" }]);
     const abortController = new AbortController();
     const write = vi.fn();
     const runPromise = runInteractiveDashboard({
@@ -335,7 +335,6 @@ describe("runInteractiveDashboard", () => {
     await runInteractiveDashboard({
       controller,
       keyInput: createKeyInput([
-        { sequence: "S" },
         { sequence: "s" },
         { sequence: "r" },
         { sequence: "q" },
@@ -344,11 +343,10 @@ describe("runInteractiveDashboard", () => {
       render: () => "dashboard",
     });
 
-    // S (alias) starts; s on a stopped service also starts.
-    expect(controller.startSelectedService).toHaveBeenCalledTimes(2);
+    expect(controller.startSelectedService).toHaveBeenCalledOnce();
     expect(controller.stopSelectedService).not.toHaveBeenCalled();
     expect(controller.restartSelectedService).toHaveBeenCalledOnce();
-    expect(write).toHaveBeenCalledTimes(4);
+    expect(write).toHaveBeenCalledTimes(3);
   });
 
   it("stops a running service with s", async () => {
@@ -445,7 +443,7 @@ describe("runInteractiveDashboard", () => {
       restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
       getSelectedServiceLogs: vi.fn(() => []),
     };
-    const keyInput = createControlledKeyInput([{ sequence: "S" }]);
+    const keyInput = createControlledKeyInput([{ sequence: "s" }]);
     const write = vi.fn();
     const runPromise = runInteractiveDashboard({
       controller,
@@ -522,7 +520,7 @@ describe("runInteractiveDashboard", () => {
 
     await runInteractiveDashboard({
       controller,
-      keyInput: createKeyInput([{ sequence: "e" }, { sequence: "j" }, { sequence: "q" }]),
+      keyInput: createKeyInput([{ sequence: "e" }, { name: "down" }, { sequence: "q" }]),
       screen: { clear: vi.fn(), write },
       render: (_state, renderOptions) => `status:${renderOptions?.statusMessage ?? ""}`,
       onEditService,
@@ -547,26 +545,6 @@ describe("runInteractiveDashboard", () => {
 
     expect(onDeleteService).toHaveBeenCalledOnce();
     expect(writes.join("\n")).toContain("Deleted.");
-  });
-
-  it("runs the move service callbacks from the dashboard", async () => {
-    const state = createState();
-    const controller = createController(state, () => []);
-    const onMoveServiceUp = vi.fn(async () => ({ type: "continue" as const, message: "Moved up." }));
-    const onMoveServiceDown = vi.fn(async () => ({ type: "continue" as const, message: "Moved down." }));
-    const writes: string[] = [];
-
-    await runInteractiveDashboard({
-      controller,
-      keyInput: createKeyInput([{ sequence: "K" }, { sequence: "J" }, { sequence: "q" }]),
-      screen: { clear: vi.fn(), write: vi.fn((contents: string) => writes.push(contents)) },
-      onMoveServiceUp,
-      onMoveServiceDown,
-    });
-
-    expect(onMoveServiceUp).toHaveBeenCalledOnce();
-    expect(onMoveServiceDown).toHaveBeenCalledOnce();
-    expect(writes.join("\n")).toContain("Moved down.");
   });
 
   it("exits when the delete service callback exits", async () => {
@@ -646,7 +624,7 @@ describe("runInteractiveDashboard", () => {
       controller,
       keyInput: createKeyInput([
         { name: "return" },
-        { sequence: "k" },
+        { name: "up" },
         { sequence: "g" },
         { sequence: "G" },
         { name: "escape" },
@@ -677,8 +655,8 @@ describe("runInteractiveDashboard", () => {
       controller,
       keyInput: createKeyInput([
         { name: "return" },
-        { sequence: "l" },
-        { sequence: "h" },
+        { name: "right" },
+        { name: "left" },
         { sequence: "0" },
         { ctrl: true, name: "c" },
       ]),
@@ -814,7 +792,7 @@ describe("runInteractiveDashboard", () => {
       { stream: "stdout" as const, line: "four", timestamp: new Date() },
     ];
     const controller = createController(state, () => logs);
-    const keyInput = createControlledKeyInput([{ name: "return" }, { sequence: "k" }]);
+    const keyInput = createControlledKeyInput([{ name: "return" }, { name: "up" }]);
     const write = vi.fn();
     const runPromise = runInteractiveDashboard({
       controller,
@@ -839,7 +817,7 @@ describe("runInteractiveDashboard", () => {
 
     await runInteractiveDashboard({
       controller,
-      keyInput: createKeyInput([{ sequence: "j" }, { sequence: "s" }, { name: "return" }, { name: "escape" }, { sequence: "q" }]),
+      keyInput: createKeyInput([{ name: "down" }, { sequence: "s" }, { name: "return" }, { name: "escape" }, { sequence: "q" }]),
       screen: { clear: vi.fn(), write: vi.fn() },
       sound,
       render: () => "dashboard",
