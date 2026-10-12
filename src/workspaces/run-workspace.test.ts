@@ -67,6 +67,33 @@ describe("runWorkspaceCommand", () => {
     expect(controller.shutdown).toHaveBeenCalledOnce();
     expect(signalSource.listenerCount("SIGINT")).toBe(0);
     expect(signalSource.listenerCount("SIGTERM")).toBe(0);
+    expect(signalSource.listenerCount("SIGHUP")).toBe(0);
+  });
+
+  it("shuts down when the terminal is closed (SIGHUP)", async () => {
+    const controller = createFakeController(workspace);
+    const signalSource = createSignalSource();
+    const runDashboard = vi.fn(
+      async ({ abortSignal }: { abortSignal?: AbortSignal }) =>
+        new Promise<{ type: "exit" }>((resolve) => {
+          abortSignal?.addEventListener("abort", () => resolve({ type: "exit" }), { once: true });
+        }),
+    );
+
+    const runPromise = runWorkspaceCommand("ecommerce", {
+      store: createStore(config),
+      createController: () => controller,
+      keyInput: createKeyInput(),
+      runDashboard,
+      signalSource,
+    });
+
+    await waitUntil(() => runDashboard.mock.calls.length === 1);
+    signalSource.emit("SIGHUP");
+    await runPromise;
+
+    expect(controller.shutdown).toHaveBeenCalledOnce();
+    expect(signalSource.listenerCount("SIGHUP")).toBe(0);
   });
 
   it("closes input and shuts down even when dashboard fails", async () => {

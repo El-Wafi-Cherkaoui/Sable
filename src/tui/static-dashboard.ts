@@ -2,7 +2,7 @@ import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } fr
 import type { ServiceLogEntry } from "../process/process-manager.js";
 import { displayPath, formatStatus, type ItemKind } from "./format.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
-import { appendAnchoredFooter } from "./layout.js";
+import { appendAnchoredFooter, clipLines } from "./layout.js";
 import { formatLogEntry } from "./log-lines.js";
 import { createTuiStyle, type TuiStyle } from "./style.js";
 import { padVisibleEnd, truncateVisible } from "./width.js";
@@ -33,6 +33,13 @@ type ItemRow =
 export function renderStaticDashboard(
   state: RuntimeWorkspaceState,
   options: RenderStaticDashboardOptions = {},
+): string {
+  return clipLines(renderDashboardLines(state, options), options.columns);
+}
+
+function renderDashboardLines(
+  state: RuntimeWorkspaceState,
+  options: RenderStaticDashboardOptions,
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
   const footer = [

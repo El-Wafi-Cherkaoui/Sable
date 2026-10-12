@@ -1,5 +1,5 @@
 import type { KeyInput } from "../input/terminal-key-input.js";
-import { renderDialogBox, renderDialogScreen } from "./dialog-box.js";
+import { dialogMaxWidth, renderDialogBox, renderDialogScreen } from "./dialog-box.js";
 import { formatKeyHints } from "./key-hints.js";
 import type { PromptScreen } from "./prompt-view.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
@@ -88,11 +88,12 @@ export function renderDeleteDialog(
       error === undefined ? "" : style.failed(error),
     ],
     style,
+    maxWidth: dialogMaxWidth(options.columns ?? process.stdout.columns),
   });
 
   return renderDialogScreen({
     box,
-    hints: formatKeyHints([["Enter", "delete"], ["Esc", "cancel"]], style),
+    hints: formatKeyHints([["Enter", "delete"], ["Esc", "cancel"]], style, dialogMaxWidth(options.columns ?? process.stdout.columns)),
     style,
     columns: options.columns ?? process.stdout.columns,
     rows: options.rows ?? process.stdout.rows,

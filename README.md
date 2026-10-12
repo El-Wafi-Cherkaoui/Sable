@@ -20,9 +20,9 @@ Sable is not a task runner, tmux replacement, IDE, Docker manager, Kubernetes to
 
 ## Status
 
-Sable 0.3.0 is the current daily-use checkpoint. Current work remains focused on reliability and small local-first improvements.
+Sable 0.3.1 is the current daily-use checkpoint. Current work remains focused on reliability and small local-first improvements.
 
-Requirements: Node.js 20+ and npm. Sable is intended to work on Windows, macOS, and Linux, with early smoke testing on Windows and Linux.
+Requirements: Node.js 20+ and npm. Sable is intended to work on Windows, macOS, and Linux, and the test suite runs on all three in CI.
 
 Current capabilities:
 
@@ -99,6 +99,8 @@ sable
 
 When you add a workspace (`a` in the picker), Sable asks for a project directory. Relative service working directories are resolved against that project directory so you can run the workspace later from anywhere.
 
+In folder fields, Sable suggests the rest of the path as you type. Press `→` to accept it, or `↑` / `↓` to step through other matching folders (`Tab` moves to the next field).
+
 ## Keys
 
 The footer on each screen shows the keys that work for what is selected. Press `?` anywhere for the full list. `Esc` and `q` always go back one level; `Ctrl+C` quits Sable from anywhere and stops everything.
@@ -158,7 +160,7 @@ e           jump to the next error (stderr) line
 Esc, q      clear the search, or go back to the dashboard
 ```
 
-Logs/output are kept in memory, up to 2,000 lines per service or command. They are not persisted to disk.
+Logs/output are kept in memory, up to 2,000 lines (and about 2 million characters) per service or command. They are not persisted to disk. Sable keeps a program's colors but drops other terminal control sequences (screen clears, cursor moves) so a noisy tool can't scramble the display, and asks programs for color unless `NO_COLOR` is set.
 
 ## Configuration
 

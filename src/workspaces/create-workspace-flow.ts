@@ -40,7 +40,7 @@ export async function runCreateWorkspaceFlow(
     title: "New workspace",
     fields: () => [
       { type: "text", key: "name", label: "Name", hint: "Letters, numbers, dashes and underscores, e.g. shop-api" },
-      { type: "text", key: "folder", label: "Folder", hint: "Where the project lives; services run from here" },
+      { type: "text", key: "folder", label: "Folder", pathBase: defaultDirectory, hint: "Where the project lives; services run from here" },
     ],
     values: { name: defaultWorkspaceName(defaultDirectory, config), folder: defaultDirectory },
     validate(values) {

@@ -1,6 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { statSync } from "node:fs";
 import treeKill from "tree-kill";
 import type { CommandConfig, ServiceConfig } from "../config/config-types.js";
+import { lastCarriageReturnSegment, sanitizeLogLine } from "./sanitize-output.js";
 
 export type ProcessStatus = "stopped" | "running" | "exited" | "failed";
 
@@ -25,6 +27,7 @@ export type ProcessManagerOptions = {
   gracefulStopTimeoutMs?: number;
   forceStopTimeoutMs?: number;
   maxLogLinesPerService?: number;
+  maxLogCharactersPerService?: number;
   processTreeKiller?: ProcessTreeKiller;
 };
 
@@ -49,6 +52,9 @@ type PendingLogChunks = Partial<Record<ProcessOutputStream, string>>;
 const defaultGracefulStopTimeoutMs = 3_000;
 const defaultForceStopTimeoutMs = 1_000;
 const defaultMaxLogLinesPerService = 2_000;
+const defaultMaxLogCharactersPerService = 2_000_000;
+// A line that never ends is cut here so one runaway stream can't grow without limit.
+const maxUnfinishedLineCharacters = 100_000;
 
 export class ProcessManager {
   private readonly processes = new Map<string, ManagedProcessEntry>();
@@ -57,6 +63,8 @@ export class ProcessManager {
   private readonly gracefulStopTimeoutMs: number;
   private readonly forceStopTimeoutMs: number;
   private readonly maxLogLinesPerService: number;
+  private readonly maxLogCharactersPerService: number;
+  private readonly logCharacters = new Map<string, number>();
   private readonly processTreeKiller: ProcessTreeKiller;
 
   constructor(options: ProcessManagerOptions = {}) {
@@ -66,6 +74,8 @@ export class ProcessManager {
       options.forceStopTimeoutMs ?? defaultForceStopTimeoutMs;
     this.maxLogLinesPerService =
       options.maxLogLinesPerService ?? defaultMaxLogLinesPerService;
+    this.maxLogCharactersPerService =
+      options.maxLogCharactersPerService ?? defaultMaxLogCharactersPerService;
     this.processTreeKiller = options.processTreeKiller ?? killProcessTree;
   }
 
@@ -80,9 +90,12 @@ export class ProcessManager {
     let child: ChildProcess;
 
     try {
+      assertDirectoryExists(service.cwd);
+
       child = spawn(service.command, {
         cwd: service.cwd,
         env: {
+          ...colorEnvironment(),
           ...process.env,
           ...service.env,
         },
@@ -260,28 +273,21 @@ export class ProcessManager {
     chunk: Buffer | string,
   ): void {
     const pendingChunk = this.pendingLogChunks.get(serviceId)?.[stream] ?? "";
-    const contents = normalizeLogContents(`${pendingChunk}${chunk.toString()}`);
+    const contents = `${pendingChunk}${chunk.toString()}`.replace(/\r\n/g, "\n");
     const lines = contents.split("\n");
 
-    if (contents.endsWith("\n")) {
-      lines.pop();
+    // The unfinished last line stays raw so escape sequences split across chunks
+    // are completed by the next chunk.
+    const unfinished = collapsePendingLine(lines.pop() ?? "");
+
+    if (unfinished.length > maxUnfinishedLineCharacters) {
+      lines.push(unfinished);
       this.setPendingLogChunk(serviceId, stream, undefined);
     } else {
-      this.setPendingLogChunk(serviceId, stream, lines.pop() ?? "");
+      this.setPendingLogChunk(serviceId, stream, unfinished);
     }
 
-    if (lines.length === 0) {
-      return;
-    }
-
-    this.appendLogEntries(
-      serviceId,
-      lines.map((line) => ({
-        stream,
-        line,
-        timestamp: new Date(),
-      })),
-    );
+    this.appendLogEntries(serviceId, toSanitizedEntries(stream, lines));
   }
 
   private setPendingLogChunk(
@@ -315,12 +321,11 @@ export class ProcessManager {
     this.pendingLogChunks.delete(serviceId);
     this.appendLogEntries(
       serviceId,
-      (["stdout", "stderr"] as const)
-        .flatMap((stream) => {
-          const line = pendingChunks[stream];
+      (["stdout", "stderr"] as const).flatMap((stream) => {
+        const line = pendingChunks[stream];
 
-          return line === undefined ? [] : [{ stream, line, timestamp: new Date() }];
-        }),
+        return line === undefined ? [] : toSanitizedEntries(stream, [line]);
+      }),
     );
   }
 
@@ -335,15 +340,35 @@ export class ProcessManager {
   }
 
   private appendLogEntries(serviceId: string, entries: ServiceLogEntry[]): void {
-    const serviceLogs = this.logs.get(serviceId) ?? [];
-
-    serviceLogs.push(...entries);
-
-    if (serviceLogs.length > this.maxLogLinesPerService) {
-      serviceLogs.splice(0, serviceLogs.length - this.maxLogLinesPerService);
+    if (entries.length === 0) {
+      return;
     }
 
+    const serviceLogs = this.logs.get(serviceId) ?? [];
+
+    let characters = this.logCharacters.get(serviceId) ?? 0;
+
+    for (const entry of entries) {
+      serviceLogs.push(entry);
+      characters += entry.line.length;
+    }
+
+    // Drop the oldest lines past either cap, but always keep the newest one.
+    let dropCount = Math.max(0, serviceLogs.length - this.maxLogLinesPerService);
+
+    for (let index = 0; index < dropCount; index += 1) {
+      characters -= serviceLogs[index]?.line.length ?? 0;
+    }
+
+    while (characters > this.maxLogCharactersPerService && dropCount < serviceLogs.length - 1) {
+      characters -= serviceLogs[dropCount]?.line.length ?? 0;
+      dropCount += 1;
+    }
+
+    serviceLogs.splice(0, dropCount);
+
     this.logs.set(serviceId, serviceLogs);
+    this.logCharacters.set(serviceId, characters);
   }
 
   private async stopProcessTree(
@@ -365,8 +390,22 @@ export class ProcessManager {
   }
 }
 
-function normalizeLogContents(contents: string): string {
-  return contents.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+// Lines that held only control sequences (a screen clear, a cursor move) are dropped.
+function toSanitizedEntries(stream: ProcessOutputStream, lines: string[]): ServiceLogEntry[] {
+  return lines.flatMap((rawLine) => {
+    const line = sanitizeLogLine(rawLine);
+
+    return line === "" && rawLine !== "" ? [] : [{ stream, line, timestamp: new Date() }];
+  });
+}
+
+// A progress bar can redraw forever without a newline; keep only its latest frame,
+// plus a trailing "\r" that may still turn out to be half of "\r\n".
+function collapsePendingLine(line: string): string {
+  const endsWithReturn = line.endsWith("\r");
+  const collapsed = lastCarriageReturnSegment(endsWithReturn ? line.slice(0, -1) : line);
+
+  return endsWithReturn ? `${collapsed}\r` : collapsed;
 }
 
 function formatProcessExitMessage(
@@ -407,6 +446,26 @@ function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
 
     child.once("exit", onExit);
   });
+}
+
+// Children get pipes, not a terminal, so most tools turn color off. Ask for it, unless
+// the user opted out with NO_COLOR; their own FORCE_COLOR or service env still wins.
+function colorEnvironment(): NodeJS.ProcessEnv {
+  return process.env.NO_COLOR === undefined ? { FORCE_COLOR: "1" } : {};
+}
+
+// Node reports a missing working folder as "spawn /bin/sh ENOENT", which points at the
+// shell instead of the folder, so check first and say what is actually wrong.
+function assertDirectoryExists(directory: string): void {
+  try {
+    if (statSync(directory).isDirectory()) {
+      return;
+    }
+  } catch {
+    // Falls through to the error below.
+  }
+
+  throw new Error(`working folder not found: ${directory}`);
 }
 
 function toError(error: unknown): Error {

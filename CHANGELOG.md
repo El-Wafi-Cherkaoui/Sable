@@ -4,6 +4,29 @@
 
 - No changes yet.
 
+## 0.3.1 - Stability
+
+### Added
+
+- Folder fields (workspace folder, service directory) suggest the rest of the path as you type. `→` accepts it, `↑`/`↓` step through other matching folders, and `Tab` moves to the next field.
+- A "Stopping..." / "Restarting..." message while a service shuts down.
+
+### Changed
+
+- Programs are asked for colour (`FORCE_COLOR=1`) unless `NO_COLOR` is set; your own environment still wins. Their colours now show in the logs view.
+- Logs are capped at about 2 million characters per service as well as 2,000 lines.
+- Sable on Windows and macOS is now tested in CI (Node 20 and 22), not only on Linux.
+
+### Hardened
+
+- Output from programs is sanitised: colours are kept, but screen clears, cursor moves, title changes and other control sequences are dropped, and a `\r` progress bar keeps only its last frame. A `tsc --watch` or vite service can no longer scramble the dashboard.
+- Starting a service whose folder no longer exists now says which folder is missing.
+- Saving a workspace no longer overwrites changes another Sable instance made to other workspaces.
+- Closing the terminal window (`SIGHUP`) now stops your services like Ctrl+C does.
+- Every screen now fits narrow terminals, and the help popup fits short ones.
+- `sable` and `sable run` explain that they need an interactive terminal when input or output is piped, instead of hanging.
+- The update check no longer stops checking if the cached check time is in the future.
+
 ## 0.3.0 - Redesign
 
 ### Added

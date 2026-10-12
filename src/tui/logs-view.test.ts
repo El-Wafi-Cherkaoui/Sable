@@ -59,6 +59,41 @@ describe("renderLogsView", () => {
     expect(short.split("\n")).toHaveLength(full.split("\n").length);
   });
 
+  describe("child colors", () => {
+    const colored = createLog("stdout", "\x1b[32mready\x1b[0m in 12ms");
+
+    it("keeps them on stdout rows when color is on", () => {
+      const rendered = renderLogsView({ state: createState(), logs: [colored], scrollOffset: 0, visibleLineCount: 1, color: true });
+
+      expect(rendered).toContain("\x1b[32mready\x1b[0m in 12ms");
+    });
+
+    it("removes them when color is off", () => {
+      const rendered = renderLogsView({ state: createState(), logs: [colored], scrollOffset: 0, visibleLineCount: 1 });
+
+      expect(rendered).not.toContain("\x1b[32m");
+      expect(rendered).toContain("ready in 12ms");
+    });
+
+    it("never cuts a color code when wrapping", () => {
+      const logs = [createLog("stdout", `\x1b[31m${"x".repeat(60)}\x1b[0m`)];
+      const rendered = renderLogsView({ state: createState(), logs, scrollOffset: 0, visibleLineCount: 4, viewportColumns: 40, wrap: true, color: true });
+      const body = rendered.split("\n").slice(2, 4);
+
+      for (const row of body) {
+        expect(row.match(/\x1b\[31m/g)).toHaveLength(1);
+        expect(row.endsWith("\x1b[0m") || row.includes("\x1b[0m")).toBe(true);
+      }
+    });
+
+    it("finds search matches in the visible text only", () => {
+      const logs = [createLog("stdout", "\x1b[31mred\x1b[0m"), createLog("stdout", "plain 31")];
+
+      expect(findMatches(logs, "31")).toEqual([1]);
+      expect(findMatches(logs, "red")).toEqual([0]);
+    });
+  });
+
   it("truncates long lines to the terminal width and scrolls them sideways", () => {
     const logs = [createLog("stdout", "abcdefghijklmnopqrstuvwxyz".repeat(4))];
     const rendered = renderLogsView({ state: createState(), logs, scrollOffset: 0, visibleLineCount: 1, viewportColumns: 40 });

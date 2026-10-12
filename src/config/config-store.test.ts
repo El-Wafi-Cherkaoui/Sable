@@ -242,4 +242,76 @@ describe("formatConfigError", () => {
       ].join("\n"),
     );
   });
+
+  describe("saving while another Sable instance changed the file", () => {
+    function workspace(id: string, command = "npm run dev") {
+      return {
+        id,
+        name: id,
+        projectDirectory: `/projects/${id}`,
+        commands: [],
+        services: [{ id: `${id}-svc`, name: "app", command, cwd: `/projects/${id}`, autoStart: true, env: {} }],
+      };
+    }
+
+    async function setup(...ids: string[]) {
+      const first = new ConfigStore({ directory: tempDirectory });
+      const second = new ConfigStore({ directory: tempDirectory });
+
+      await first.save({ version: 1, workspaces: ids.map((id) => workspace(id)) });
+
+      return { first, second };
+    }
+
+    it("keeps a workspace the other instance added", async () => {
+      const { first, second } = await setup("a");
+      const firstView = await first.load();
+      const secondView = await second.load();
+
+      await second.save({ ...secondView, workspaces: [...secondView.workspaces, workspace("b")] });
+      await first.save({ ...firstView, workspaces: [workspace("a", "npm start")] });
+
+      const saved = await new ConfigStore({ directory: tempDirectory }).load();
+
+      expect(saved.workspaces.map((item) => item.id)).toEqual(["a", "b"]);
+      expect(saved.workspaces[0]?.services[0]?.command).toBe("npm start");
+    });
+
+    it("keeps the other instance's edit to a workspace this one did not touch", async () => {
+      const { first, second } = await setup("a", "b");
+      const firstView = await first.load();
+      const secondView = await second.load();
+
+      await second.save({ ...secondView, workspaces: [secondView.workspaces[0]!, workspace("b", "edited elsewhere")] });
+      await first.save({ ...firstView, workspaces: [workspace("a", "edited here"), firstView.workspaces[1]!] });
+
+      const saved = await new ConfigStore({ directory: tempDirectory }).load();
+
+      expect(saved.workspaces.map((item) => item.services[0]?.command)).toEqual(["edited here", "edited elsewhere"]);
+    });
+
+    it("still deletes a workspace this instance removed", async () => {
+      const { first, second } = await setup("a", "b");
+      const firstView = await first.load();
+      const secondView = await second.load();
+
+      await second.save({ ...secondView, workspaces: [...secondView.workspaces, workspace("c")] });
+      await first.save({ ...firstView, workspaces: [firstView.workspaces[0]!] });
+
+      const saved = await new ConfigStore({ directory: tempDirectory }).load();
+
+      expect(saved.workspaces.map((item) => item.id)).toEqual(["a", "c"]);
+    });
+
+    it("saves exactly what it was given when nothing changed meanwhile", async () => {
+      const { first } = await setup("a");
+      const view = await first.load();
+
+      await first.save({ ...view, workspaces: [workspace("a", "npm start"), workspace("b")] });
+
+      const saved = await new ConfigStore({ directory: tempDirectory }).load();
+
+      expect(saved.workspaces.map((item) => item.id)).toEqual(["a", "b"]);
+    });
+  });
 });

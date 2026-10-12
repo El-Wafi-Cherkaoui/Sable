@@ -274,7 +274,7 @@ export function itemFields(kind: ItemKind, workspace: WorkspaceConfig, includeTy
       label: "Command",
       hint: kind === "service" ? "Keeps running until stopped, e.g. npm run dev" : "Runs once, e.g. npm run migrate",
     },
-    { type: "text", key: "cwd", label: "Directory", hint: `Relative to ${displayPath(workspace.projectDirectory)}` },
+    { type: "text", key: "cwd", label: "Directory", pathBase: workspace.projectDirectory, hint: `Relative to ${displayPath(workspace.projectDirectory)}` },
     ...(kind === "service" ? [{ type: "toggle" as const, key: "autoStart", label: "Auto-start" }] : []),
     { type: "list", key: "env", label: "Env", hint: "KEY=value, e.g. PORT=3000", addLabel: "add variable" },
   ];

@@ -72,7 +72,10 @@ export function startUpdateCheck(options: UpdateCheckOptions): UpdateCheck {
       checkedAt = cache.checkedAt;
       dismissed = cache.dismissed;
 
-      if (now() - cache.checkedAt < checkIntervalMs) {
+      // A check time in the future (the clock was wrong or moved back) must not freeze the cache.
+      const age = now() - cache.checkedAt;
+
+      if (age >= 0 && age < checkIntervalMs) {
         return;
       }
     }

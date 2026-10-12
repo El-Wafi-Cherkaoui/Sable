@@ -134,6 +134,85 @@ describe("runForm", () => {
   });
 });
 
+describe("folder completion", () => {
+  const folderFields = (): FormField[] => [
+    { type: "text", key: "name", label: "Name" },
+    { type: "text", key: "cwd", label: "Directory", pathBase: "/work" },
+    { type: "text", key: "other", label: "Other" },
+  ];
+  const completePath = vi.fn((text: string) => (text === "ap" ? ["i/", "p/", "ple/"] : text === "x" ? ["y/"] : []));
+  const folderOptions = { fields: folderFields, completePath };
+  const folderState = (cwd: string, extra: Partial<FormState> = {}): FormState => ({
+    values: { name: "n", cwd, other: "" },
+    focus: 1,
+    cursor: cwd.length,
+    errors: {},
+    ...extra,
+  });
+
+  it("shows the suggestion after the text with the folder hints", () => {
+    const rendered = renderForm({ title: "t", ...folderOptions }, folderState("ap"));
+
+    expect(rendered).toContain("ap▏i/");
+    expect(rendered).toContain("[→] complete folder");
+    expect(rendered).toContain("other folders 1/3");
+  });
+
+  it("accepts the shown suggestion with → at the end of the text", () => {
+    const state = applyFormKey(folderOptions, folderState("ap", { completionIndex: 1 }), { name: "right" });
+
+    expect(state.values.cwd).toBe("app/");
+    expect(state.cursor).toBe(4);
+    expect(state.completionIndex).toBe(0);
+  });
+
+  it("steps through suggestions with ↓ and ↑ before moving between fields", () => {
+    let state = folderState("ap");
+
+    state = applyFormKey(folderOptions, state, { name: "down" });
+    state = applyFormKey(folderOptions, state, { name: "down" });
+    expect([state.focus, state.completionIndex]).toEqual([1, 2]);
+    expect(renderForm({ title: "t", ...folderOptions }, state)).toContain("ap▏ple/");
+
+    state = applyFormKey(folderOptions, state, { name: "up" });
+    expect([state.focus, state.completionIndex]).toEqual([1, 1]);
+
+    state = applyFormKey(folderOptions, { ...state, completionIndex: 2 }, { name: "down" });
+    expect(state.focus).toBe(2);
+
+    state = applyFormKey(folderOptions, folderState("ap"), { name: "up" });
+    expect(state.focus).toBe(0);
+  });
+
+  it("moves between fields with ↑↓ when there is a single suggestion or none", () => {
+    expect(applyFormKey(folderOptions, folderState("x"), { name: "down" }).focus).toBe(2);
+    expect(applyFormKey(folderOptions, folderState("zzz"), { name: "down" }).focus).toBe(2);
+  });
+
+  it("always lets Tab move to the next field", () => {
+    expect(applyFormKey(folderOptions, folderState("ap"), { name: "tab" }).focus).toBe(2);
+  });
+
+  it("starts again from the first suggestion after typing", () => {
+    const state = applyFormKey(folderOptions, folderState("ap", { completionIndex: 2 }), { sequence: "p" });
+
+    expect(state.completionIndex).toBe(0);
+  });
+
+  it("does not suggest while the cursor is inside the text", () => {
+    const state = folderState("ap", { cursor: 1 });
+
+    expect(renderForm({ title: "t", ...folderOptions }, state)).not.toContain("complete folder");
+    expect(applyFormKey(folderOptions, state, { name: "right" }).cursor).toBe(2);
+    expect(applyFormKey(folderOptions, state, { name: "down" }).focus).toBe(2);
+  });
+
+  it("does not suggest on ordinary text fields or without a completer", () => {
+    expect(renderForm({ title: "t", ...folderOptions }, folderState("ap", { focus: 0 }))).not.toContain("complete folder");
+    expect(renderForm({ title: "t", fields: folderFields }, folderState("ap"))).not.toContain("complete folder");
+  });
+});
+
 function stateAt(focus: number, cursor = 0): FormState {
   return { values, focus, cursor, errors: {} };
 }

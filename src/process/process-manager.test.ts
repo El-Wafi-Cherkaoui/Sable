@@ -12,6 +12,128 @@ afterEach(async () => {
 });
 
 describe("ProcessManager", () => {
+  describe("child color environment", () => {
+    async function readForceColor(env: Record<string, string> = {}): Promise<string> {
+      manager = createManager();
+      const service = createService({
+        command: nodeCommand("console.log('FC=' + process.env.FORCE_COLOR);"),
+        env,
+      });
+
+      manager.start(service);
+      await waitForStatus(manager, service.id, "exited");
+
+      return manager.getLogs(service.id).find((entry) => entry.line.startsWith("FC="))?.line ?? "";
+    }
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("asks children for color", async () => {
+      vi.stubEnv("FORCE_COLOR", undefined as unknown as string);
+      vi.stubEnv("NO_COLOR", undefined as unknown as string);
+
+      expect(await readForceColor()).toBe("FC=1");
+    });
+
+    it("lets the service env override it", async () => {
+      vi.stubEnv("NO_COLOR", undefined as unknown as string);
+
+      expect(await readForceColor({ FORCE_COLOR: "0" })).toBe("FC=0");
+    });
+
+    it("does not ask for color when NO_COLOR is set", async () => {
+      vi.stubEnv("FORCE_COLOR", undefined as unknown as string);
+      vi.stubEnv("NO_COLOR", "1");
+
+      expect(await readForceColor()).toBe("FC=undefined");
+    });
+  });
+
+  describe("log sanitising", () => {
+    function pushChunk(stream: "stdout" | "stderr", chunk: string): string[] {
+      manager = createManager();
+      const feed = (value: string) =>
+        (manager as unknown as { appendLogChunk(id: string, s: string, c: string): void }).appendLogChunk(
+          "service-1",
+          stream,
+          value,
+        );
+
+      feed(chunk);
+      return manager.getLogs("service-1").map((entry) => entry.line);
+    }
+
+    it("drops the oldest lines once the character cap is passed", () => {
+      manager = new ProcessManager({ maxLogCharactersPerService: 10 });
+      const feed = (value: string) =>
+        (manager as unknown as { appendLogChunk(id: string, s: string, c: string): void }).appendLogChunk(
+          "service-1",
+          "stdout",
+          value,
+        );
+
+      feed("aaaa\nbbbb\ncccc\n");
+      feed("dd\n");
+
+      expect(manager.getLogs("service-1").map((entry) => entry.line)).toEqual(["bbbb", "cccc", "dd"]);
+
+      feed(`${"x".repeat(50)}\n`);
+
+      expect(manager.getLogs("service-1").map((entry) => entry.line)).toEqual(["x".repeat(50)]);
+    });
+
+    it("cuts a runaway line that never ends", () => {
+      const lines = pushChunk("stdout", "y".repeat(150_000));
+
+      expect(lines).toEqual(["y".repeat(150_000)]);
+    });
+
+    it("strips screen clears and keeps colors", () => {
+      expect(pushChunk("stdout", "\x1b[2J\x1b[1;1H\x1b[32mwatching\x1b[0m\n")).toEqual([
+        "\x1b[32mwatching\x1b[0m",
+      ]);
+    });
+
+    it("drops lines made only of control sequences but keeps blank lines", () => {
+      expect(pushChunk("stdout", "\x1b[2J\n\nafter\n")).toEqual(["", "after"]);
+    });
+
+    it("keeps the last frame of a carriage-return progress bar", () => {
+      expect(pushChunk("stderr", "10%\r50%\r100%\n")).toEqual(["100%"]);
+      expect(pushChunk("stderr", "a\r\nb\n")).toEqual(["a", "b"]);
+    });
+
+    it("completes escape sequences and CRLF split across chunks", () => {
+      manager = createManager();
+      const feed = (value: string) =>
+        (manager as unknown as { appendLogChunk(id: string, s: string, c: string): void }).appendLogChunk(
+          "service-1",
+          "stdout",
+          value,
+        );
+
+      feed("one\x1b[");
+      feed("2Ktwo\r");
+      feed("\nthree\n");
+
+      expect(manager.getLogs("service-1").map((entry) => entry.line)).toEqual(["onetwo", "three"]);
+    });
+
+    it("sanitises an unfinished line when the process ends", async () => {
+      manager = createManager();
+      const service = createService({
+        command: nodeCommand("process.stdout.write(String.fromCharCode(27) + '[2Jlast words');"),
+      });
+
+      manager.start(service);
+      await waitForStatus(manager, service.id, "exited");
+
+      expect(manager.getLogs(service.id).map((entry) => entry.line)).toContain("last words");
+    });
+  });
+
   it("starts a service command", () => {
     manager = createManager();
 
@@ -46,17 +168,16 @@ describe("ProcessManager", () => {
     });
   });
 
-  it("records failed state when a service cannot spawn", async () => {
+  it("names the missing folder when the working directory does not exist", () => {
     manager = createManager();
-    const service = createService({ cwd: path.join(os.tmpdir(), "sable-missing-cwd") });
+    const missing = path.join(os.tmpdir(), "sable-missing-cwd");
+    const service = createService({ cwd: missing });
 
-    manager.start(service);
+    const state = manager.start(service);
 
-    await waitForStatus(manager, service.id, "failed");
-
-    expect(manager.getState(service.id).status).toBe("failed");
-    expect(manager.getLogs(service.id).map((entry) => entry.line)).toContainEqual(
-      expect.stringMatching(/^process error: /),
+    expect(state.status).toBe("failed");
+    expect(manager.getLogs(service.id).map((entry) => entry.line)).toContain(
+      `service failed to start: working folder not found: ${missing}`,
     );
   });
 

@@ -1,3 +1,4 @@
+import { truncateAnsi } from "./ansi-text.js";
 import type { TuiStyle } from "./style.js";
 import { padVisibleEnd, sliceVisible, stripAnsi, visibleLength } from "./width.js";
 
@@ -7,6 +8,8 @@ export type DialogBoxOptions = {
   style: TuiStyle;
   // Lines (by index) to center inside the box, e.g. a row of buttons.
   centered?: number[];
+  // Widest the box may be. Longer lines are cut so the box never wraps on a narrow terminal.
+  maxWidth?: number;
 };
 
 export type DialogScreenOptions = {
@@ -19,12 +22,19 @@ export type DialogScreenOptions = {
   background?: string;
 };
 
+// The most a box, or the hints under it, may use on a terminal `columns` wide, keeping the last column free.
+export function dialogMaxWidth(columns: number | undefined): number | undefined {
+  return columns === undefined ? undefined : Math.max(1, columns - 1);
+}
+
 // A rounded box with its title in the top border and a blank line of padding
 // above and below the content: the look of every Sable popup.
 export function renderDialogBox(options: DialogBoxOptions): string[] {
   const { style } = options;
-  const content = ["", ...options.lines, ""];
-  const title = ` ${options.title} `;
+  // The box is 6 columns wider than its text: two borders and two columns of padding each side.
+  const textWidth = options.maxWidth === undefined ? Number.POSITIVE_INFINITY : Math.max(8, options.maxWidth - 6);
+  const content = ["", ...options.lines, ""].map((line) => truncateAnsi(line, textWidth));
+  const title = truncateAnsi(` ${options.title} `, textWidth - 2);
   const innerWidth = Math.max(visibleLength(title) + 2, ...content.map((line) => visibleLength(line))) + 4;
   const top = style.border(`╭─${title}${"─".repeat(Math.max(0, innerWidth - visibleLength(title) - 1))}╮`);
   const bottom = style.border(`╰${"─".repeat(innerWidth)}╯`);
