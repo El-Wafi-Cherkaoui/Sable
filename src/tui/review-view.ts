@@ -127,7 +127,8 @@ function paint(text: string, tone: ReviewLine["tone"], style: TuiStyle): string 
   }
 }
 
-// Splits a line at the terminal width, indenting the continuation lines a little further.
+// Splits a line at the terminal width, preferring to break at a space and indenting the continuation
+// lines a little further. Nothing is dropped: the pieces always add up to the whole line.
 function wrap(text: string, width: number): string[] {
   if (visibleLength(text) <= width) {
     return [text];
@@ -135,19 +136,31 @@ function wrap(text: string, width: number): string[] {
 
   const indent = " ".repeat((text.length - text.trimStart().length) + 2);
   const lines: string[] = [];
-  let column = 0;
+  let rest = text;
   let first = true;
 
-  while (column < visibleLength(text)) {
+  while (rest !== "") {
     const room = first ? width : Math.max(8, width - indent.length);
-    const piece = sliceVisible(text, column, room);
+
+    if (visibleLength(rest) <= room) {
+      lines.push(first ? rest : `${indent}${rest}`);
+      break;
+    }
+
+    let piece = sliceVisible(rest, 0, room);
+    const lastSpace = piece.lastIndexOf(" ");
+
+    // Break at the last space when that leaves a reasonable first part.
+    if (lastSpace > piece.length * 0.4) {
+      piece = piece.slice(0, lastSpace);
+    }
 
     if (piece === "") {
       break;
     }
 
     lines.push(first ? piece : `${indent}${piece}`);
-    column += visibleLength(piece);
+    rest = rest.slice(piece.length).replace(/^ /, "");
     first = false;
   }
 

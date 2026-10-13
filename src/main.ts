@@ -65,6 +65,7 @@ program
     try {
       result = await runWorkspaceHome({
         store: new ConfigStore(),
+        launchDirectory: process.cwd(),
         sound,
         settings,
         welcomeScreen: settings.welcomeScreen.isEnabled(),

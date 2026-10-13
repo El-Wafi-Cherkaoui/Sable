@@ -35,6 +35,10 @@ describe("mapWorkspacePickerKey", () => {
     expect(mapWorkspacePickerKey({ sequence: "J" })).toBe("none");
   });
 
+  it("imports a project file with i", () => {
+    expect(mapWorkspacePickerKey({ sequence: "i" })).toBe("importProject");
+  });
+
   it("does not quit on Escape or unknown keys", () => {
     expect(mapWorkspacePickerKey({ name: "escape" })).toBe("none");
     expect(mapWorkspacePickerKey({ sequence: "S" })).toBe("none");

@@ -73,6 +73,14 @@ describe("renderWorkspacePicker", () => {
       ].join("\n"),
     );
   });
+  it("shows the import key only when the launch folder has a sable.json", () => {
+    const without = renderWorkspacePicker(createWorkspacePickerState(workspaces)).split("\n").at(-1);
+    const withFile = renderWorkspacePicker({ ...createWorkspacePickerState(workspaces), projectFileHere: true }).split("\n").at(-1);
+
+    expect(without).not.toContain("import");
+    expect(withFile).toBe("[↑↓] select  [Enter] open  [a] add  [i] import sable.json  [e] rename  [?] help  [q] quit");
+  });
+
   it("renders status messages in a reserved footer slot", () => {
     const lines = renderWorkspacePicker(createWorkspacePickerState(workspaces, 'Auto-start disabled for "api".')).split("\n");
 
