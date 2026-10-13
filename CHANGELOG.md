@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Command suggestions: while you type a command for a service or command, Sable shows the rest of a command you saved before, from this workspace first and then your other workspaces. Press `→` to accept it, or `↑` / `↓` to step through other matches.
+
 ### Changed
 
 - The welcome screen now shows on every launch (it was once a day). Turn it off with the new "Welcome screen" row in Settings (`,`, then `↑↓` and `Space`) to go straight to your workspaces; the new-version popup still appears first when there is an update.

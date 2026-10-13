@@ -8,6 +8,7 @@ import {
   runDeleteServiceFlow,
   runEditCommandFlow,
   runEditServiceFlow,
+  knownCommands,
   toDirectoryValue,
   validateItem,
   type ServiceFlowStore,
@@ -337,3 +338,13 @@ const configWithTwoServices: AppConfig = {
   version: 1,
   workspaces: [workspaceWithTwoServices],
 };
+
+describe("knownCommands", () => {
+  it("lists this workspace's commands first, then the others', each once", () => {
+    const item = (command: string) => ({ id: command, name: command, command, cwd: projectDirectory, env: {} });
+    const mine = { ...workspace, services: [{ ...item("npm run dev"), autoStart: true }], commands: [item("npm run lint")] };
+    const other = { ...workspace, id: "other", services: [{ ...item("npm run dev"), autoStart: true }, { ...item("docker compose up"), autoStart: true }], commands: [item("  ")] };
+
+    expect(knownCommands({ ...config, workspaces: [other, mine] }, mine)).toEqual(["npm run dev", "npm run lint", "docker compose up"]);
+  });
+});

@@ -9,8 +9,9 @@ import { padVisibleEnd } from "./width.js";
 
 export type FormField =
   // `pathBase` marks a folder field: typing shows a completion, and → accepts it.
-  // Relative paths are read from that folder.
-  | { type: "text"; key: string; label: string; hint?: string; pathBase?: string }
+  // Relative paths are read from that folder. `suggestions` are whole values (best first)
+  // offered the same way while typing, e.g. commands entered before.
+  | { type: "text"; key: string; label: string; hint?: string; pathBase?: string; suggestions?: string[] }
   | { type: "toggle"; key: string; label: string }
   | { type: "choice"; key: string; label: string; choices: Array<{ value: string; label: string }> }
   | { type: "list"; key: string; label: string; hint?: string; addLabel: string };
@@ -290,16 +291,26 @@ function renderRowValue(row: FormRow, state: FormState, focused: boolean, style:
   return completion === undefined ? shown : `${shown}${style.muted(truncateEnd(completion, Math.max(1, width - text.length - 1)))}`;
 }
 
-// The ways to finish the folder being typed, offered only on a folder field with the
-// cursor at the end.
+// The ways to finish the folder or suggested value being typed, offered only on such a
+// field with the cursor at the end.
 function pathCompletions(options: Pick<RunFormOptions, "completePath">, row: FormRow | undefined, state: FormState): string[] {
-  if (options.completePath === undefined || row?.kind !== "field" || row.field.type !== "text" || row.field.pathBase === undefined) {
+  if (row?.kind !== "field" || row.field.type !== "text") {
     return [];
   }
 
   const text = textOf(state.values, row) ?? "";
 
-  return state.cursor === text.length ? options.completePath(text, row.field.pathBase) : [];
+  if (state.cursor !== text.length) {
+    return [];
+  }
+
+  if (row.field.suggestions !== undefined) {
+    return text === ""
+      ? []
+      : row.field.suggestions.filter((suggestion) => suggestion.length > text.length && suggestion.startsWith(text)).map((suggestion) => suggestion.slice(text.length));
+  }
+
+  return options.completePath === undefined || row.field.pathBase === undefined ? [] : options.completePath(text, row.field.pathBase);
 }
 
 // Shows a window of the text that keeps the cursor visible, with a block cursor
@@ -335,10 +346,11 @@ function getFormKeyHints(row: FormRow | undefined, completions: string[], comple
   }
 
   const position = Math.min(completionIndex, completions.length - 1) + 1;
+  const [noun, plural] = row?.kind === "field" && row.field.type === "text" && row.field.suggestions !== undefined ? ["command", "commands"] : ["folder", "folders"];
 
   return completions.length === 1
-    ? [["→", "complete folder"], ["↑↓", "field"], ...save]
-    : [["→", "complete folder"], ["↑↓", `other folders ${position}/${completions.length}`], ["Tab", "field"], ...save];
+    ? [["→", `complete ${noun}`], ["↑↓", "field"], ...save]
+    : [["→", `complete ${noun}`], ["↑↓", `other ${plural} ${position}/${completions.length}`], ["Tab", "field"], ...save];
 }
 
 function trySubmit(

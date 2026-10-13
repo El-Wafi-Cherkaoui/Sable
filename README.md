@@ -101,6 +101,8 @@ When you add a workspace (`a` in the picker), Sable asks for a project directory
 
 In folder fields, Sable suggests the rest of the path as you type. Press `→` to accept it, or `↑` / `↓` to step through other matching folders (`Tab` moves to the next field).
 
+The Command field works the same way with commands you saved before, this workspace's first and then your other workspaces'.
+
 ## Keys
 
 The footer on each screen shows the keys that work for what is selected. Press `?` anywhere for the full list. `Esc` and `q` always go back one level; `Ctrl+C` quits Sable from anywhere and stops everything.
@@ -206,7 +208,7 @@ The primary interactive flow is the no-argument `sable` home picker. Every actio
 ## MVP limitations
 
 - no persistent logs; logs are in-memory only
-- no command history or autocomplete
+- no history of commands you ran; suggestions come only from saved services and commands
 - no mouse support
 - no theme system or visual customization
 - no panes, built-in editor, file explorer, task runner, Docker/Kubernetes abstraction, SSH, plugin system, or AI features
