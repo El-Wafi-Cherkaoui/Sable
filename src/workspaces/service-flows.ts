@@ -56,7 +56,7 @@ export async function runAddWorkspaceItemFlow(
   const result = await (options.form ?? runForm)({
     title: "New service or command",
     subtitle: workspace.name,
-    fields: (values) => itemFields(kindOf(values), workspace, true),
+    fields: (values) => itemFields(kindOf(values), workspace, true, knownCommands(config, workspace)),
     values: { type: "service", name: "", command: "", cwd: ".", autoStart: true, env: [] },
     validate: (values) => validateItem(kindOf(values), values, workspace, undefined, options.directoryExists ?? defaultDirectoryExists),
     keyInput: options.keyInput,
@@ -98,7 +98,7 @@ export async function runEditServiceFlow(
   const result = await (options.form ?? runForm)({
     title: `Edit service "${service.name}"`,
     subtitle: workspace.name,
-    fields: () => itemFields("service", workspace, false),
+    fields: () => itemFields("service", workspace, false, knownCommands(config, workspace)),
     values: {
       name: service.name,
       command: service.command,
@@ -138,7 +138,7 @@ export async function runEditCommandFlow(
   const result = await (options.form ?? runForm)({
     title: `Edit command "${command.name}"`,
     subtitle: workspace.name,
-    fields: () => itemFields("command", workspace, false),
+    fields: () => itemFields("command", workspace, false, knownCommands(config, workspace)),
     values: {
       name: command.name,
       command: command.command,
@@ -257,7 +257,16 @@ export async function runDeleteServiceFlow(
   };
 }
 
-export function itemFields(kind: ItemKind, workspace: WorkspaceConfig, includeType: boolean): FormField[] {
+// Commands already saved, for suggestions while typing: this workspace's first, then the
+// others', each only once.
+export function knownCommands(config: AppConfig, workspace: WorkspaceConfig): string[] {
+  const others = config.workspaces.filter((candidate) => candidate.id !== workspace.id);
+  const all = [workspace, ...others].flatMap((candidate) => [...candidate.services, ...candidate.commands].map((item) => item.command.trim()));
+
+  return [...new Set(all)].filter((command) => command !== "");
+}
+
+export function itemFields(kind: ItemKind, workspace: WorkspaceConfig, includeType: boolean, suggestions: string[] = []): FormField[] {
   return [
     ...(includeType
       ? [{
@@ -272,6 +281,7 @@ export function itemFields(kind: ItemKind, workspace: WorkspaceConfig, includeTy
       type: "text",
       key: "command",
       label: "Command",
+      suggestions,
       hint: kind === "service" ? "Keeps running until stopped, e.g. npm run dev" : "Runs once, e.g. npm run migrate",
     },
     { type: "text", key: "cwd", label: "Directory", pathBase: workspace.projectDirectory, hint: `Relative to ${displayPath(workspace.projectDirectory)}` },

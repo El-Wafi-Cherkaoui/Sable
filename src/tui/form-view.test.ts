@@ -231,3 +231,32 @@ function keys(sequence: Array<{ sequence?: string; name?: string; ctrl?: boolean
     close() {},
   };
 }
+
+describe("suggested values", () => {
+  const suggestFields = (): FormField[] => [
+    { type: "text", key: "command", label: "Command", suggestions: ["npm run dev", "npm run build", "pnpm dev"] },
+  ];
+  const suggestOptions = { fields: suggestFields };
+  const suggestState = (command: string): FormState => ({ values: { command }, focus: 0, cursor: command.length, errors: {} });
+
+  it("offers the rest of earlier values that start with the typed text", () => {
+    const rendered = renderForm({ title: "t", ...suggestOptions }, suggestState("npm run "));
+
+    expect(rendered).toContain("npm run ▏dev");
+    expect(rendered).toContain("[→] complete command");
+    expect(rendered).toContain("other commands 1/2");
+  });
+
+  it("accepts a suggestion with → and steps through the others with ↓", () => {
+    const next = applyFormKey(suggestOptions, suggestState("npm run "), { name: "down" });
+    const accepted = applyFormKey(suggestOptions, next, { name: "right" });
+
+    expect(accepted.values.command).toBe("npm run build");
+  });
+
+  it("suggests nothing for empty text, an exact match or no match", () => {
+    expect(renderForm({ title: "t", ...suggestOptions }, suggestState(""))).not.toContain("complete command");
+    expect(renderForm({ title: "t", ...suggestOptions }, suggestState("pnpm dev"))).not.toContain("complete command");
+    expect(renderForm({ title: "t", ...suggestOptions }, suggestState("yarn"))).not.toContain("complete command");
+  });
+});
