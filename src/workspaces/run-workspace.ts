@@ -7,6 +7,7 @@ import {
   type ShutdownFailure,
 } from "../controller/workspace-controller.js";
 import { TerminalKeyInput, type KeyInput } from "../input/terminal-key-input.js";
+import type { LogFiles } from "../logs/log-files.js";
 import {
   ProcessManager,
   type ManagedProcessState,
@@ -55,8 +56,12 @@ export type RunWorkspaceController = {
 
 export type ShutdownWarn = (message: string) => void;
 
+// How many saved lines from an earlier run are shown above a fresh run's output.
+const earlierOutputLines = 300;
+
 export type RunWorkspaceCommandOptions = {
   store: WorkspaceConfigReader;
+  logFiles?: LogFiles;
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   keyInput?: KeyInput;
   sound?: SoundControl;
@@ -80,6 +85,7 @@ export type RunWorkspaceSessionOptions = {
   workspace: WorkspaceConfig;
   controller?: RunWorkspaceController;
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
+  logFiles?: LogFiles;
   keyInput: KeyInput;
   sound?: SoundControl;
   settings?: SettingsControl;
@@ -98,13 +104,34 @@ export type RunWorkspaceSessionOptions = {
 
 export function createRunWorkspaceController(
   workspace: WorkspaceConfig,
-  options: { sound?: SoundControl } = {},
+  options: { sound?: SoundControl; logFiles?: LogFiles } = {},
 ): RunWorkspaceController {
-  return new WorkspaceController({
-    workspace,
+  const { logFiles } = options;
+  // The process manager is built first, but needs the controller to name the item a line belongs to.
+  const created: { controller?: WorkspaceController } = {};
+  const processManager = new ProcessManager({
     // A process that ends on its own gets a chime; one Sable stops does not.
-    processManager: new ProcessManager({ onAttention: () => options.sound?.play("attention") }),
+    onAttention: () => options.sound?.play("attention"),
+    onLog: logFiles === undefined
+      ? undefined
+      : (id, entries) => {
+        const target = created.controller?.describeItem(id);
+
+        if (target !== undefined) {
+          for (const entry of entries) {
+            logFiles.append(target, entry);
+          }
+        }
+      },
   });
+
+  created.controller = new WorkspaceController({
+    workspace,
+    processManager,
+    earlierOutput: logFiles === undefined ? undefined : (target) => logFiles.readEarlier(target, earlierOutputLines),
+  });
+
+  return created.controller;
 }
 
 export async function runWorkspaceCommand(
@@ -126,6 +153,7 @@ export async function runWorkspaceCommand(
     await runWorkspaceSession({
       workspace,
       createController: options.createController,
+      logFiles: options.logFiles,
       sound: options.sound,
       settings: options.settings,
       keyInput,
@@ -148,7 +176,7 @@ export async function runWorkspaceSession(
   const controller =
     options.controller ??
     options.createController?.(options.workspace) ??
-    createRunWorkspaceController(options.workspace, { sound: options.sound });
+    createRunWorkspaceController(options.workspace, { sound: options.sound, logFiles: options.logFiles });
   const runDashboard = options.runDashboard ?? runInteractiveDashboard;
   const shouldStartAutoStartServices = options.startAutoStartServices ?? true;
   const shouldShutdownOnReturn = options.shutdownOnReturn ?? true;

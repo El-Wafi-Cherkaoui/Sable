@@ -763,7 +763,7 @@ export function renderWorkspacePickerHelp(options: HelpViewOptions = {}): string
       rows: ["s           stop it", "r           restart its services"],
     },
     {
-      rows: [",           settings (sound, welcome screen)", "q           quit Sable (from this screen)", "Ctrl+C      quit Sable from anywhere"],
+      rows: [",           settings (sound, welcome screen, saved logs)", "q           quit Sable (from this screen)", "Ctrl+C      quit Sable from anywhere"],
     },
   ], options);
 }

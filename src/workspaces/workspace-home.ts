@@ -31,6 +31,7 @@ import {
   type RenameWorkspaceFlowOptions,
   type RenameWorkspaceFlowResult,
 } from "./rename-workspace-flow.js";
+import type { LogFiles } from "../logs/log-files.js";
 import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import { runUpdateDialog } from "../tui/update-dialog.js";
@@ -66,6 +67,7 @@ export type RunWorkspaceHomeOptions = {
   update?: WorkspaceHomeUpdate;
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
+  logFiles?: LogFiles;
   sound?: SoundControl;
   settings?: SettingsControl;
   // Show the welcome screen at launch (default); off goes straight to the workspace list.
@@ -115,7 +117,7 @@ export async function runWorkspaceHome(
   const shutdownFailures: ShutdownFailure[] = [];
   const abortShutdown = () => shutdownAbortController.abort();
   const createController = options.createController
-    ?? ((workspace: WorkspaceConfig) => createRunWorkspaceController(workspace, { sound: options.sound }));
+    ?? ((workspace: WorkspaceConfig) => createRunWorkspaceController(workspace, { sound: options.sound, logFiles: options.logFiles }));
 
   for (const signal of shutdownSignals) {
     signalSource.once(signal, abortShutdown);

@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { ItemConfig, WorkspaceConfig } from "../config/config-types.js";
+import type { ItemConfig, ItemKind, WorkspaceConfig } from "../config/config-types.js";
 import type { ManagedProcessState, ServiceLogEntry, StopFailure } from "../process/process-manager.js";
 import { runStartPlan, type StartPlan } from "./start-plan.js";
 import {
@@ -47,7 +47,11 @@ export type WorkspaceControllerOptions = {
   pollMs?: number;
   now?: () => number;
   sleep?: (milliseconds: number) => Promise<void>;
+  // Output an item saved in an earlier run, shown above this run's output when it is available.
+  earlierOutput?: (item: { workspace: string; name: string; kind: ItemKind }) => Promise<ServiceLogEntry[]>;
 };
+
+export type DescribedItem = { workspace: string; name: string; kind: ItemKind };
 
 const defaultUpAfterMs = 5_000;
 const defaultPollMs = 200;
@@ -60,10 +64,14 @@ export class WorkspaceController {
   // Items the user stopped while they were still waiting for a prerequisite.
   private readonly droppedIds = new Set<string>();
   private closing = false;
+  private readonly earlierOutput: WorkspaceControllerOptions["earlierOutput"];
+  private readonly earlier = new Map<string, ServiceLogEntry[]>();
+  private readonly earlierRequested = new Set<string>();
 
   constructor(options: WorkspaceControllerOptions) {
     this.state = createRuntimeState(options.workspace);
     this.processManager = options.processManager;
+    this.earlierOutput = options.earlierOutput;
     this.timing = {
       upAfterMs: options.upAfterMs ?? defaultUpAfterMs,
       pollMs: options.pollMs ?? defaultPollMs,
@@ -230,7 +238,27 @@ export class WorkspaceController {
   }
 
   getItemLogs(itemId: string): ServiceLogEntry[] {
-    return this.findItem(itemId) === undefined ? [] : this.processManager.getLogs(itemId);
+    if (this.findItem(itemId) === undefined) {
+      return [];
+    }
+
+    const current = this.processManager.getLogs(itemId);
+
+    this.requestEarlier(itemId);
+
+    const earlier = this.earlier.get(itemId);
+    const last = earlier?.at(-1);
+
+    return earlier === undefined || last === undefined
+      ? current
+      : [...earlier, { stream: "system", line: "earlier run above, this run below", timestamp: last.timestamp }, ...current];
+  }
+
+  // What a log file needs to know about an item: which workspace, name and kind it belongs to.
+  describeItem(itemId: string): DescribedItem | undefined {
+    const item = this.findItem(itemId);
+
+    return item === undefined ? undefined : { workspace: this.state.workspace.name, name: item.name, kind: item.kind };
   }
 
   getSelectedServiceLogs(): ServiceLogEntry[] {
@@ -259,6 +287,25 @@ export class WorkspaceController {
     return projectDirectory === undefined || path.isAbsolute(item.cwd)
       ? item
       : { ...item, cwd: path.resolve(projectDirectory, item.cwd) };
+  }
+
+  // Looks for saved output the first time an item's log is asked for; it appears on a later redraw.
+  private requestEarlier(itemId: string): void {
+    const described = this.describeItem(itemId);
+
+    if (this.earlierOutput === undefined || described === undefined || this.earlierRequested.has(itemId)) {
+      return;
+    }
+
+    this.earlierRequested.add(itemId);
+    this.earlierOutput(described).then(
+      (entries) => {
+        if (entries.length > 0) {
+          this.earlier.set(itemId, entries);
+        }
+      },
+      () => undefined,
+    );
   }
 
   private beginPlan(targetIds: string[]): StartPlan {

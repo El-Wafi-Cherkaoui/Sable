@@ -124,7 +124,7 @@ v           view services in selected workspace
 s           stop the running workspace
 r           restart the running workspace's services
 ?           help
-,           settings (sound, welcome screen)
+,           settings (sound, welcome screen, saved logs)
 q           quit Sable
 ```
 
@@ -149,7 +149,7 @@ e           edit selected item (changes apply on restart)
 d           delete selected item (stop it first)
 m           move selected service (↑ ↓, then Enter; Esc cancels)
 ?           help
-,           settings (sound, welcome screen)
+,           settings (sound, welcome screen, saved logs)
 Esc, q      back to the picker, or quit when started with sable run
 ```
 
@@ -169,7 +169,7 @@ e           jump to the next error (stderr) line
 Esc, q      clear the search, or go back to the dashboard
 ```
 
-Logs/output are kept in memory, up to 2,000 lines (and about 2 million characters) per service or command. They are not persisted to disk. Sable keeps a program's colors but drops other terminal control sequences (screen clears, cursor moves) so a noisy tool can't scramble the display, and asks programs for color unless `NO_COLOR` is set.
+Logs/output are kept in memory, up to 2,000 lines (and about 2 million characters) per service or command. By default they are not written to disk; turn on **Save logs** in Settings (`,`) to keep a copy (see Saved logs below). Sable keeps a program's colors but drops other terminal control sequences (screen clears, cursor moves) so a noisy tool can't scramble the display, and asks programs for color unless `NO_COLOR` is set.
 
 ## Start order
 
@@ -217,6 +217,18 @@ Put a `sable.json` in your project and commit it. A teammate who starts Sable in
 
 Sable looks for `sable.json` in the folder it is started in, not in parent folders.
 
+## Saved logs
+
+Turn on **Save logs** in Settings (`,`, then `↑↓` and `Space`) and Sable also writes everything each service or command prints to a file, so you can read it after Sable closes or after a crash. It is off by default, and nothing is written while it is off.
+
+- Files are in the `logs/` folder of the config directory (shown in the Settings popup), one per item: `logs/<workspace>/api.log`, and `build.command.log` for a command.
+- Each line has its time and stream: `2026-10-13T11:42:01.123Z [stderr] Error: ...`. They are plain text, so `grep`, `tail -f` and sharing work as usual.
+- A file stops growing at 2 MB: it is renamed to `.log.1` (replacing the previous `.log.1`) and a new file starts, so an item uses at most about 4 MB.
+- When you look at an item's logs after restarting Sable, its saved output from the last run appears above the new output, after a line that says so (the last 300 lines).
+- If a file can't be written (disk full, no permission), Sable carries on without saving it.
+
+Sable is not a log shipper or a service manager: this is a local convenience for development. Logs of things you run in production belong to the tool that runs them.
+
 ## Sound
 
 Sable plays soft, quiet tones as you move (`↑↓`), open and go back, start and stop things, and a calm chime when a service or command ends on its own (not when you stop it). Sound is on by default. Press `,` on the picker or dashboard to open the Settings popup (`↑↓` to choose, `Space` to switch) and turn it off; settings are saved in `settings.json` next to `workspaces.json`.
@@ -256,7 +268,7 @@ The primary interactive flow is the no-argument `sable` home picker. Every actio
 
 ## MVP limitations
 
-- no persistent logs; logs are in-memory only
+- logs are in-memory unless you turn on **Save logs**; there is no log search across files
 - no history of commands you ran; suggestions come only from saved services and commands
 - no mouse support
 - no theme system or visual customization

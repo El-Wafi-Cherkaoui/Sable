@@ -18,7 +18,7 @@ function createKeyInput(keys: Awaited<ReturnType<KeyInput["readKey"]>>[]): KeyIn
   };
 }
 
-function createSettings(initial = { sound: true, welcomeScreen: true }) {
+function createSettings(initial = { sound: true, welcomeScreen: true, persistLogs: false }) {
   const state = { ...initial };
   const settings: SettingsControl = {
     sound: {
@@ -35,6 +35,13 @@ function createSettings(initial = { sound: true, welcomeScreen: true }) {
         state.welcomeScreen = next;
       }),
     },
+    persistLogs: {
+      isEnabled: () => state.persistLogs,
+      setEnabled: vi.fn(async (next: boolean) => {
+        state.persistLogs = next;
+      }),
+    },
+    logsDirectory: "/home/me/.config/sable-nodejs/logs",
   };
 
   return settings;
@@ -76,6 +83,15 @@ describe("settings dialog", () => {
     }
   });
 
+  it("wraps descriptions at spaces, never inside a word", () => {
+    const description = "Also write each item's output to a file under /home/me/.config/sable-nodejs/logs, up to 2 MB each.";
+    const rendered = renderSettingsDialog({ items: [{ label: "Save logs", enabled: false, description }], selected: 0, columns: 80, rows: 20 });
+    const words = rendered.split("\n").map((line) => line.replace(/[│╭╰╮╯─]/g, " ").trim()).join(" ");
+
+    expect(words).toContain("/home/me/.config/sable-nodejs/logs,");
+    expect(words).toContain("up to 2 MB each.");
+  });
+
   it("toggles sound with Space and closes with Esc", async () => {
     const settings = createSettings();
     const write = vi.fn();
@@ -97,17 +113,30 @@ describe("settings dialog", () => {
     expect(settings.sound.setEnabled).not.toHaveBeenCalled();
   });
 
+  it("turns saving logs on from the third row, and says where they go", async () => {
+    const settings = createSettings();
+    const write = vi.fn();
+
+    await open(settings, [{ name: "down" }, { name: "down" }, { name: "return" }, { sequence: "," }], write);
+
+    expect(settings.persistLogs.setEnabled).toHaveBeenCalledWith(true);
+    expect(settings.sound.setEnabled).not.toHaveBeenCalled();
+    expect(settings.welcomeScreen.setEnabled).not.toHaveBeenCalled();
+    expect(write.mock.calls.at(-1)![0]).toContain("Save logs        ● on");
+    expect(write.mock.calls.at(-1)![0]).toContain("/logs");
+  });
+
   it("wraps the selection around the list", async () => {
     const settings = createSettings();
 
     await open(settings, [{ name: "up" }, { name: "return" }, { name: "down" }, { name: "return" }, { name: "escape" }]);
 
-    expect(settings.welcomeScreen.setEnabled).toHaveBeenCalledWith(false);
+    expect(settings.persistLogs.setEnabled).toHaveBeenCalledWith(true);
     expect(settings.sound.setEnabled).toHaveBeenCalledWith(false);
   });
 
   it("plays a cue when sound is turned back on, not when turned off", async () => {
-    const settings = createSettings({ sound: false, welcomeScreen: true });
+    const settings = createSettings({ sound: false, welcomeScreen: true, persistLogs: false });
 
     await open(settings, [{ name: "return" }, { name: "return" }, { sequence: "," }]);
 

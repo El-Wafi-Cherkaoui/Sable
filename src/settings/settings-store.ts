@@ -5,6 +5,8 @@ export type Settings = {
   sound: boolean;
   // The full welcome screen at launch; off shows a short version.
   welcomeScreen: boolean;
+  // Write each item's output to a file as well; off unless asked for.
+  persistLogs: boolean;
 };
 
 export type SettingsStore = {
@@ -14,7 +16,7 @@ export type SettingsStore = {
   update(changes: Partial<Settings>): Promise<void>;
 };
 
-const defaultSettings: Settings = { sound: true, welcomeScreen: true };
+const defaultSettings: Settings = { sound: true, welcomeScreen: true, persistLogs: false };
 
 export function settingsFile(configDirectory: string): string {
   return path.join(configDirectory, "settings.json");
@@ -28,11 +30,12 @@ export function createSettingsStore(file: string): SettingsStore {
     async load() {
       try {
         const parsed: unknown = JSON.parse(await fs.readFile(file, "utf8"));
-        const fields = typeof parsed === "object" && parsed !== null ? parsed as { sound?: unknown; welcomeScreen?: unknown } : {};
+        const fields = typeof parsed === "object" && parsed !== null ? parsed as { sound?: unknown; welcomeScreen?: unknown; persistLogs?: unknown } : {};
 
         return {
           sound: typeof fields.sound === "boolean" ? fields.sound : defaultSettings.sound,
           welcomeScreen: typeof fields.welcomeScreen === "boolean" ? fields.welcomeScreen : defaultSettings.welcomeScreen,
+          persistLogs: typeof fields.persistLogs === "boolean" ? fields.persistLogs : defaultSettings.persistLogs,
         };
       } catch {
         return { ...defaultSettings };

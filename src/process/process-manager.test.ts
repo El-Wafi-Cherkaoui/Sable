@@ -38,6 +38,22 @@ describe("ProcessManager", () => {
     });
   });
 
+  describe("log callback", () => {
+    it("hands over every line an item prints and every note Sable records for it", async () => {
+      const lines: string[] = [];
+
+      manager = createManager({ onLog: (id: string, entries: Array<{ stream: string; line: string }>) => lines.push(...entries.map((entry) => `${id}:${entry.stream}:${entry.line}`)) });
+      const service = createService({ command: nodeCommand('console.log("out"); console.error("err");') });
+
+      manager.start(service);
+      await waitForStatus(manager, service.id, "exited");
+
+      expect(lines).toContain(`${service.id}:system:service started`);
+      expect(lines).toContain(`${service.id}:stdout:out`);
+      expect(lines).toContain(`${service.id}:stderr:err`);
+    });
+  });
+
   describe("child color environment", () => {
     async function readForceColor(env: Record<string, string> = {}): Promise<string> {
       manager = createManager();
