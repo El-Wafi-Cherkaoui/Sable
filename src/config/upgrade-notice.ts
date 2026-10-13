@@ -4,7 +4,9 @@ import type { UpgradeNotice } from "./config-store.js";
 // the TUI and as plain lines by the other commands.
 export function upgradeNoticeParagraphs(notice: UpgradeNotice, shownPath: string = notice.backupFile): string[] {
   return [
-    "Sable 0.4 keeps services and commands in one list, so your workspaces file has a new format. Nothing is lost: your workspaces are converted the next time Sable saves them.",
+    notice.converted
+      ? "Sable 0.4 keeps services and commands in one list, so your workspaces file now has a new format. It was converted just now and nothing was lost."
+      : "Sable 0.4 keeps services and commands in one list, so your workspaces file has a new format. Nothing is lost: it is converted the next time Sable can save it.",
     "",
     notice.backedUp
       ? `A copy of your old file was kept here: ${shownPath}`

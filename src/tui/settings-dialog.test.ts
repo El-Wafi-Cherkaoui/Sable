@@ -18,7 +18,7 @@ function createKeyInput(keys: Awaited<ReturnType<KeyInput["readKey"]>>[]): KeyIn
   };
 }
 
-function createSettings(initial = { sound: true, welcomeScreen: true, persistLogs: false }) {
+function createSettings(initial = { sound: true, welcomeScreen: true, persistLogs: false, tips: true }) {
   const state = { ...initial };
   const settings: SettingsControl = {
     sound: {
@@ -39,6 +39,12 @@ function createSettings(initial = { sound: true, welcomeScreen: true, persistLog
       isEnabled: () => state.persistLogs,
       setEnabled: vi.fn(async (next: boolean) => {
         state.persistLogs = next;
+      }),
+    },
+    tips: {
+      isEnabled: () => state.tips,
+      setEnabled: vi.fn(async (next: boolean) => {
+        state.tips = next;
       }),
     },
     logsDirectory: "/home/me/.config/sable-nodejs/logs",
@@ -126,17 +132,26 @@ describe("settings dialog", () => {
     expect(write.mock.calls.at(-1)![0]).toContain("/logs");
   });
 
+  it("switches the tips off from the fourth row", async () => {
+    const settings = createSettings();
+
+    await open(settings, [{ name: "down" }, { name: "down" }, { name: "down" }, { name: "return" }, { name: "escape" }]);
+
+    expect(settings.tips.setEnabled).toHaveBeenCalledWith(false);
+    expect(settings.persistLogs.setEnabled).not.toHaveBeenCalled();
+  });
+
   it("wraps the selection around the list", async () => {
     const settings = createSettings();
 
     await open(settings, [{ name: "up" }, { name: "return" }, { name: "down" }, { name: "return" }, { name: "escape" }]);
 
-    expect(settings.persistLogs.setEnabled).toHaveBeenCalledWith(true);
+    expect(settings.tips.setEnabled).toHaveBeenCalledWith(false);
     expect(settings.sound.setEnabled).toHaveBeenCalledWith(false);
   });
 
   it("plays a cue when sound is turned back on, not when turned off", async () => {
-    const settings = createSettings({ sound: false, welcomeScreen: true, persistLogs: false });
+    const settings = createSettings({ sound: false, welcomeScreen: true, persistLogs: false, tips: true });
 
     await open(settings, [{ name: "return" }, { name: "return" }, { sequence: "," }]);
 

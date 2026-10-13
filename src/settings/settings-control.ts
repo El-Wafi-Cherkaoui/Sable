@@ -13,6 +13,7 @@ export type SettingsControl = {
   sound: SoundControl;
   welcomeScreen: SettingToggle;
   persistLogs: SettingToggle;
+  tips: SettingToggle;
   // Where saved logs go, shown next to the setting.
   logsDirectory?: string;
 };
@@ -21,11 +22,15 @@ export function createWelcomeScreenToggle(store: SettingsStore, enabled: boolean
   return createToggle(store, "welcomeScreen", enabled);
 }
 
+export function createTipsToggle(store: SettingsStore, enabled: boolean): SettingToggle {
+  return createToggle(store, "tips", enabled);
+}
+
 export function createPersistLogsToggle(store: SettingsStore, enabled: boolean): SettingToggle {
   return createToggle(store, "persistLogs", enabled);
 }
 
-function createToggle(store: SettingsStore, key: "welcomeScreen" | "persistLogs", enabled: boolean): SettingToggle {
+function createToggle(store: SettingsStore, key: "welcomeScreen" | "persistLogs" | "tips", enabled: boolean): SettingToggle {
   let current = enabled;
 
   return {
@@ -52,6 +57,7 @@ export async function loadSettingsControl(configDirectory: string): Promise<Sett
     sound: createSoundControl(player, store),
     welcomeScreen: createWelcomeScreenToggle(store, settings.welcomeScreen),
     persistLogs: createPersistLogsToggle(store, settings.persistLogs),
+    tips: createTipsToggle(store, settings.tips),
     logsDirectory: path.join(configDirectory, "logs"),
   };
 }

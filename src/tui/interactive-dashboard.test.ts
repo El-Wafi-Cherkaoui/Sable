@@ -1058,7 +1058,7 @@ const toggle = (enabled = true) => {
 
   return { isEnabled: () => on, setEnabled: vi.fn(async (next: boolean) => { on = next; }) };
 };
-const fakeSettings = () => ({ sound: { play: vi.fn(), close: vi.fn(), ...toggle() }, welcomeScreen: toggle(), persistLogs: toggle() });
+const fakeSettings = () => ({ sound: { play: vi.fn(), close: vi.fn(), ...toggle() }, welcomeScreen: toggle(), persistLogs: toggle(), tips: toggle() });
 
 function createKeyInput(
   keys: Array<{ sequence?: string; name?: string; ctrl?: boolean }>,

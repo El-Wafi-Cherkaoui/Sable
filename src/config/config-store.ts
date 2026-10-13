@@ -51,11 +51,15 @@ export type UpgradeNotice = {
   backupFile: string;
   // False when the copy could not be made.
   backedUp: boolean;
+  // True when the file on disk was rewritten in the new format right away.
+  converted: boolean;
 };
 
 export class ConfigStore {
   readonly paths: ConfigPaths;
   private upgradeNotice: UpgradeNotice | undefined;
+  // Set while reading an old-format file that has a safe copy: load() then rewrites it in the new format.
+  private convertOnLoad = false;
   // What this store last read or wrote, so a save can tell what changed in the file
   // since then (another Sable instance) and keep that instead of overwriting it.
   private lastSeen: AppConfig | undefined;
@@ -76,6 +80,22 @@ export class ConfigStore {
   async load(): Promise<AppConfig> {
     const config = await this.readFile();
 
+    // An old-format file is converted at once, but only when a copy of it is safe. If writing fails
+    // (read-only folder), the file stays as it was and is converted by the next successful save.
+    if (this.convertOnLoad) {
+      this.convertOnLoad = false;
+
+      try {
+        await this.writeAtomically(config);
+
+        if (this.upgradeNotice !== undefined) {
+          this.upgradeNotice = { ...this.upgradeNotice, converted: true };
+        }
+      } catch {
+        // Keep the old file; nothing is lost.
+      }
+    }
+
     this.lastSeen = config;
 
     return config;
@@ -83,6 +103,8 @@ export class ConfigStore {
 
   private async readFile(): Promise<AppConfig> {
     let rawConfig: string;
+
+    this.convertOnLoad = false;
 
     try {
       rawConfig = await fs.readFile(this.paths.file, "utf8");
@@ -105,9 +127,11 @@ export class ConfigStore {
     if (isRecord(parsedConfig) && parsedConfig.version === 1) {
       const outcome = await backUpOldConfig(this.paths.file);
 
+      this.convertOnLoad = outcome !== "failed";
+
       // "existed" means an earlier run already made the copy and told the user.
       if (outcome !== "existed") {
-        this.upgradeNotice ??= { backupFile: `${this.paths.file}.bak-0.3`, backedUp: outcome === "created" };
+        this.upgradeNotice ??= { backupFile: `${this.paths.file}.bak-0.3`, backedUp: outcome === "created", converted: false };
       }
     }
 
@@ -123,8 +147,10 @@ export class ConfigStore {
   }
 
   async save(config: AppConfig): Promise<void> {
-    const validatedConfig = await this.mergeWithFile(validateAppConfig(config));
+    await this.writeAtomically(await this.mergeWithFile(validateAppConfig(config)));
+  }
 
+  private async writeAtomically(validatedConfig: AppConfig): Promise<void> {
     await fs.mkdir(this.paths.directory, { recursive: true });
 
     const tempFile = path.join(

@@ -26,6 +26,8 @@ export type WorkspacePickerState = {
   settingsAvailable?: boolean;
   // The folder Sable was started in has a sable.json, so the import key is worth showing.
   projectFileHere?: boolean;
+  // Workspaces that could be shared but have no sable.json yet: the status line suggests it when one is selected.
+  shareTipIds?: string[];
 };
 
 export type WorkspacePickerResult =
@@ -84,6 +86,7 @@ export type RunWorkspacePickerOptions = {
   sound?: SoundControl;
   settings?: SettingsControl;
   projectFileHere?: boolean;
+  shareTipIds?: string[];
   runSettings?: typeof runSettingsDialog;
   afterStartup?: () => Promise<"continue" | "update" | "exit">;
 };
@@ -121,6 +124,7 @@ export async function runWorkspacePicker(
     activeRunningServiceCount: options.activeRunningServiceCount,
     settingsAvailable: options.settings !== undefined,
     projectFileHere: options.projectFileHere,
+    shareTipIds: options.shareTipIds,
   };
   let mode: PickerMode = "picker";
   let stateBeforeMove: WorkspacePickerState | undefined;
@@ -539,7 +543,7 @@ function renderPickerLines(
 ): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
   const color = options.color === true;
-  const statusLine = formatPickerStatusLine(state.statusMessage, style);
+  const statusLine = formatPickerStatusLine(state, style);
   const footer = formatKeyHints(getPickerKeyHints(state), style, options.columns === undefined ? undefined : options.columns - 1);
   const count = state.workspaces.length;
   const lines = [`${style.title(product.displayName)}${style.muted(` · ${count} ${count === 1 ? "workspace" : "workspaces"}`)}`, ""];
@@ -733,15 +737,22 @@ function baseKeyHints(state: WorkspacePickerState): KeyHint[] {
 }
 
 function formatPickerStatusLine(
-  statusMessage: string | undefined,
+  state: WorkspacePickerState,
   style: TuiStyle,
 ): string {
-  if (statusMessage === undefined) {
-    return "";
+  if (state.statusMessage !== undefined) {
+    return `${style.statusLabel("›")} ${state.statusMessage}`;
   }
 
-  return `${style.statusLabel("›")} ${statusMessage}`;
+  const selected = getSelectedWorkspace(state);
+
+  // A tip never replaces a message, and shows only for a workspace that has something to share.
+  return selected !== undefined && state.shareTipIds?.includes(selected.id) === true && state.moving !== true
+    ? style.muted(shareTip)
+    : "";
 }
+
+const shareTip = "Tip: press x to write a sable.json. Teammates then get this workspace just by running sable in the folder.";
 
 export function renderWorkspacePickerHelp(options: HelpViewOptions = {}): string {
   return renderHelpBox("Help · workspaces", [
@@ -767,7 +778,7 @@ export function renderWorkspacePickerHelp(options: HelpViewOptions = {}): string
       rows: ["s           stop it", "r           restart its services"],
     },
     {
-      rows: [",           settings (sound, welcome screen, saved logs)", "q           quit Sable (from this screen)", "Ctrl+C      quit Sable from anywhere"],
+      rows: [",           settings (sound, welcome screen, saved logs, tips)", "q           quit Sable (from this screen)", "Ctrl+C      quit Sable from anywhere"],
     },
   ], options);
 }

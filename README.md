@@ -143,7 +143,7 @@ v           view services in selected workspace
 s           stop the running workspace
 r           restart the running workspace's services
 ?           help
-,           settings (sound, welcome screen, saved logs)
+,           settings (sound, welcome screen, saved logs, tips)
 q           quit Sable
 ```
 
@@ -169,7 +169,7 @@ e           edit selected item (changes apply on restart)
 d           delete selected item (stop it first)
 m           move selected service (↑ ↓, then Enter; Esc cancels)
 ?           help
-,           settings (sound, welcome screen, saved logs)
+,           settings (sound, welcome screen, saved logs, tips)
 Esc, q      back to the picker, or quit when started with sable run
 ```
 
@@ -227,7 +227,7 @@ Put a `sable.json` in your project and commit it. A teammate who starts Sable in
 - `{{NAME}}` is a placeholder. Declare it under `placeholders` with an optional `description` and `default`. Each person gives their own value when they import the file, and it stays on their machine.
 - Don't put secrets in the file. Use a placeholder with no default and everyone enters their own.
 
-**Writing the file.** In the picker, select a workspace and press `x`. Sable shows exactly what it will write, then writes `sable.json` into the workspace's folder. Variables with names like `TOKEN`, `SECRET` or `KEY` become placeholders and their values stay out of the file. Look the file over before you commit it: Sable can't tell whether a command contains something private.
+**Writing the file.** In the picker, select a workspace and press `x`. A workspace that has no `sable.json` yet shows a one-line tip about this under the list; switch **Tips** off in Settings (`,`) to hide it. Sable shows exactly what it will write, then writes `sable.json` into the workspace's folder. Variables with names like `TOKEN`, `SECRET` or `KEY` become placeholders and their values stay out of the file. Look the file over before you commit it: Sable can't tell whether a command contains something private.
 
 **Using the file.** Start `sable` in a folder that has a `sable.json` and no workspace yet, or press `i` in the picker. Sable shows every command the file would run, and only after you press Enter does it create the workspace. Nothing starts before you agree. Sable asks for the placeholder values, then the workspace appears in the picker.
 
@@ -262,7 +262,7 @@ Sable stores workspace configuration as JSON in an OS-aware user config director
 
 Workspace commands are treated as trusted local configuration.
 
-**Upgrading from 0.3.** Sable 0.4 stores each workspace's services and commands in one `items` list (`"version": 2`). The first time it finds a 0.3 file it keeps a copy next to it as `workspaces.json.bak-0.3`, tells you once, and converts the file the next time it saves. Nothing is lost. Versions before 0.4 can't read the new format; to go back to one, put `workspaces.json.bak-0.3` back as `workspaces.json`.
+**Upgrading from 0.3.** Sable 0.4 stores each workspace's services and commands in one `items` list (`"version": 2`). The first time it finds a 0.3 file it keeps a copy next to it as `workspaces.json.bak-0.3`, converts the file right away, and tells you once. Nothing is lost. If it can't make the copy or write the file (a read-only folder), it leaves your file alone and converts it later. Versions before 0.4 can't read the new format; to go back to one, put `workspaces.json.bak-0.3` back as `workspaces.json`.
 
 ## Updates
 
