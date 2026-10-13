@@ -9,6 +9,8 @@ export type ScriptSuggestion = {
   command: string;
   kind: "service" | "command";
   selected: boolean;
+  // The project file it came from, set when suggestions from several files are merged.
+  source?: string;
 };
 
 export type ProjectFiles = {
@@ -16,7 +18,7 @@ export type ProjectFiles = {
   read(filePath: string): string;
 };
 
-const nodeFiles: ProjectFiles = {
+export const nodeFiles: ProjectFiles = {
   exists: existsSync,
   read: (filePath) => readFileSync(filePath, "utf8"),
 };

@@ -22,6 +22,7 @@ export type RunChecklistOptions = {
   screen?: PromptScreen;
   color?: boolean;
   columns?: number;
+  rows?: number;
 };
 
 export type ChecklistResult =
@@ -37,7 +38,7 @@ export async function runChecklist(options: RunChecklistOptions): Promise<Checkl
   let focus = 0;
   const render = () => {
     screen.clear();
-    screen.write(`${renderChecklist(options, selected, focus, style, color, options.columns ?? process.stdout.columns ?? 80)}\n`);
+    screen.write(`${renderChecklist(options, selected, focus, style, color, options.columns ?? process.stdout.columns ?? 80, options.rows ?? process.stdout.rows)}\n`);
   };
 
   render();
@@ -83,18 +84,30 @@ export function renderChecklist(
   style: TuiStyle = createTuiStyle(false),
   color = false,
   columns = 80,
+  rows?: number,
 ): string {
   const labelWidth = Math.max(...options.items.map((item) => item.label.length));
   const count = selected.filter(Boolean).length;
   const lines = [
-    `${style.title(options.title)}${options.subtitle === undefined ? "" : style.muted(` · ${options.subtitle}`)}`,
+    truncateVisible(`${style.title(options.title)}${options.subtitle === undefined ? "" : style.muted(` · ${options.subtitle}`)}`, columns - 1),
     "",
     options.question,
     ...(options.explanation === undefined ? [] : [style.muted(options.explanation)]),
     "",
   ];
 
+  // On a short terminal only a window of the list is drawn, kept around the focused row.
+  const footerLines = 2;
+  const available = rows === undefined || rows <= 0 ? options.items.length : Math.max(3, rows - 1 - lines.length - footerLines);
+  const windowed = options.items.length > available;
+  const size = windowed ? available - 1 : options.items.length;
+  const start = windowed ? Math.max(0, Math.min(focus - Math.floor(size / 2), options.items.length - size)) : 0;
+
   for (const [index, item] of options.items.entries()) {
+    if (index < start || index >= start + size) {
+      continue;
+    }
+
     const note = item.note === undefined ? "" : `  ${style.muted(item.note)}`;
     const line = truncateVisible(
       `${index === focus ? "> " : "  "}[${selected[index] ? "x" : " "}] ${padVisibleEnd(item.label, labelWidth)}  ${style.muted(item.detail)}${note}`,
@@ -102,6 +115,13 @@ export function renderChecklist(
     );
 
     lines.push(index === focus && color ? style.selected(padVisibleEnd(line, columns - 1)) : line);
+  }
+
+  if (windowed) {
+    const above = start;
+    const below = options.items.length - start - size;
+
+    lines.push(style.muted([above > 0 ? `↑ ${above} more` : "", below > 0 ? `↓ ${below} more` : ""].filter((part) => part !== "").join(" · ")));
   }
 
   lines.push("", formatKeyHints([

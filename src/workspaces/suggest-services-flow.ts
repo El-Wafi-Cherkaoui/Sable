@@ -3,7 +3,8 @@ import type { KeyInput } from "../input/terminal-key-input.js";
 import { generateShortId } from "../shared/id.js";
 import { runChecklist } from "../tui/checklist-view.js";
 import type { PromptScreen } from "../tui/prompt-view.js";
-import { suggestScripts, type ProjectFiles } from "./script-suggestions.js";
+import { suggestProject } from "./project-suggestions.js";
+import { nodeFiles, type ProjectFiles } from "./script-suggestions.js";
 
 export type SuggestServicesFlowResult =
   | { type: "added"; message: string }
@@ -19,12 +20,14 @@ export type SuggestServicesFlowOptions = {
   keyInput: KeyInput;
   screen?: PromptScreen;
   files?: ProjectFiles;
+  platform?: NodeJS.Platform;
   checklist?: typeof runChecklist;
   generateId?: typeof generateShortId;
 };
 
-// Offered once, right after a workspace is created: turns package.json scripts
-// into services and commands so a new user reaches a running service quickly.
+// Offered once, right after a workspace is created: turns the scripts and targets found in the
+// project (package.json, Makefile, Docker Compose, Cargo, Go and so on) into services and commands
+// so a new user reaches a running service quickly.
 export async function runSuggestServicesFlow(options: SuggestServicesFlowOptions): Promise<SuggestServicesFlowResult> {
   const config = await options.store.load();
   const workspace = config.workspaces.find((candidate) => candidate.id === options.workspaceId);
@@ -33,7 +36,7 @@ export async function runSuggestServicesFlow(options: SuggestServicesFlowOptions
     return { type: "skipped" };
   }
 
-  const found = suggestScripts(workspace.projectDirectory, options.files);
+  const found = suggestProject(workspace.projectDirectory, options.files ?? nodeFiles, options.platform);
 
   if (found === undefined) {
     return { type: "skipped" };
@@ -41,8 +44,8 @@ export async function runSuggestServicesFlow(options: SuggestServicesFlowOptions
 
   const result = await (options.checklist ?? runChecklist)({
     title: workspace.name,
-    subtitle: `found package.json (${found.manager})`,
-    question: "Add services from your scripts?",
+    subtitle: `found ${joinNames(found.sources)}`,
+    question: "Add services from your project?",
     explanation: "Checked services start when the workspace opens. You can change everything later with e.",
     items: found.suggestions.map((suggestion) => ({
       label: suggestion.name,
@@ -95,5 +98,16 @@ export async function runSuggestServicesFlow(options: SuggestServicesFlowOptions
     commands.length > 0 ? `${commands.length} ${commands.length === 1 ? "command" : "commands"}` : undefined,
   ].filter((part) => part !== undefined);
 
-  return { type: "added", message: `Added ${parts.join(" and ")} from package.json.` };
+  const used = [...new Set(chosen.map((suggestion) => fileOf(suggestion.source ?? "package.json")))];
+
+  return { type: "added", message: `Added ${parts.join(" and ")} from ${joinNames(used)}.` };
+}
+
+// "package.json (npm)" -> "package.json"
+function fileOf(source: string): string {
+  return source.replace(/ \(.*\)$/, "");
+}
+
+function joinNames(names: string[]): string {
+  return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }

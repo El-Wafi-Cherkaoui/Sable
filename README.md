@@ -27,7 +27,7 @@ Requirements: Node.js 20+ and npm. Sable is intended to work on Windows, macOS, 
 Current capabilities:
 
 - open the workspace picker with `sable`; a welcome screen guides first-time users
-- create a workspace and get services suggested from its `package.json` scripts
+- create a workspace and get services suggested from what is in its folder: `package.json` scripts, `Makefile` and `justfile` targets, Docker Compose, Cargo, Go, Django, pytest, Rails and Laravel
 - add, edit, delete, and reorder workspaces, services, and one-shot commands
 - edit everything in one form, including environment variables, even while a service runs
 - start, stop, and restart services; run commands; see status at a glance
@@ -88,6 +88,24 @@ npm.cmd run build
 npm.cmd test
 npm.cmd link
 ```
+
+## Suggestions for a new workspace
+
+When you create a workspace in a folder with no services yet, Sable looks through the folder and offers what it finds as one checklist (`↑↓` move, `Space` tick, `Enter` add). Services you tick start when the workspace opens; one-shot items become commands. Nothing is added until you press Enter, and everything can be changed later with `e`.
+
+| Found | Offered |
+| --- | --- |
+| `package.json` | its scripts, run with npm, pnpm, yarn or bun (from the lockfile): `dev`, `build`, ... |
+| `Makefile` | its targets as `make <target>` (up to 12) |
+| `justfile` | recipes that take no arguments, as `just <recipe>` |
+| `docker-compose.yml`, `compose.yaml` | `docker compose up`, and each service on its own |
+| `Cargo.toml` | `cargo run` (if it has a program), `cargo test`, `cargo build` |
+| `go.mod` | `go run .` (if there is a `main.go`), `go test ./...`, `go build ./...` |
+| `manage.py` | Django's `runserver`, `migrate` and `test` |
+| `pytest.ini`, or pytest mentioned in `pyproject.toml`, `tox.ini` or the requirements | `pytest` |
+| Rails or Laravel app | the server, tests and migrations |
+
+Only the first service from each file is ticked to begin with, so a project that lists the same dev server in two places doesn't start it twice. Names from files other than `package.json` start with the tool (`make build`, `cargo run`), so they never clash with each other.
 
 ## Commands
 
