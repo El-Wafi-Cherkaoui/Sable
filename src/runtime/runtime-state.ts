@@ -2,20 +2,20 @@ import type { CommandConfig, ItemConfig, ServiceConfig, WorkspaceConfig } from "
 import type { ManagedProcessState } from "../process/process-manager.js";
 import { commandsOf, servicesOf } from "../config/workspace-items.js";
 
+// Set while a start-all plan holds an item back, or after it gave up on the item.
+export type RuntimeQueueState =
+  | { status: "waiting"; for: string[] }
+  | { status: "skipped"; reason: string };
+
 export type RuntimeItemState = {
   item: ItemConfig;
   process: ManagedProcessState;
+  queue?: RuntimeQueueState;
 };
 
-export type RuntimeServiceState = {
-  item: ServiceConfig;
-  process: ManagedProcessState;
-};
+export type RuntimeServiceState = RuntimeItemState & { item: ServiceConfig };
 
-export type RuntimeCommandState = {
-  item: CommandConfig;
-  process: ManagedProcessState;
-};
+export type RuntimeCommandState = RuntimeItemState & { item: CommandConfig };
 
 export type RuntimeWorkspaceState = {
   workspace: {
@@ -99,6 +99,37 @@ export function updateProcessState(
   };
 }
 
+export function setQueueStateInRuntimeState(
+  state: RuntimeWorkspaceState,
+  itemId: string,
+  queue: RuntimeQueueState | undefined,
+): RuntimeWorkspaceState {
+  const index = state.itemIndexById[itemId];
+
+  if (index === undefined) {
+    return state;
+  }
+
+  return {
+    ...state,
+    items: state.items.map((itemState, itemIndex) => {
+      if (itemIndex !== index) {
+        return itemState;
+      }
+
+      const next: RuntimeItemState = { ...itemState };
+
+      if (queue === undefined) {
+        delete next.queue;
+      } else {
+        next.queue = queue;
+      }
+
+      return next;
+    }),
+  };
+}
+
 export function updateItemConfigInRuntimeState(
   state: RuntimeWorkspaceState,
   item: ItemConfig,
@@ -152,7 +183,12 @@ export function removeItemFromRuntimeState(
   const selectedCommand = getSelectedCommand(state);
   const previousServicePosition = selectedService === undefined ? 0 : runtimeServices(state).indexOf(selectedService);
   const previousCommandPosition = selectedCommand === undefined ? 0 : runtimeCommands(state).indexOf(selectedCommand);
-  const items = state.items.filter((_, itemIndex) => itemIndex !== index);
+  // Items that waited for the removed one stop waiting for it, as in the saved config.
+  const items = state.items
+    .filter((_, itemIndex) => itemIndex !== index)
+    .map((itemState) => itemState.item.after.includes(itemId)
+      ? { ...itemState, item: { ...itemState.item, after: itemState.item.after.filter((id) => id !== itemId) } }
+      : itemState);
   const serviceCount = items.filter((itemState) => itemState.item.kind === "service").length;
   const commandCount = items.length - serviceCount;
 
