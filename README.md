@@ -115,6 +115,8 @@ In `sable`:
 ↑ / ↓       select workspace
 Enter       open selected workspace
 a           add a workspace
+i           set up a workspace from the sable.json in the folder Sable was started in
+x           write a sable.json for the selected workspace, to share it
 e           rename selected workspace
 d           delete selected workspace
 m           move selected workspace (↑ ↓, then Enter; Esc cancels)
@@ -180,6 +182,40 @@ An item can wait for others. In the add or edit form, the **After** rows take th
 Sable follows this order when it opens a workspace (services marked auto-start) and when you press `S` (every service, plus the commands they wait for). Items still held back show `◌ waiting for db`. If something they wait for stops early or fails, they show `✕ skipped: db stopped early` and are not started. Press `s` on a waiting item to cancel its start. Starting one item with `s` or `r` always starts just that item.
 
 Conditions belong in the command itself: `test -f dist/main.js || npm run build` only builds when the file is missing.
+
+## Sharing a workspace with your team
+
+Put a `sable.json` in your project and commit it. A teammate who starts Sable in that folder gets the same services and commands, without setting anything up by hand.
+
+```json
+{
+  "version": 1,
+  "name": "shop",
+  "placeholders": {
+    "API_PORT": { "description": "Port for the API", "default": "3000" }
+  },
+  "items": [
+    { "type": "service", "name": "db", "command": "docker compose up db" },
+    { "type": "service", "name": "api", "command": "npm run dev", "cwd": "api",
+      "after": ["db"], "env": { "PORT": "{{API_PORT}}" } },
+    { "type": "command", "name": "build", "command": "npm run build" }
+  ]
+}
+```
+
+- `type` is `service` or `command`. `cwd` is a folder inside the project (default `.`), `autoStart: false` keeps a service from starting with the workspace, and `after` lists items by name (see Start order).
+- `{{NAME}}` is a placeholder. Declare it under `placeholders` with an optional `description` and `default`. Each person gives their own value when they import the file, and it stays on their machine.
+- Don't put secrets in the file. Use a placeholder with no default and everyone enters their own.
+
+**Writing the file.** In the picker, select a workspace and press `x`. Sable shows exactly what it will write, then writes `sable.json` into the workspace's folder. Variables with names like `TOKEN`, `SECRET` or `KEY` become placeholders and their values stay out of the file. Look the file over before you commit it: Sable can't tell whether a command contains something private.
+
+**Using the file.** Start `sable` in a folder that has a `sable.json` and no workspace yet, or press `i` in the picker. Sable shows every command the file would run, and only after you press Enter does it create the workspace. Nothing starts before you agree. Sable asks for the placeholder values, then the workspace appears in the picker.
+
+**Staying in sync.** When you open the workspace (or start Sable in its folder), Sable compares the file with the one you agreed to. If it changed, you see what changed, the old and the new command side by side, and nothing is applied until you agree. Press Esc to keep your current version and look again later.
+
+**Making it fit your machine.** Editing an imported item (`e`) changes it only for you, and a later update from the file keeps your change. Fields you did not touch follow the file. Deleting an imported item removes it only for you. If an imported item fails, Sable explains the likely cause in the status line, such as a program that isn't installed, a port in use or a missing folder, and tells you to press `e` to adjust it here.
+
+Sable looks for `sable.json` in the folder it is started in, not in parent folders.
 
 ## Sound
 
