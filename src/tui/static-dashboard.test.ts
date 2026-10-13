@@ -27,12 +27,9 @@ describe("renderStaticDashboard", () => {
   it("explains services and commands when the workspace is empty", () => {
     const rendered = renderStaticDashboard({
       ...createState(),
-      services: [],
-      commands: [],
-      serviceIndexById: {},
-      commandIndexById: {},
-      selectedServiceIndex: undefined,
-      selectedItem: undefined,
+      items: [],
+      itemIndexById: {},
+      selectedItemIndex: undefined,
     });
 
     expect(rendered).toContain("No services or commands yet.");
@@ -60,7 +57,7 @@ describe("renderStaticDashboard", () => {
   });
 
   it("shows start for a stopped service and the move keys in move mode", () => {
-    const state = { ...createState(), selectedServiceIndex: 1, selectedItem: { type: "service" as const, index: 1 } };
+    const state = { ...createState(), selectedItemIndex: 1 };
 
     expect(renderStaticDashboard(state, { quitLabel: "back" }).split("\n").at(-1)).toBe(
       "[s] start  [Enter] logs  [e] edit  [a] add  [?] help  [q] back",
@@ -73,12 +70,7 @@ describe("renderStaticDashboard", () => {
   });
 
   it("shows run keys for a selected command", () => {
-    const state = {
-      ...createState(),
-      selectedServiceIndex: undefined,
-      selectedCommandIndex: 0,
-      selectedItem: { type: "command" as const, index: 0 },
-    };
+    const state = { ...createState(), selectedItemIndex: 3 };
     const rendered = renderStaticDashboard(state);
 
     expect(rendered).toContain("> migrate         ✓ done");
@@ -91,7 +83,7 @@ describe("renderStaticDashboard", () => {
 
     expect(selectedLine).toContain("\x1b[48;5;236m");
     expect(visibleLength(selectedLine ?? "")).toBe(59);
-    expect(renderStaticDashboard(createState(), { color: true, pulseServiceIndex: 0 })).toContain("\x1b[48;5;239m");
+    expect(renderStaticDashboard(createState(), { color: true, pulseItemIndex: 0 })).toContain("\x1b[48;5;239m");
   });
 
   it("shows the selected item's latest output beside the list on wide terminals", () => {
@@ -147,30 +139,33 @@ describe("renderStaticDashboard", () => {
 });
 
 function createState(): RuntimeWorkspaceState {
+  return stateOf([
+    { item: createService("svc_backend", "backend"), process: { status: "running", pid: 1234 } },
+    { item: createService("svc_frontend", "frontend"), process: { status: "stopped" } },
+    { item: createService("svc_worker", "worker"), process: { status: "failed", error: new Error("spawn ENOENT") } },
+    { item: createCommand("cmd_migrate", "migrate"), process: { status: "exited", exitCode: 0, signal: null } },
+  ], 0, { id: "ws_ecommerce", name: "ecommerce", projectDirectory: "/srv/shop" });
+}
+
+function stateOf(
+  items: RuntimeWorkspaceState["items"],
+  selectedItemIndex: number,
+  workspace: RuntimeWorkspaceState["workspace"] = { id: "ws_many", name: "many" },
+): RuntimeWorkspaceState {
   return {
-    workspace: { id: "ws_ecommerce", name: "ecommerce", projectDirectory: "/srv/shop" },
-    selectedServiceIndex: 0,
-    selectedCommandIndex: undefined,
-    selectedItem: { type: "service", index: 0 },
-    serviceIndexById: { svc_backend: 0, svc_frontend: 1, svc_worker: 2 },
-    commandIndexById: { cmd_migrate: 0 },
-    services: [
-      { service: createService("svc_backend", "backend"), process: { status: "running", pid: 1234 } },
-      { service: createService("svc_frontend", "frontend"), process: { status: "stopped" } },
-      { service: createService("svc_worker", "worker"), process: { status: "failed", error: new Error("spawn ENOENT") } },
-    ],
-    commands: [
-      { command: createCommand("cmd_migrate", "migrate"), process: { status: "exited", exitCode: 0, signal: null } },
-    ],
+    workspace,
+    items,
+    itemIndexById: Object.fromEntries(items.map((itemState, index) => [itemState.item.id, index])),
+    selectedItemIndex,
   };
 }
 
 function createCommand(id: string, name: string) {
-  return { id, name, command: "npm run migrate", cwd: ".", env: {} };
+  return { kind: "command" as const, id, name, command: "npm run migrate", cwd: ".", env: {} };
 }
 
 function createService(id: string, name: string) {
-  return { id, name, command: "npm run dev", cwd: ".", autoStart: true, env: {} };
+  return { kind: "service" as const, id, name, command: "npm run dev", cwd: ".", autoStart: true, env: {} };
 }
 
 function createLog(stream: ServiceLogEntry["stream"], line: string): ServiceLogEntry {
@@ -178,19 +173,11 @@ function createLog(stream: ServiceLogEntry["stream"], line: string): ServiceLogE
 }
 
 function createManyServiceState(serviceCount: number, selectedServiceIndex: number): RuntimeWorkspaceState {
-  const services = Array.from({ length: serviceCount }, (_, index) => ({
-    service: createService(`svc_${index + 1}`, `service-${index + 1}`),
-    process: { status: "stopped" as const },
-  }));
-
-  return {
-    workspace: { id: "ws_many", name: "many" },
+  return stateOf(
+    Array.from({ length: serviceCount }, (_, index) => ({
+      item: createService(`svc_${index + 1}`, `service-${index + 1}`),
+      process: { status: "stopped" as const },
+    })),
     selectedServiceIndex,
-    selectedCommandIndex: undefined,
-    selectedItem: { type: "service", index: selectedServiceIndex },
-    serviceIndexById: Object.fromEntries(services.map((serviceState, index) => [serviceState.service.id, index])),
-    commandIndexById: {},
-    services,
-    commands: [],
-  };
+  );
 }

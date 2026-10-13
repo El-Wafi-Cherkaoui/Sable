@@ -35,6 +35,7 @@ import type { SoundControl } from "../sound/sound-control.js";
 import { runUpdateDialog } from "../tui/update-dialog.js";
 import { runSuggestServicesFlow, type SuggestServicesFlowOptions, type SuggestServicesFlowResult } from "./suggest-services-flow.js";
 import { servicesOf } from "../config/workspace-items.js";
+import { runtimeServices } from "../runtime/runtime-state.js";
 
 export type WorkspaceHomeConfigStore = {
   load(): Promise<AppConfig>;
@@ -126,7 +127,7 @@ export async function runWorkspaceHome(
         statusMessage,
         selectedWorkspaceId,
         activeWorkspaceId: activeSession?.workspaceId,
-        activeRunningServiceCount: activeSession?.controller.getState().services
+        activeRunningServiceCount: activeSession === undefined ? undefined : runtimeServices(activeSession.controller.getState())
           .filter((serviceState) => serviceState.process.status === "running").length,
         startupMomentMs: shouldShowStartupMoment && options.welcomeScreen !== false ? welcomeScreenMs : 0,
         afterStartup: options.update === undefined || !shouldShowStartupMoment ? undefined : () => showUpdatePopup(options.update!, keyInput, options.screen),
@@ -413,9 +414,9 @@ async function restartActiveSession(
 }> {
   const state = options.controller.getState();
   const runningServiceIds = new Set(
-    state.services
+    runtimeServices(state)
       .filter((serviceState) => serviceState.process.status === "running")
-      .map((serviceState) => serviceState.service.id),
+      .map((serviceState) => serviceState.item.id),
   );
 
   for (const service of servicesOf(options.workspace)) {
@@ -429,7 +430,7 @@ async function restartActiveSession(
   const failures = await options.controller.shutdown();
   const controller = options.createController(options.workspace);
 
-  await Promise.all([...runningServiceIds].map((serviceId) => controller.startService(serviceId)));
+  await Promise.all([...runningServiceIds].map((serviceId) => controller.startItem(serviceId)));
 
   return { session: { workspaceId: options.workspace.id, controller }, failures };
 }

@@ -1,7 +1,7 @@
 import { isResize, mapDashboardKey, mapHelpKey, mapMoveKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
-import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import { getSelectedCommand, getSelectedItem, getSelectedService, runtimeServices, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import { runSettingsDialog } from "./settings-dialog.js";
@@ -78,7 +78,7 @@ export async function runInteractiveDashboard(
   const logsRefreshIntervalMs = options.logsRefreshIntervalMs ?? 250;
   const logsRevealIntervalMs = options.logsRevealIntervalMs ?? 55;
   let shouldQuit = false;
-  let pulseItem: { type: "service"; index: number } | { type: "command"; index: number } | undefined;
+  let pulseItem: number | undefined;
   let pulseTimer: ReturnType<typeof setTimeout> | undefined;
   let mode = "dashboard" as ViewMode;
   let helpReturnMode: HelpReturnMode = "dashboard";
@@ -191,7 +191,7 @@ export async function runInteractiveDashboard(
         clearPulse();
         options.controller.selectNextService();
         options.sound?.play("move");
-        pulseItem = getPulseItem(options.controller.getState());
+        pulseItem = options.controller.getState().selectedItemIndex;
         schedulePulseClear();
         renderDashboardFrame();
         break;
@@ -200,7 +200,7 @@ export async function runInteractiveDashboard(
         clearPulse();
         options.controller.selectPreviousService();
         options.sound?.play("move");
-        pulseItem = getPulseItem(options.controller.getState());
+        pulseItem = options.controller.getState().selectedItemIndex;
         schedulePulseClear();
         renderDashboardFrame();
         break;
@@ -216,7 +216,7 @@ export async function runInteractiveDashboard(
           options.sound?.play("started");
           await options.controller.startSelectedService();
         }
-        pulseItem = getPulseItem(options.controller.getState());
+        pulseItem = options.controller.getState().selectedItemIndex;
         schedulePulseClear();
         renderDashboardFrame();
         break;
@@ -230,7 +230,7 @@ export async function runInteractiveDashboard(
         options.sound?.play("started");
         await options.controller.restartSelectedService();
         clearDashboardMessage();
-        pulseItem = getPulseItem(options.controller.getState());
+        pulseItem = options.controller.getState().selectedItemIndex;
         schedulePulseClear();
         renderDashboardFrame();
         break;
@@ -325,7 +325,7 @@ export async function runInteractiveDashboard(
 
         if (getSelectedCommand(state) !== undefined) {
           dashboardMessage = "Only services can be moved.";
-        } else if (getSelectedService(state) !== undefined && state.services.length > 1) {
+        } else if (getSelectedService(state) !== undefined && runtimeServices(state).length > 1) {
           clearDashboardMessage();
           moveOffset = 0;
           mode = "move";
@@ -389,8 +389,7 @@ export async function runInteractiveDashboard(
       moving: mode === "move",
       settingsAvailable: options.settings !== undefined,
       statusMessage: dashboardMessage,
-      pulseServiceIndex: pulseItem?.type === "service" ? pulseItem.index : undefined,
-      pulseCommandIndex: pulseItem?.type === "command" ? pulseItem.index : undefined,
+      pulseItemIndex: pulseItem,
       selectedServiceLogs: options.controller.getSelectedServiceLogs(),
       columns: process.stdout.columns,
       rows: process.stdout.rows,
@@ -412,8 +411,7 @@ export async function runInteractiveDashboard(
 
   // Stopping can take a few seconds while the loop waits, so say what is happening first.
   function showBusyMessage(verb: string): void {
-    const selected = getSelectedCommand(options.controller.getState()) ?? getSelectedService(options.controller.getState());
-    const name = selected === undefined ? "item" : "command" in selected ? selected.command.name : selected.service.name;
+    const name = getSelectedItem(options.controller.getState())?.item.name ?? "item";
 
     dashboardMessage = `${verb} ${name}...`;
     renderDashboardFrame();
@@ -477,7 +475,7 @@ export async function runInteractiveDashboard(
     }
 
     if (action === "done" || action === "cancel") {
-      const serviceName = getSelectedService(options.controller.getState())?.service.name;
+      const serviceName = getSelectedService(options.controller.getState())?.item.name;
 
       dashboardMessage = action === "done" && moveOffset !== 0 && serviceName !== undefined
         ? `Moved service "${serviceName}".`
@@ -497,14 +495,14 @@ export async function runInteractiveDashboard(
       return "unchanged";
     }
 
-    const indexBefore = options.controller.getState().selectedServiceIndex;
+    const indexBefore = options.controller.getState().selectedItemIndex;
     const result = await callback();
 
     if (result.type === "exit") {
       return "exit";
     }
 
-    const indexAfter = options.controller.getState().selectedServiceIndex;
+    const indexAfter = options.controller.getState().selectedItemIndex;
 
     if (indexBefore === undefined || indexAfter === undefined || indexBefore === indexAfter) {
       return "unchanged";
@@ -520,23 +518,7 @@ function isCtrlC(keypress: Awaited<ReturnType<KeyInput["readKey"]>>): boolean {
 }
 
 function isSelectedItemRunning(state: RuntimeWorkspaceState): boolean {
-  const selected = getSelectedCommand(state) ?? getSelectedService(state);
-
-  return selected?.process.status === "running";
-}
-
-function getPulseItem(
-  state: RuntimeWorkspaceState,
-): { type: "service"; index: number } | { type: "command"; index: number } | undefined {
-  if (state.selectedItem?.type === "service") {
-    return { type: "service", index: state.selectedItem.index };
-  }
-
-  if (state.selectedItem?.type === "command") {
-    return { type: "command", index: state.selectedItem.index };
-  }
-
-  return undefined;
+  return getSelectedItem(state)?.process.status === "running";
 }
 
 function renderFrame(screen: InteractiveDashboardScreen, contents: string): void {

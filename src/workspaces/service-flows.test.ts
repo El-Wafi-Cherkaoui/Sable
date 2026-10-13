@@ -5,9 +5,8 @@ import type { KeyInput } from "../input/terminal-key-input.js";
 import type { FormResult, RunFormOptions } from "../tui/form-view.js";
 import {
   runAddWorkspaceItemFlow,
-  runDeleteServiceFlow,
-  runEditCommandFlow,
-  runEditServiceFlow,
+  runDeleteItemFlow,
+  runEditItemFlow,
   knownCommands,
   toDirectoryValue,
   validateItem,
@@ -23,7 +22,7 @@ describe("runAddWorkspaceItemFlow", () => {
       store, workspace, keyInput: createKeyInput([]), form, generateId: () => "svc_worker", directoryExists: () => true,
     });
 
-    expect(result).toEqual({ type: "completed", message: 'Added service "worker".', serviceId: "svc_worker" });
+    expect(result).toEqual({ type: "completed", message: 'Added service "worker".', itemId: "svc_worker" });
     expect(store.savedConfig?.workspaces[0]?.items.at(-1)).toEqual({
       kind: "service",
       id: "svc_worker",
@@ -43,7 +42,7 @@ describe("runAddWorkspaceItemFlow", () => {
       store, workspace, keyInput: createKeyInput([]), form, generateId: () => "cmd_migrate", directoryExists: () => true,
     });
 
-    expect(result).toEqual({ type: "completed", message: 'Added command "migrate".', commandId: "cmd_migrate" });
+    expect(result).toEqual({ type: "completed", message: 'Added command "migrate".', itemId: "cmd_migrate" });
     expect(store.savedConfig?.workspaces[0]?.items.filter((item) => item.kind === "command")).toEqual([
       { kind: "command", id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: projectDirectory, env: {} },
     ]);
@@ -89,43 +88,43 @@ describe("runAddWorkspaceItemFlow", () => {
       directoryExists: () => true,
     });
 
-    expect(result).toMatchObject({ type: "completed", serviceId: "svc_web" });
+    expect(result).toMatchObject({ type: "completed", itemId: "svc_web" });
     expect(store.savedConfig?.workspaces[0]?.items.at(-1)).toMatchObject({ name: "web", command: "npm run web", autoStart: true });
   });
 });
 
-describe("runEditServiceFlow", () => {
+describe("runEditItemFlow, for a service", () => {
   it("prefills the form and saves every changed field at once", async () => {
     const store = createStore(config);
     const form = fakeForm({ name: "api-server", command: "npm start", cwd: ".", autoStart: false, env: ["PORT=4000"] });
 
-    const result = await runEditServiceFlow({
-      store, workspace, keyInput: createKeyInput([]), serviceId: "svc_api", form, directoryExists: () => true,
+    const result = await runEditItemFlow({
+      store, workspace, keyInput: createKeyInput([]), itemId: "svc_api", form, directoryExists: () => true,
     });
 
     expect(form.mock.calls[0]![0].values).toEqual({ name: "api", command: "npm run dev", cwd: ".", autoStart: true, env: [] });
-    expect(result).toEqual({ type: "completed", message: 'Saved service "api-server".', serviceId: "svc_api" });
+    expect(result).toEqual({ type: "completed", message: 'Saved service "api-server".', itemId: "svc_api" });
     expect(store.savedConfig?.workspaces[0]?.items[0]).toEqual({
       kind: "service", id: "svc_api", name: "api-server", command: "npm start", cwd: projectDirectory, autoStart: false, env: { PORT: "4000" },
     });
   });
 
-  it("goes back without saving when the service no longer exists", async () => {
+  it("goes back without saving when the item no longer exists", async () => {
     const store = createStore(config);
 
-    await expect(runEditServiceFlow({ store, workspace, keyInput: createKeyInput([]), serviceId: "svc_gone", form: fakeForm({}) }))
-      .resolves.toEqual({ type: "back", message: "That service no longer exists." });
+    await expect(runEditItemFlow({ store, workspace, keyInput: createKeyInput([]), itemId: "svc_gone", form: fakeForm({}) }))
+      .resolves.toEqual({ type: "back", message: "That item no longer exists." });
     expect(store.savedConfig).toBeUndefined();
   });
 });
 
-describe("runEditCommandFlow", () => {
+describe("runEditItemFlow, for a command", () => {
   it("prefills and saves a command", async () => {
     const withCommand = { ...workspace, items: [{ kind: "command", id: "cmd_build", name: "build", command: "npm run build", cwd: projectDirectory, env: { CI: "1" } }] };
     const store = createStore({ version: 2, workspaces: [withCommand] });
     const form = fakeForm({ name: "build", command: "npm run build -- --prod", cwd: ".", env: ["CI=1"] });
 
-    await runEditCommandFlow({ store, workspace: withCommand, keyInput: createKeyInput([]), commandId: "cmd_build", form, directoryExists: () => true });
+    await runEditItemFlow({ store, workspace: withCommand, keyInput: createKeyInput([]), itemId: "cmd_build", form, directoryExists: () => true });
 
     expect(form.mock.calls[0]![0].values).toEqual({ name: "build", command: "npm run build", cwd: ".", env: ["CI=1"] });
     expect(store.savedConfig?.workspaces[0]?.items[0]).toMatchObject({ command: "npm run build -- --prod", env: { CI: "1" } });
@@ -170,15 +169,15 @@ describe("toDirectoryValue", () => {
   });
 });
 
-describe("runDeleteServiceFlow", () => {
+describe("runDeleteItemFlow", () => {
   it("deletes a service after typed-name confirmation", async () => {
     const store = createStore(config);
 
     await expect(
-      runDeleteServiceFlow({
+      runDeleteItemFlow({
         store,
         workspace,
-        serviceId: "svc_api",
+        itemId: "svc_api",
         keyInput: createKeyInput([
           { sequence: "a" },
           { sequence: "p" },
@@ -190,7 +189,7 @@ describe("runDeleteServiceFlow", () => {
     ).resolves.toEqual({
       type: "completed",
       message: 'Deleted service "api" from workspace "ecommerce".',
-      removedServiceId: "svc_api",
+      removedItemId: "svc_api",
     });
     expect(store.savedConfig?.workspaces[0]?.items).toEqual([]);
   });
@@ -198,10 +197,10 @@ describe("runDeleteServiceFlow", () => {
   it("keeps prompting when the typed service name does not match", async () => {
     const store = createStore(config);
 
-    await runDeleteServiceFlow({
+    await runDeleteItemFlow({
       store,
       workspace,
-      serviceId: "svc_api",
+      itemId: "svc_api",
       keyInput: createKeyInput([
         { sequence: "x" },
         { name: "return" },
@@ -221,10 +220,10 @@ describe("runDeleteServiceFlow", () => {
     const store = createStore(config);
 
     await expect(
-      runDeleteServiceFlow({
+      runDeleteItemFlow({
         store,
         workspace,
-        serviceId: "svc_api",
+        itemId: "svc_api",
         keyInput: createKeyInput([{ name: "escape" }]),
         screen: createScreen(),
       }),
@@ -236,10 +235,10 @@ describe("runDeleteServiceFlow", () => {
     const store = createStore(config);
 
     await expect(
-      runDeleteServiceFlow({
+      runDeleteItemFlow({
         store,
         workspace,
-        serviceId: "svc_api",
+        itemId: "svc_api",
         keyInput: createKeyInput([{ name: "c", ctrl: true }]),
         screen: createScreen(),
       }),

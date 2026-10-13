@@ -10,11 +10,11 @@ describe("runInteractiveDashboard", () => {
     const controller = {
       getState: vi.fn(() => state),
       selectNextService: vi.fn(() => {
-        state = { ...state, selectedServiceIndex: 1 };
+        state = { ...state, selectedItemIndex: 1 };
         return state;
       }),
       selectPreviousService: vi.fn(() => {
-        state = { ...state, selectedServiceIndex: 0 };
+        state = { ...state, selectedItemIndex: 0 };
         return state;
       }),
       startSelectedService: vi.fn(async () => ({ status: "running" as const })),
@@ -30,7 +30,7 @@ describe("runInteractiveDashboard", () => {
     const clear = vi.fn();
     const write = vi.fn();
     const render = vi.fn((runtimeState: RuntimeWorkspaceState) =>
-      `selected:${runtimeState.selectedServiceIndex}`,
+      `selected:${runtimeState.selectedItemIndex}`,
     );
 
     await runInteractiveDashboard({
@@ -55,9 +55,7 @@ describe("runInteractiveDashboard", () => {
       selectNextService: vi.fn(() => {
         state = {
           ...state,
-          selectedServiceIndex: 1,
-          selectedCommandIndex: undefined,
-          selectedItem: { type: "service", index: 1 },
+          selectedItemIndex: 1,
         };
 
         return state;
@@ -75,7 +73,7 @@ describe("runInteractiveDashboard", () => {
       keyInput,
       screen: { clear: vi.fn(), write },
       render: (runtimeState, renderOptions) =>
-        `selected:${runtimeState.selectedServiceIndex}:pulse:${renderOptions?.pulseServiceIndex ?? "none"}`,
+        `selected:${runtimeState.selectedItemIndex}:pulse:${renderOptions?.pulseItemIndex ?? "none"}`,
     });
 
     await waitForWrite(write, "selected:1:pulse:1\n");
@@ -91,9 +89,7 @@ describe("runInteractiveDashboard", () => {
       selectNextService: vi.fn(() => {
         state = {
           ...state,
-          selectedServiceIndex: 1,
-          selectedCommandIndex: undefined,
-          selectedItem: { type: "service", index: 1 },
+          selectedItemIndex: 1,
         };
 
         return state;
@@ -113,7 +109,7 @@ describe("runInteractiveDashboard", () => {
       abortSignal: abortController.signal,
       screen: { clear: vi.fn(), write },
       render: (runtimeState, renderOptions) =>
-        `selected:${runtimeState.selectedServiceIndex}:pulse:${renderOptions?.pulseServiceIndex ?? "none"}`,
+        `selected:${runtimeState.selectedItemIndex}:pulse:${renderOptions?.pulseItemIndex ?? "none"}`,
     });
 
     await waitForWrite(write, "selected:1:pulse:1\n");
@@ -353,7 +349,7 @@ describe("runInteractiveDashboard", () => {
     const baseState = createState();
     const state = {
       ...baseState,
-      services: baseState.services.map((serviceState, index) =>
+      items: baseState.items.map((serviceState, index) =>
         index === 0 ? { ...serviceState, process: { status: "running" as const } } : serviceState,
       ),
     };
@@ -377,7 +373,7 @@ describe("runInteractiveDashboard", () => {
     const baseState = createState();
     const state = {
       ...baseState,
-      services: baseState.services.map((serviceState, index) =>
+      items: baseState.items.map((serviceState, index) =>
         index === 0 ? { ...serviceState, process: { status: "running" as const } } : serviceState,
       ),
     };
@@ -408,11 +404,11 @@ describe("runInteractiveDashboard", () => {
     let state = createState();
     const controller = { ...createController(state, () => []), getState: vi.fn(() => state) };
     const onMoveServiceDown = vi.fn(async () => {
-      state = { ...state, selectedServiceIndex: 1, selectedItem: { type: "service" as const, index: 1 } };
+      state = { ...state, selectedItemIndex: 1 };
       return { type: "continue" as const, message: "moved" };
     });
     const onMoveServiceUp = vi.fn(async () => {
-      state = { ...state, selectedServiceIndex: 0, selectedItem: { type: "service" as const, index: 0 } };
+      state = { ...state, selectedItemIndex: 0 };
       return { type: "continue" as const, message: "moved" };
     });
     const render = vi.fn((_state: RuntimeWorkspaceState, renderOptions?: { moving?: boolean }) =>
@@ -450,7 +446,7 @@ describe("runInteractiveDashboard", () => {
       keyInput,
       screen: { clear: vi.fn(), write },
       render: (runtimeState, renderOptions) =>
-        `selected:${runtimeState.selectedServiceIndex}:pulse:${renderOptions?.pulseServiceIndex ?? "none"}`,
+        `selected:${runtimeState.selectedItemIndex}:pulse:${renderOptions?.pulseItemIndex ?? "none"}`,
     });
 
     await waitForWrite(write, "selected:0:pulse:0\n");
@@ -848,7 +844,7 @@ describe("runInteractiveDashboard", () => {
     const base = createState();
     const state: RuntimeWorkspaceState = {
       ...base,
-      services: base.services.map((service, index) => index === 0
+      items: base.items.map((service, index) => index === 0
         ? { ...service, process: { status: "running" as const, pid: 1 } }
         : service),
     };

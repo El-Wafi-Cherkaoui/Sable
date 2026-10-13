@@ -1,4 +1,4 @@
-import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import { getSelectedCommand, getSelectedItem, getSelectedService, runtimeServices, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import type { ServiceLogEntry } from "../process/process-manager.js";
 import { displayPath, formatStatus, type ItemKind } from "./format.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
@@ -15,8 +15,8 @@ export type RenderStaticDashboardOptions = {
   settingsAvailable?: boolean;
   color?: boolean;
   style?: TuiStyle;
-  pulseServiceIndex?: number;
-  pulseCommandIndex?: number;
+  // Index into the state's items of the row to flash.
+  pulseItemIndex?: number;
   selectedServiceLogs?: ServiceLogEntry[];
   columns?: number;
   rows?: number;
@@ -51,7 +51,7 @@ function renderDashboardLines(
   ];
   const lines = [formatHeader(state, style), ""];
 
-  if (state.services.length === 0 && state.commands.length === 0) {
+  if (state.items.length === 0) {
     lines.push(
       "No services or commands yet.",
       "",
@@ -96,10 +96,12 @@ function formatHeader(state: RuntimeWorkspaceState, style: TuiStyle): string {
     details.push(displayPath(state.workspace.projectDirectory));
   }
 
-  if (state.services.length > 0) {
-    const running = state.services.filter((serviceState) => serviceState.process.status === "running").length;
+  const services = runtimeServices(state);
 
-    details.push(`${running} of ${state.services.length} running`);
+  if (services.length > 0) {
+    const running = services.filter((serviceState) => serviceState.process.status === "running").length;
+
+    details.push(`${running} of ${services.length} running`);
   }
 
   const suffix = details.length === 0 ? "" : style.muted(` · ${details.join(" · ")}`);
@@ -129,37 +131,28 @@ function createItemRows(
     });
   };
 
-  if (state.services.length > 0) {
-    rows.push({ type: "heading", line: style.muted("SERVICES") });
-  }
+  // The items are already in display order, services then commands; a heading starts each group.
+  let groupKind: ItemKind | undefined;
 
-  for (const [index, serviceState] of state.services.entries()) {
-    addRow(
-      "service",
-      index,
-      serviceState.service.name,
-      formatStatus(serviceState.process, "service", style),
-      index === state.selectedServiceIndex,
-      index === options.pulseServiceIndex,
-    );
-  }
+  for (const [index, itemState] of state.items.entries()) {
+    const kind = itemState.item.kind;
 
-  if (state.commands.length > 0) {
-    if (rows.length > 0) {
-      rows.push({ type: "heading", line: "" });
+    if (kind !== groupKind) {
+      if (rows.length > 0) {
+        rows.push({ type: "heading", line: "" });
+      }
+
+      rows.push({ type: "heading", line: style.muted(kind === "service" ? "SERVICES" : "COMMANDS") });
+      groupKind = kind;
     }
 
-    rows.push({ type: "heading", line: style.muted("COMMANDS") });
-  }
-
-  for (const [index, commandState] of state.commands.entries()) {
     addRow(
-      "command",
+      kind,
       index,
-      commandState.command.name,
-      formatStatus(commandState.process, "command", style),
-      index === state.selectedCommandIndex,
-      index === options.pulseCommandIndex,
+      itemState.item.name,
+      formatStatus(itemState.process, kind, style),
+      index === state.selectedItemIndex,
+      index === options.pulseItemIndex,
     );
   }
 
@@ -168,8 +161,7 @@ function createItemRows(
 
 function sliceAroundSelection(rows: ItemRow[], state: RuntimeWorkspaceState, viewportSize: number): string[] {
   const selectedIndex = Math.max(0, rows.findIndex((row) =>
-    (row.type === "service" && row.index === state.selectedServiceIndex) ||
-    (row.type === "command" && row.index === state.selectedCommandIndex),
+    row.type !== "heading" && row.index === state.selectedItemIndex,
   ));
   const start = rows.length <= viewportSize
     ? 0
@@ -185,7 +177,7 @@ function renderPreview(
   width: number,
   height: number,
 ): string[] {
-  const name = getSelectedCommand(state)?.command.name ?? getSelectedService(state)?.service.name;
+  const name = getSelectedItem(state)?.item.name;
 
   if (name === undefined) {
     return [];
@@ -216,7 +208,7 @@ function formatStatusLine(
   style: TuiStyle,
 ): string {
   const message = options.moving === true
-    ? `Moving service "${getSelectedService(state)?.service.name ?? ""}"`
+    ? `Moving service "${getSelectedService(state)?.item.name ?? ""}"`
     : options.statusMessage;
 
   return message === undefined ? "" : `${style.statusLabel("›")} ${message}`;

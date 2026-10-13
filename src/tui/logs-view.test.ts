@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ServiceLogEntry } from "../process/process-manager.js";
-import { createRuntimeState, updateServiceProcessState } from "../runtime/runtime-state.js";
+import { createRuntimeState, updateProcessState } from "../runtime/runtime-state.js";
 import {
   bottomScrollOffset,
   clampScrollOffset,
@@ -234,7 +234,7 @@ function createState() {
     items: [{ kind: "service", id: "svc_api", name: "api", command: "npm run dev", cwd: ".", autoStart: true, env: {} }],
   });
 
-  return updateServiceProcessState(state, "svc_api", { status: "running", pid: 1 });
+  return updateProcessState(state, "svc_api", { status: "running", pid: 1 });
 }
 
 function createLog(stream: ServiceLogEntry["stream"], line: string, time = "10:00:00"): ServiceLogEntry {

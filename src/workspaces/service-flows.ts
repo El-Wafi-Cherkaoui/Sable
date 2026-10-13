@@ -10,7 +10,7 @@ import { runDeleteDialog } from "../tui/delete-dialog.js";
 import type { PromptScreen } from "../tui/prompt-view.js";
 
 export type ServiceFlowResult =
-  | { type: "completed"; message: string; serviceId?: string; commandId?: string; removedServiceId?: string; removedCommandId?: string }
+  | { type: "completed"; message: string; itemId?: string; removedItemId?: string }
   | { type: "back"; message: string }
   | { type: "exit" };
 
@@ -26,20 +26,14 @@ export type ServiceFlowOptions = {
   screen?: PromptScreen;
   generateId?: typeof generateShortId;
   directoryExists?: (directoryPath: string) => boolean;
-  serviceId?: string;
-  commandId?: string;
   form?: typeof runForm;
   // The screen the action was started from, shown dimmed behind a popup.
   background?: string;
   deleteDialog?: typeof runDeleteDialog;
 };
 
-export type DeleteServiceFlowOptions = ServiceFlowOptions & {
-  serviceId: string;
-};
-
-export type DeleteCommandFlowOptions = ServiceFlowOptions & {
-  commandId: string;
+export type ItemFlowOptions = ServiceFlowOptions & {
+  itemId: string;
 };
 
 const idPrefixes = { service: "svc", command: "cmd" } as const;
@@ -73,46 +67,21 @@ export async function runAddWorkspaceItemFlow(
 
   await options.store.save(updateWorkspace(config, workspace.id, addItem(workspace, item)));
 
-  return completed(kind, item.id, `Added ${kind} "${item.name}".`);
+  return { type: "completed", message: `Added ${kind} "${item.name}".`, itemId: item.id };
 }
 
-export async function runEditServiceFlow(
-  options: ServiceFlowOptions,
-): Promise<ServiceFlowResult> {
-  return runEditItemFlow("service", options, options.serviceId);
-}
-
-export async function runEditCommandFlow(
-  options: ServiceFlowOptions,
-): Promise<ServiceFlowResult> {
-  return runEditItemFlow("command", options, options.commandId);
-}
-
-export async function runDeleteCommandFlow(
-  options: DeleteCommandFlowOptions,
-): Promise<ServiceFlowResult> {
-  return runDeleteItemFlow("command", options, options.commandId);
-}
-
-export async function runDeleteServiceFlow(
-  options: DeleteServiceFlowOptions,
-): Promise<ServiceFlowResult> {
-  return runDeleteItemFlow("service", options, options.serviceId);
-}
-
-async function runEditItemFlow(
-  kind: ItemKind,
-  options: ServiceFlowOptions,
-  itemId: string | undefined,
+export async function runEditItemFlow(
+  options: ItemFlowOptions,
 ): Promise<ServiceFlowResult> {
   const config = await options.store.load();
   const workspace = findWorkspace(config, options.workspace.id);
-  const found = workspace === undefined ? undefined : findItem(workspace, itemId);
-  const item = found?.kind === kind ? found : undefined;
+  const item = workspace === undefined ? undefined : findItem(workspace, options.itemId);
 
   if (workspace === undefined || item === undefined) {
-    return { type: "back", message: `That ${kind} no longer exists.` };
+    return { type: "back", message: "That item no longer exists." };
   }
+
+  const kind = item.kind;
 
   const result = await (options.form ?? runForm)({
     title: `Edit ${kind} "${item.name}"`,
@@ -137,13 +106,11 @@ async function runEditItemFlow(
 
   await options.store.save(updateWorkspace(config, workspace.id, replaceItem(workspace, nextItem)));
 
-  return completed(kind, nextItem.id, `Saved ${kind} "${nextItem.name}".`);
+  return { type: "completed", message: `Saved ${kind} "${nextItem.name}".`, itemId: nextItem.id };
 }
 
-async function runDeleteItemFlow(
-  kind: ItemKind,
-  options: ServiceFlowOptions,
-  itemId: string,
+export async function runDeleteItemFlow(
+  options: ItemFlowOptions,
 ): Promise<ServiceFlowResult> {
   const config = await options.store.load();
   const workspace = findWorkspace(config, options.workspace.id);
@@ -152,12 +119,13 @@ async function runDeleteItemFlow(
     return { type: "back", message: `Workspace "${options.workspace.name}" was not found.` };
   }
 
-  const found = findItem(workspace, itemId);
-  const item = found?.kind === kind ? found : undefined;
+  const item = findItem(workspace, options.itemId);
 
   if (item === undefined) {
     return { type: "back", message: "Delete cancelled." };
   }
+
+  const kind = item.kind;
 
   const confirmation = await (options.deleteDialog ?? runDeleteDialog)({
     title: `Delete ${kind}`,
@@ -183,12 +151,8 @@ async function runDeleteItemFlow(
   return {
     type: "completed",
     message: `Deleted ${kind} "${item.name}" from workspace "${workspace.name}".`,
-    ...(kind === "service" ? { removedServiceId: item.id } : { removedCommandId: item.id }),
+    removedItemId: item.id,
   };
-}
-
-function completed(kind: ItemKind, id: string, message: string): ServiceFlowResult {
-  return { type: "completed", message, ...(kind === "service" ? { serviceId: id } : { commandId: id }) };
 }
 
 // Commands already saved, for suggestions while typing: this workspace's first, then the
