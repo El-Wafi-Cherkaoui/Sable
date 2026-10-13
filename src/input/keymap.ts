@@ -18,6 +18,7 @@ export type DashboardAction =
   | "toggle"
   | "restart"
   | "startAll"
+  | "savedLogs"
   | "addService"
   | "editService"
   | "deleteService"
@@ -55,6 +56,7 @@ export type WorkspacePickerAction =
   | "createWorkspace"
   | "importProject"
   | "exportProject"
+  | "savedLogs"
   | "deleteWorkspace"
   | "renameWorkspace"
   | "stopActiveWorkspace"
@@ -86,6 +88,8 @@ export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction
       return "importProject";
     case "x":
       return "exportProject";
+    case "L":
+      return "savedLogs";
     case "e":
       return "renameWorkspace";
     case "d":
@@ -133,6 +137,8 @@ export function mapDashboardKey(keypress: Keypress): DashboardAction {
       return "restart";
     case "S":
       return "startAll";
+    case "L":
+      return "savedLogs";
     case "a":
       return "addService";
     case "e":

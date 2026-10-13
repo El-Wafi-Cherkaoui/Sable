@@ -1130,6 +1130,60 @@ describe("runWorkspaceHome with a sable.json", () => {
     }));
   });
 
+  it("opens the saved logs from the list with L and passes the workspaces and the running one", async () => {
+    const showSavedLogs = vi.fn(async () => "close" as const);
+    const runPicker = vi.fn()
+      .mockResolvedValueOnce({ type: "run", workspace })
+      .mockResolvedValueOnce({ type: "savedLogs", background: "THE LIST" })
+      .mockResolvedValueOnce({ type: "exit" });
+    const controller = createFakeController();
+
+    await runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(async () => ({ type: "back" as const })),
+      createController: vi.fn(() => controller),
+      logFiles: { totalUsage: async () => ({ bytes: 0, files: 0 }), workspaceUsage: async () => ({ bytes: 0, files: 0 }) } as never,
+      showSavedLogs,
+    });
+
+    expect(showSavedLogs).toHaveBeenCalledOnce();
+    expect(showSavedLogs).toHaveBeenCalledWith(expect.objectContaining({ title: "Saved logs", background: "THE LIST" }));
+    expect(runPicker).toHaveBeenCalledTimes(3);
+  });
+
+  it("hands the log files to the dashboard session, which needs them to manage saved logs", async () => {
+    const logFiles = { totalUsage: vi.fn() } as never;
+    const runSession = vi.fn(async () => ({ type: "back" as const }));
+    const runPicker = vi.fn().mockResolvedValueOnce({ type: "run", workspace }).mockResolvedValueOnce({ type: "exit" });
+
+    await runWorkspaceHome({ store: createStore(config), keyInput: createKeyInput(), runPicker, runSession, createController: vi.fn(() => createFakeController()), logFiles });
+
+    expect(runSession).toHaveBeenCalledWith(expect.objectContaining({ logFiles }));
+  });
+
+  it("says saved logs are not available when Sable has no log files to manage", async () => {
+    const runPicker = vi.fn().mockResolvedValueOnce({ type: "savedLogs" }).mockResolvedValueOnce({ type: "exit" });
+
+    await runWorkspaceHome({ store: createStore(config), keyInput: createKeyInput(), runPicker, runSession: vi.fn() });
+
+    expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({ statusMessage: "Saved logs are not available here." }));
+  });
+
+  it("quits when the saved logs popup is closed with Ctrl+C", async () => {
+    const runPicker = vi.fn().mockResolvedValueOnce({ type: "savedLogs" });
+
+    await expect(runWorkspaceHome({
+      store: createStore(config),
+      keyInput: createKeyInput(),
+      runPicker,
+      runSession: vi.fn(),
+      logFiles: {} as never,
+      showSavedLogs: vi.fn(async () => "exit" as const),
+    })).resolves.toEqual({ type: "quit" });
+  });
+
   it("checks the file again when a linked workspace is opened, and opens the updated workspace with a message", async () => {
     const updated = { ...linkedWorkspace, items: [{ kind: "command" as const, after: [], id: "cmd_new", name: "seed", command: "npm run seed", cwd: folder, env: {} }] };
     let stored: AppConfig = { version: 2, workspaces: [linkedWorkspace] };

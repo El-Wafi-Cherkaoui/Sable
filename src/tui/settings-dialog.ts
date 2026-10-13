@@ -45,7 +45,7 @@ export async function runSettingsDialog(options: SettingsDialogOptions): Promise
     {
       label: "Save logs",
       enabled: settings.persistLogs.isEnabled(),
-      description: `Also write each item's output to a file${settings.logsDirectory === undefined ? "" : ` under ${displayPath(settings.logsDirectory)}`}, up to 2 MB each, so you can read it after Sable closes.`,
+      description: `Also write each item's output to a file${settings.logsDirectory === undefined ? "" : ` under ${displayPath(settings.logsDirectory)}`}, up to 2 MB each, so you can read it after Sable closes. Press L on the list or dashboard to delete them.`,
     },
   ];
   const render = () => {

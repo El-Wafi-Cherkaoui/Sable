@@ -76,6 +76,12 @@ describe("mapDashboardKey", () => {
     expect(mapDashboardKey({ sequence: "J" })).toBe("none");
   });
 
+  it("opens the saved logs with a capital L, on the list as well as the dashboard", () => {
+    expect(mapDashboardKey({ sequence: "L" })).toBe("savedLogs");
+    expect(mapWorkspacePickerKey({ sequence: "L" })).toBe("savedLogs");
+    expect(mapDashboardKey({ sequence: "l" })).toBe("none");
+  });
+
   it("starts every service with a capital S", () => {
     expect(mapDashboardKey({ sequence: "S" })).toBe("startAll");
     expect(mapDashboardKey({ sequence: "s" })).toBe("toggle");

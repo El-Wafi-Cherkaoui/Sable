@@ -56,6 +56,7 @@ export type RunInteractiveDashboardOptions = {
   onAddService?: () => Promise<DashboardCallbackResult>;
   onEditService?: () => Promise<DashboardCallbackResult>;
   onDeleteService?: (context: { background?: string }) => Promise<DashboardCallbackResult>;
+  onManageSavedLogs?: (context: { background?: string }) => Promise<DashboardCallbackResult>;
   onMoveServiceUp?: () => Promise<DashboardCallbackResult>;
   onMoveServiceDown?: () => Promise<DashboardCallbackResult>;
 };
@@ -255,6 +256,24 @@ export async function runInteractiveDashboard(
             ? "Already starting."
             : "No services to start.";
         refreshGraceTicks = startingGraceTicks;
+        renderDashboardFrame();
+        break;
+      }
+      case "savedLogs": {
+        clearPulse();
+
+        if (options.onManageSavedLogs === undefined) {
+          dashboardMessage = "Saved logs are not available here.";
+        } else {
+          const result = await options.onManageSavedLogs({ background: lastScreenContents });
+
+          if (result.type === "exit") {
+            return { type: "exit" };
+          }
+
+          dashboardMessage = result.message;
+        }
+
         renderDashboardFrame();
         break;
       }

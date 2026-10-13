@@ -35,6 +35,8 @@ import { upgradeNoticeParagraphs } from "../config/upgrade-notice.js";
 import type { UpgradeNotice } from "../config/config-store.js";
 import type { LogFiles } from "../logs/log-files.js";
 import { runNoticeDialog } from "../tui/notice-dialog.js";
+import type { runSavedLogsDialog } from "../tui/saved-logs-dialog.js";
+import { runAllSavedLogs } from "./saved-logs-flow.js";
 import { displayPath } from "../tui/format.js";
 import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
@@ -72,6 +74,7 @@ export type RunWorkspaceHomeOptions = {
   runExportProject?: (options: ProjectFlowOptions & { workspace: WorkspaceConfig }) => Promise<ProjectFlowResult>;
   update?: WorkspaceHomeUpdate;
   showNotice?: typeof runNoticeDialog;
+  showSavedLogs?: typeof runSavedLogsDialog;
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   logFiles?: LogFiles;
@@ -299,6 +302,32 @@ export async function runWorkspaceHome(
         continue;
       }
 
+      if (pickerResult.type === "savedLogs") {
+        if (options.logFiles === undefined) {
+          statusMessage = "Saved logs are not available here.";
+          continue;
+        }
+
+        const shown = await runAllSavedLogs({
+          logFiles: options.logFiles,
+          keyInput,
+          screen: options.screen,
+          background: pickerResult.background,
+          saving: options.settings?.persistLogs.isEnabled() ?? false,
+          workspaces: config.workspaces,
+          active: activeSession === undefined
+            ? undefined
+            : { name: config.workspaces.find((workspace) => workspace.id === activeSession!.workspaceId)?.name ?? "", controller: activeSession.controller },
+          dialog: options.showSavedLogs,
+        });
+
+        if (shown === "exit") {
+          return { type: "quit" };
+        }
+
+        continue;
+      }
+
       if (pickerResult.type === "exportProject") {
         let flowResult: ProjectFlowResult;
 
@@ -483,6 +512,7 @@ export async function runWorkspaceHome(
         keyInput,
         sound: options.sound,
         settings: options.settings,
+        logFiles: options.logFiles,
         abortSignal: shutdownAbortController.signal,
         dashboardQuitLabel: "back",
         store: options.store,

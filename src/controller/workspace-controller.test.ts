@@ -628,6 +628,25 @@ describe("WorkspaceController earlier output", () => {
     expect(controller.getItemLogs("svc_backend")).toEqual([]);
   });
 
+  it("forgets the saved output of some items, or of all, once their saved logs were deleted", async () => {
+    const earlierOutput = vi.fn(async () => [saved("old line")]);
+    const controller = new WorkspaceController({ workspace: createWorkspace(), processManager: createFakeProcessManager(), earlierOutput });
+
+    controller.getItemLogs("svc_backend");
+    controller.getItemLogs("svc_frontend");
+    await flush();
+    expect(controller.getItemLogs("svc_backend")).toHaveLength(2);
+
+    controller.clearEarlierOutput(["svc_backend"]);
+    expect(controller.getItemLogs("svc_backend")).toEqual([]);
+    expect(controller.getItemLogs("svc_frontend")).toHaveLength(2);
+
+    controller.clearEarlierOutput();
+    expect(controller.getItemLogs("svc_frontend")).toEqual([]);
+    // It is not read from the files again by itself.
+    expect(earlierOutput).toHaveBeenCalledTimes(2);
+  });
+
   it("describes an item for the log file: its workspace, name and kind", () => {
     const controller = new WorkspaceController({ workspace: createWorkspace(), processManager: createFakeProcessManager() });
 
