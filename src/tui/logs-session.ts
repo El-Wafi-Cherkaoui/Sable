@@ -1,6 +1,7 @@
 import { mapLogsKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import type { ServiceLogEntry } from "../process/process-manager.js";
+import { needsDates } from "./log-lines.js";
 import {
   bottomScrollOffset,
   clampScrollOffset,
@@ -76,6 +77,7 @@ export function createLogsSession(options: LogsSessionOptions): LogsSession {
       height: getVisibleLineCount(),
       width: Math.max(23, (process.stdout.columns ?? 80) - 1),
       wrap,
+      dated: needsDates(options.getLogs()),
     };
   }
 

@@ -32,3 +32,18 @@ export function formatClockTime(date: Date): string {
     .map((part) => String(part).padStart(2, "0"))
     .join(":");
 }
+
+// "10-12 09:00:00": the clock time with the month and day in front, for lines from another day.
+export function formatDateTime(date: Date): string {
+  const day = [date.getMonth() + 1, date.getDate()].map((part) => String(part).padStart(2, "0")).join("-");
+
+  return `${day} ${formatClockTime(date)}`;
+}
+
+// Whether a log needs dates: it has lines from a day before today. Lines are in time order, so the first one tells.
+export function needsDates(logs: ReadonlyArray<{ timestamp: Date }>, now: Date = new Date()): boolean {
+  const first = logs[0]?.timestamp;
+
+  return first !== undefined
+    && (first.getFullYear() !== now.getFullYear() || first.getMonth() !== now.getMonth() || first.getDate() !== now.getDate());
+}

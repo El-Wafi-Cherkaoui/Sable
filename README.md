@@ -224,7 +224,7 @@ Turn on **Save logs** in Settings (`,`, then `↑↓` and `Space`) and Sable als
 - Files are in the `logs/` folder of the config directory (shown in the Settings popup), one per item: `logs/<workspace>/api.log`, and `build.command.log` for a command.
 - Each line has its time and stream: `2026-10-13T11:42:01.123Z [stderr] Error: ...`. They are plain text, so `grep`, `tail -f` and sharing work as usual.
 - A file stops growing at 2 MB: it is renamed to `.log.1` (replacing the previous `.log.1`) and a new file starts, so an item uses at most about 4 MB.
-- When you look at an item's logs after restarting Sable, its saved output from the last run appears above the new output, after a line that says so (the last 300 lines).
+- When you look at an item's logs after restarting Sable, its saved output from the last run appears above the new output, after a line that says so (the last 300 lines). When the logs contain lines from an earlier day, every line shows the month and day (`10-12 09:15:00`) so old and new output can be told apart; if everything is from today, only the time is shown.
 - If a file can't be written (disk full, no permission), Sable carries on without saving it.
 
 Sable is not a log shipper or a service manager: this is a local convenience for development. Logs of things you run in production belong to the tool that runs them.

@@ -2,7 +2,7 @@ import type { ServiceLogEntry } from "../process/process-manager.js";
 import { getSelectedItem, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import { formatItemStatus } from "./format.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
-import { formatClockTime } from "./log-lines.js";
+import { formatClockTime, formatDateTime, needsDates } from "./log-lines.js";
 import { clipLines } from "./layout.js";
 import { createTuiStyle, type TuiStyle } from "./style.js";
 import { highlightAnsi, sliceAnsi, truncateAnsi, wrapAnsi } from "./ansi-text.js";
@@ -14,6 +14,8 @@ export type LogsLayout = {
   height: number;
   width: number;
   wrap: boolean;
+  // Lines show "MM-DD HH:MM:SS" instead of just the time, because some are from an earlier day.
+  dated?: boolean;
 };
 
 export type LogsSearch = {
@@ -36,14 +38,21 @@ export type RenderLogsViewOptions = {
   message?: string;
   // Why the item failed and what to do, shown when there is no message or search.
   hint?: string;
+  // What counts as today when deciding whether lines need a date; for tests.
+  now?: Date;
   color?: boolean;
   style?: TuiStyle;
 };
 
 const defaultVisibleLineCount = 20;
 const defaultViewportColumns = 80;
-// Gutter (2) + "HH:MM:SS " (9) + stream mark (2).
+// Gutter (2) + "HH:MM:SS " (9) + stream mark (2); a date "MM-DD " adds 6.
 const prefixWidth = 13;
+const dateWidth = 6;
+
+function prefixWidthOf(layout: LogsLayout): number {
+  return prefixWidth + (layout.dated === true ? dateWidth : 0);
+}
 
 export function renderLogsView(options: RenderLogsViewOptions): string {
   const style = options.style ?? createTuiStyle(options.color ?? false);
@@ -113,8 +122,9 @@ export function errorIndexes(logs: ServiceLogEntry[]): number[] {
 function resolveLayout(options: RenderLogsViewOptions): LogsLayout {
   return {
     height: options.visibleLineCount ?? defaultVisibleLineCount,
-    width: Math.max(prefixWidth + 10, (options.viewportColumns ?? defaultViewportColumns) - 1),
+    width: Math.max(prefixWidth + dateWidth + 10, (options.viewportColumns ?? defaultViewportColumns) - 1),
     wrap: options.wrap === true,
+    dated: needsDates(options.logs, options.now),
   };
 }
 
@@ -176,7 +186,7 @@ function renderEntry(
   color: boolean,
 ): string[] {
   const gutter = highlighted ? "> " : "  ";
-  const time = formatClockTime(entry.timestamp);
+  const time = layout.dated === true ? formatDateTime(entry.timestamp) : formatClockTime(entry.timestamp);
 
   if (entry.stream === "system") {
     const label = `── ${entry.line} · ${time} `;
@@ -184,7 +194,7 @@ function renderEntry(
     return [`${gutter}${style.muted(truncateVisible(`${label}${"─".repeat(Math.max(0, layout.width - 2 - visibleLength(label)))}`, layout.width - 2))}`];
   }
 
-  const contentWidth = layout.width - prefixWidth;
+  const contentWidth = layout.width - prefixWidthOf(layout);
   const mark = entry.stream === "stderr" ? `${style.failed("▌")} ` : "  ";
   // The child's own colors are shown only on plain stdout rows: stderr is painted red as a
   // whole and the highlighted row is painted as selected, and a child reset would undo both.
@@ -205,7 +215,7 @@ function renderEntry(
   }
 
   const chunks = wrapAnsi(text, contentWidth);
-  const indent = " ".repeat(prefixWidth);
+  const indent = " ".repeat(prefixWidthOf(layout));
 
   return chunks.map((chunk, index) => decorate(`${index === 0 ? prefix : indent}${paint(chunk)}`));
 }
@@ -215,7 +225,7 @@ function rowCount(entry: ServiceLogEntry, layout: LogsLayout): number {
     return 1;
   }
 
-  return wrapAnsi(entry.line, layout.width - prefixWidth).length;
+  return wrapAnsi(entry.line, layout.width - prefixWidthOf(layout)).length;
 }
 
 function formatSearchLine(options: RenderLogsViewOptions, style: TuiStyle): string {

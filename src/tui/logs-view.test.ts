@@ -7,9 +7,14 @@ import {
   errorIndexes,
   findMatches,
   nextIndex,
-  renderLogsView,
+  renderLogsView as renderLogsViewAt,
 } from "./logs-view.js";
+import { formatDateTime, needsDates } from "./log-lines.js";
 import { visibleLength } from "./width.js";
+
+// The test lines are all from 2026-01-01, so that is "today" unless a test says otherwise.
+const jan1 = new Date("2026-01-01T12:00:00");
+const renderLogsView = (options: Parameters<typeof renderLogsViewAt>[0]) => renderLogsViewAt({ now: jan1, ...options });
 
 describe("renderLogsView", () => {
   it("renders a one-line header, timestamped lines, an stderr bar, and run dividers", () => {
@@ -249,3 +254,50 @@ function createState() {
 function createLog(stream: ServiceLogEntry["stream"], line: string, time = "10:00:00"): ServiceLogEntry {
   return { stream, line, timestamp: new Date(`2026-01-01T${time}`) };
 }
+
+describe("dates on old lines", () => {
+  const at = (stamp: string, line: string, stream: ServiceLogEntry["stream"] = "stdout"): ServiceLogEntry => ({ stream, line, timestamp: new Date(stamp), });
+  const earlier = at("2026-01-01T23:58:10", "yesterday's output");
+  const later = at("2026-01-02T00:05:30", "today's output");
+  const render = (logs: ServiceLogEntry[], extra: Partial<Parameters<typeof renderLogsViewAt>[0]> = {}) =>
+    renderLogsViewAt({ state: createState(), logs, scrollOffset: 0, visibleLineCount: 6, now: new Date("2026-01-02T09:00:00"), ...extra });
+
+  it("shows the month and day on every line once the log has lines from an earlier day", () => {
+    const lines = render([earlier, later]).split("\n");
+
+    expect(lines).toContain("  01-01 23:58:10   yesterday's output");
+    expect(lines).toContain("  01-02 00:05:30   today's output");
+  });
+
+  it("keeps the plain time while every line is from today", () => {
+    const lines = render([later, at("2026-01-02T00:06:00", "more")]).split("\n");
+
+    expect(lines).toContain("  00:05:30   today's output");
+    expect(lines.join("\n")).not.toContain("01-02");
+  });
+
+  it("dates the run dividers too", () => {
+    const rendered = render([at("2026-01-01T23:58:10", "service started", "system"), later]);
+
+    expect(rendered).toContain("── service started · 01-01 23:58:10 ");
+  });
+
+  it("wraps under the wider text column when dates are shown", () => {
+    const rendered = render([earlier, at("2026-01-02T00:05:30", "x".repeat(60))], { viewportColumns: 40, wrap: true, visibleLineCount: 8 });
+    const rows = rendered.split("\n");
+    const first = rows.findIndex((row) => row.includes("00:05:30"));
+
+    expect(rows[first + 1]?.startsWith(" ".repeat(19))).toBe(true);
+    expect(rows.every((row) => visibleLength(row) <= 40)).toBe(true);
+  });
+
+  it("decides from the oldest line, using the local calendar day", () => {
+    const now = new Date("2026-01-02T09:00:00");
+
+    expect(needsDates([], now)).toBe(false);
+    expect(needsDates([later], now)).toBe(false);
+    expect(needsDates([earlier, later], now)).toBe(true);
+    expect(formatDateTime(new Date("2026-03-04T05:06:07"))).toBe("03-04 05:06:07");
+  });
+});
+
