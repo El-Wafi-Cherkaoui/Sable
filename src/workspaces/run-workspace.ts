@@ -24,6 +24,7 @@ import type { SoundControl } from "../sound/sound-control.js";
 import type { PromptScreen } from "../tui/prompt-view.js";
 import { requireWorkspaceByName } from "./find-workspace.js";
 import { runWorkspaceSavedLogs } from "./saved-logs-flow.js";
+import { runSecretsFlow } from "./secrets-flow.js";
 import { runAddWorkspaceItemFlow, runDeleteItemFlow, runEditItemFlow } from "./service-flows.js";
 
 export type WorkspaceConfigReader = {
@@ -296,6 +297,17 @@ export async function runWorkspaceSession(
           }
 
           return { type: "continue", message: flowResult.message };
+        }),
+      onMissingSecrets: options.store === undefined
+        ? undefined
+        : (context: { itemId: string; background?: string }) => runSecretsFlow({
+          store: options.store!,
+          workspace: options.workspace,
+          itemId: context.itemId,
+          controller,
+          keyInput: options.keyInput,
+          screen: options.promptScreen,
+          background: context.background,
         }),
       onManageSavedLogs: options.logFiles === undefined
         ? undefined

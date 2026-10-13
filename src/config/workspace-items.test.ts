@@ -10,6 +10,7 @@ import {
   findItem,
   findService,
   itemsOfKind,
+  missingSecretsOf,
   moveService,
   removeItem,
   replaceItem,
@@ -100,3 +101,22 @@ describe("findDependencyCycle", () => {
     expect(findDependencyCycle([node("a", "ghost")])).toBeUndefined();
   });
 });
+
+describe("missingSecretsOf", () => {
+  const withEnv = (env: Record<string, string>, secrets?: string[]) => ({ ...service("a"), env, ...(secrets === undefined ? {} : { secrets }) });
+
+  it("lists the secrets that have no value, or an empty one", () => {
+    expect(missingSecretsOf(withEnv({ PORT: "3000", TOKEN: "" }, ["TOKEN", "DATABASE_URL", "PORT"]))).toEqual(["TOKEN", "DATABASE_URL"]);
+  });
+
+  it("finds nothing missing when all have values, when none are marked, or when the user never decided", () => {
+    expect(missingSecretsOf(withEnv({ TOKEN: "abc" }, ["TOKEN"]))).toEqual([]);
+    expect(missingSecretsOf(withEnv({}, []))).toEqual([]);
+    expect(missingSecretsOf(withEnv({}, undefined))).toEqual([]);
+  });
+
+  it("lists a name once", () => {
+    expect(missingSecretsOf(withEnv({}, ["A", "A"]))).toEqual(["A"]);
+  });
+});
+

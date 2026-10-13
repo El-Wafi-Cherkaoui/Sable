@@ -9,7 +9,8 @@ import { renderHelpView, type HelpContext } from "./help-view.js";
 import { createDashboardEventReader } from "./dashboard-events.js";
 import { createLogsSession } from "./logs-session.js";
 import { renderLogsView } from "./logs-view.js";
-import { explainFailure } from "../runtime/failure-hint.js";
+import { missingSecretsOf } from "../config/workspace-items.js";
+import { explainFailure, explainMissingSecrets } from "../runtime/failure-hint.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
 import { shouldUseColor } from "./style.js";
 
@@ -57,6 +58,9 @@ export type RunInteractiveDashboardOptions = {
   onEditService?: () => Promise<DashboardCallbackResult>;
   onDeleteService?: (context: { background?: string }) => Promise<DashboardCallbackResult>;
   onManageSavedLogs?: (context: { background?: string }) => Promise<DashboardCallbackResult>;
+  // Called before an item that needs secret variables is started and some have no value. "ready" means they
+  // are set now and it can start; "cancelled" leaves it stopped, with a message.
+  onMissingSecrets?: (context: { itemId: string; background?: string }) => Promise<{ type: "ready" } | { type: "cancelled"; message: string } | { type: "exit" }>;
   onMoveServiceUp?: () => Promise<DashboardCallbackResult>;
   onMoveServiceDown?: () => Promise<DashboardCallbackResult>;
 };
@@ -220,6 +224,17 @@ export async function runInteractiveDashboard(
           await options.controller.stopSelectedService();
           clearDashboardMessage();
         } else {
+          const secrets = await ensureSecrets();
+
+          if (secrets === "exit") {
+            return { type: "exit" };
+          }
+
+          if (secrets === "cancelled") {
+            renderDashboardFrame();
+            break;
+          }
+
           options.sound?.play("started");
           await options.controller.startSelectedService();
         }
@@ -227,11 +242,22 @@ export async function runInteractiveDashboard(
         schedulePulseClear();
         renderDashboardFrame();
         break;
-      case "restart":
+      case "restart": {
         clearDashboardMessage();
         clearPulse();
         if (isSelectedItemRunning(options.controller.getState())) {
           showBusyMessage("Restarting");
+        }
+
+        const secretsForRestart = await ensureSecrets();
+
+        if (secretsForRestart === "exit") {
+          return { type: "exit" };
+        }
+
+        if (secretsForRestart === "cancelled") {
+          renderDashboardFrame();
+          break;
         }
 
         options.sound?.play("started");
@@ -241,6 +267,7 @@ export async function runInteractiveDashboard(
         schedulePulseClear();
         renderDashboardFrame();
         break;
+      }
       case "startAll": {
         clearPulse();
 
@@ -400,7 +427,7 @@ export async function runInteractiveDashboard(
     lastScreenContents = renderLogs({
       ...view,
       state,
-      hint: explainFailure(getSelectedItem(state), view.logs),
+      hint: explainMissingSecrets(getSelectedItem(state)) ?? explainFailure(getSelectedItem(state), view.logs),
       color,
     });
     renderFrame(screen, lastScreenContents);
@@ -440,7 +467,7 @@ export async function runInteractiveDashboard(
       statusMessage: dashboardMessage,
       pulseItemIndex: pulseItem,
       selectedServiceLogs,
-      failureHint: explainFailure(getSelectedItem(state), selectedServiceLogs),
+      failureHint: explainMissingSecrets(getSelectedItem(state)) ?? explainFailure(getSelectedItem(state), selectedServiceLogs),
       columns: process.stdout.columns,
       rows: process.stdout.rows,
       color,
@@ -475,6 +502,29 @@ export async function runInteractiveDashboard(
     }
 
     return process.stdout.columns !== undefined && process.stdout.columns >= 100;
+  }
+
+  // Before starting the selected item: if it needs secret variables that have no value, ask for them first.
+  async function ensureSecrets(): Promise<"ready" | "cancelled" | "exit"> {
+    const selected = getSelectedItem(options.controller.getState());
+
+    if (selected === undefined || missingSecretsOf(selected.item).length === 0) {
+      return "ready";
+    }
+
+    if (options.onMissingSecrets === undefined) {
+      dashboardMessage = `"${selected.item.name}" needs ${missingSecretsOf(selected.item).join(", ")}.`;
+
+      return "cancelled";
+    }
+
+    const outcome = await options.onMissingSecrets({ itemId: selected.item.id, background: lastScreenContents });
+
+    if (outcome.type === "cancelled") {
+      dashboardMessage = outcome.message;
+    }
+
+    return outcome.type;
   }
 
   // Stopping can take a few seconds while the loop waits, so say what is happening first.

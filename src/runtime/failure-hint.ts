@@ -1,8 +1,22 @@
 import type { ServiceLogEntry } from "../process/process-manager.js";
+import { missingSecretsOf } from "../config/workspace-items.js";
 import type { RuntimeItemState } from "./runtime-state.js";
 
 const recentLines = 80;
 const keepLocal = "only for you";
+
+// Said before anything is tried: the item cannot start until the user gives it these secret variables.
+export function explainMissingSecrets(itemState: RuntimeItemState | undefined): string | undefined {
+  if (itemState === undefined || itemState.process.status === "running") {
+    return undefined;
+  }
+
+  const missing = missingSecretsOf(itemState.item);
+
+  return missing.length === 0
+    ? undefined
+    : `Needs ${missing.join(", ")} on this machine (kept out of sable.json). Press ${itemState.item.kind === "command" ? "r" : "s"} to set ${missing.length === 1 ? "it" : "them"}.`;
+}
 
 // A short, plain explanation for an item that came from a project's sable.json and has failed here,
 // with what to do about it. Such an item was written for someone else's machine, so a failure is

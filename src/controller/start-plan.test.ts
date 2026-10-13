@@ -21,6 +21,7 @@ function simulate(
     events?: (time: number, set: (id: string, state: ManagedProcessState) => void) => void;
     initial?: Record<string, ManagedProcessState>;
     dropped?: Set<string>;
+    blocked?: Record<string, string>;
   } = {},
 ) {
   let time = 0;
@@ -42,6 +43,7 @@ function simulate(
       markHistory.push([id, mark]);
     },
     isDropped: (id) => options.dropped?.has(id) ?? false,
+    blockedReason: (id) => options.blocked?.[id],
     upAfterMs: 5000,
     pollMs: 1000,
     now: () => time,
@@ -184,6 +186,16 @@ describe("runStartPlan", () => {
     expect(run.started).toEqual([["db", 0]]);
     expect(run.marks.get("api")).toBeUndefined();
     expect(run.marks.get("web")).toEqual({ status: "skipped", reason: "api was stopped" });
+  });
+
+  it("skips an item that cannot be started, saying why, and what waits for it, but not the rest", async () => {
+    const run = simulate([service("db"), service("api", "db"), service("web", "api"), service("other")], ["web", "other"], { blocked: { api: "needs STRIPE_KEY" } });
+
+    await run.plan.done;
+
+    expect(run.started.map(([id]) => id).sort()).toEqual(["db", "other"]);
+    expect(run.marks.get("api")).toEqual({ status: "skipped", reason: "needs STRIPE_KEY" });
+    expect(run.marks.get("web")).toEqual({ status: "skipped", reason: "api was skipped" });
   });
 
   it("clears an old skipped mark when the plan begins", async () => {

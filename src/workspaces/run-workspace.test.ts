@@ -29,6 +29,7 @@ describe("runWorkspaceCommand", () => {
       onAddService: expect.any(Function),
       onEditService: expect.any(Function),
       onDeleteService: expect.any(Function),
+      onMissingSecrets: expect.any(Function),
       onMoveServiceUp: expect.any(Function),
       onMoveServiceDown: expect.any(Function),
     });

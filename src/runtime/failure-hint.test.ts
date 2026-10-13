@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
-import { explainFailure } from "./failure-hint.js";
+import { explainFailure, explainMissingSecrets } from "./failure-hint.js";
 import type { RuntimeItemState } from "./runtime-state.js";
 
 const log = (line: string, stream: ServiceLogEntry["stream"] = "stderr"): ServiceLogEntry => ({ stream, line, timestamp: new Date(0) });
@@ -66,3 +66,29 @@ describe("explainFailure", () => {
     expect(explainFailure(stateOf({ status: "failed", error: new Error("spawn EACCES") }), [])).toContain("From sable.json");
   });
 });
+
+describe("explainMissingSecrets", () => {
+  const needing = (secrets: string[], env: Record<string, string>, kind: "service" | "command" = "service", process: ManagedProcessState = { status: "stopped" }): RuntimeItemState => ({
+    item: kind === "service"
+      ? { kind, id: "i", name: "api", command: "x", cwd: "/x", autoStart: true, env, after: [], secrets }
+      : { kind, id: "i", name: "api", command: "x", cwd: "/x", env, after: [], secrets },
+    process,
+  });
+
+  it("says which secrets are missing and which key sets them", () => {
+    expect(explainMissingSecrets(needing(["STRIPE_KEY", "DATABASE_URL"], {}))).toBe("Needs STRIPE_KEY, DATABASE_URL on this machine (kept out of sable.json). Press s to set them.");
+    expect(explainMissingSecrets(needing(["TOKEN"], {}, "command"))).toBe("Needs TOKEN on this machine (kept out of sable.json). Press r to set it.");
+  });
+
+  it("says nothing when all have values, nothing is marked, or the item is already running", () => {
+    expect(explainMissingSecrets(needing(["TOKEN"], { TOKEN: "abc" }))).toBeUndefined();
+    expect(explainMissingSecrets(needing([], {}))).toBeUndefined();
+    expect(explainMissingSecrets(needing(["TOKEN"], {}, "service", { status: "running", pid: 1 }))).toBeUndefined();
+    expect(explainMissingSecrets(undefined)).toBeUndefined();
+  });
+
+  it("applies to every item that names a secret, not only ones from a sable.json", () => {
+    expect(explainMissingSecrets(needing(["TOKEN"], {}))).toContain("Needs TOKEN");
+  });
+});
+
