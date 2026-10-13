@@ -13,18 +13,15 @@ export type ProjectExport = {
   notes: string[];
   // The name each item has in the file, by item id.
   names: Map<string, string>;
-  // This machine's real values for the placeholders that stand in for secrets.
-  values: Record<string, string>;
 };
 
 // Builds the sable.json that would give a teammate this workspace: folders relative to the project,
-// items linked by name, and a placeholder instead of any value that looks like a secret.
+// items linked by name, and no value for any variable marked secret (the file only names them).
+// An item whose secrets the user never reviewed falls back to guessing from the variable names.
 export function buildProjectFile(workspace: WorkspaceConfig, homeDirectory: string = os.homedir()): ProjectExport {
   const notes: string[] = [];
   const names = new Map<string, string>();
   const used = new Set<string>();
-  const placeholders: Record<string, { description: string }> = {};
-  const values: Record<string, string> = {};
 
   for (const item of workspace.items) {
     let name = item.name;
@@ -40,22 +37,10 @@ export function buildProjectFile(workspace: WorkspaceConfig, homeDirectory: stri
 
   const items = workspace.items.map((item) => {
     const name = names.get(item.id)!;
-    const env: Record<string, string> = {};
+    const secrets = secretsOf(item, name, notes);
+    const env = Object.fromEntries(Object.entries(item.env).filter(([key]) => !secrets.includes(key)));
 
-    for (const [key, value] of Object.entries(item.env)) {
-      if (secretName.test(key)) {
-        const placeholder = uniquePlaceholder(`${name}_${key}`, placeholders);
-
-        placeholders[placeholder] = { description: `${key} for ${name}. Kept on each machine, not in this file.` };
-        values[placeholder] = value;
-        env[key] = `{{${placeholder}}}`;
-        notes.push(`${name}: the value of ${key} looks like a secret, so the file asks each person for it instead.`);
-      } else {
-        env[key] = value;
-      }
-    }
-
-    for (const text of [item.command, ...Object.values(item.env)]) {
+    for (const text of [item.command, ...Object.values(env)]) {
       if (mentionsLocalPath(text, workspace.projectDirectory, homeDirectory)) {
         notes.push(`${name}: its command or variables mention a folder on this machine (${shorten(text)}). Check it works for others.`);
         break;
@@ -73,13 +58,13 @@ export function buildProjectFile(workspace: WorkspaceConfig, homeDirectory: stri
       ...(item.kind === "service" && !item.autoStart ? { autoStart: false } : {}),
       ...(waits.length > 0 ? { after: waits } : {}),
       ...(Object.keys(env).length > 0 ? { env } : {}),
+      ...(secrets.length > 0 ? { secrets } : {}),
     };
   });
 
   const file = {
     version: 1,
     name: workspace.name,
-    ...(Object.keys(placeholders).length > 0 ? { placeholders } : {}),
     items,
   };
   const text = `${compactStringLists(JSON.stringify(file, null, 2))}\n`;
@@ -90,7 +75,33 @@ export function buildProjectFile(workspace: WorkspaceConfig, homeDirectory: stri
     throw new Error(`The exported file would not be valid. ${check.type === "invalid" ? check.message : ""}`);
   }
 
-  return { text, notes: [...new Set(notes)], names, values };
+  return { text, notes: [...new Set(notes)], names };
+}
+
+// The variables of an item to keep out of the file: the ones the user marked, or, for an item they never
+// reviewed, the ones whose names look like secrets. Marked ones are named even when they have no value yet.
+function secretsOf(item: ItemConfig, name: string, notes: string[]): string[] {
+  if (item.secrets === undefined) {
+    const guessed = Object.keys(item.env).filter((key) => secretName.test(key));
+
+    for (const key of guessed) {
+      notes.push(`${name}: ${key} looks like a secret, so its value is not written; teammates are asked for it. Open the item with e to decide yourself.`);
+    }
+
+    return guessed;
+  }
+
+  for (const key of item.secrets) {
+    notes.push(`${name}: ${key} is marked secret, so its value is not written; teammates are asked for it.`);
+  }
+
+  for (const key of Object.keys(item.env)) {
+    if (!item.secrets.includes(key) && secretName.test(key)) {
+      notes.push(`${name}: ${key} looks like a secret but is not marked as one, so its value IS written to the file. Mark it with e if it should stay private.`);
+    }
+  }
+
+  return [...new Set(item.secrets)];
 }
 
 // Keeps a short list of strings, like "after", on one line so the file stays easy to read in a diff.
@@ -124,22 +135,6 @@ function folderOf(item: ItemConfig, projectDirectory: string, notes: string[], n
   }
 
   return relative;
-}
-
-function uniquePlaceholder(raw: string, existing: Record<string, unknown>): string {
-  let base = raw.toUpperCase().replace(/[^A-Z0-9_]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
-
-  if (!/^[A-Z]/.test(base)) {
-    base = `X_${base}`;
-  }
-
-  let candidate = base;
-
-  for (let suffix = 2; existing[candidate] !== undefined; suffix += 1) {
-    candidate = `${base}_${suffix}`;
-  }
-
-  return candidate;
 }
 
 function mentionsLocalPath(text: string, projectDirectory: string, homeDirectory: string): boolean {

@@ -342,9 +342,10 @@ describe("runExportProjectFlow", () => {
     const linked = store.saved!.workspaces[0]!;
 
     expect(linked.items.map((item) => item.fromProject)).toEqual(["db", "api", "build"]);
-    expect(linked.project?.values).toEqual({ API_API_TOKEN: "s3cret" });
-    expect(linked.project?.base.api?.env).toEqual({ PORT: "3000", API_TOKEN: "s3cret" });
-    expect(linked.items[1]?.env).toEqual({ PORT: "3000", API_TOKEN: "s3cret" });
+    expect(linked.project?.values).toEqual({});
+    // The shared file knows the variable by name only; this machine keeps the value.
+    expect(linked.project?.base.api).toMatchObject({ env: { PORT: "3000" }, secrets: ["API_TOKEN"] });
+    expect(linked.items[1]).toMatchObject({ env: { PORT: "3000", API_TOKEN: "s3cret" }, secrets: ["API_TOKEN"] });
   });
 
   it("is already up to date right after writing, and picks up a teammate's change later", async () => {
@@ -405,13 +406,18 @@ describe("runExportProjectFlow", () => {
     await runExportProjectFlow({ store: storeWith(workspace), workspace, keyInput: noKeys(), review: reviewing("confirm") });
 
     const teammate = createStore();
-    const form = answering({ name: "mine", "value.API_API_TOKEN": "their-token" });
+    const form = answering({});
+    const review = reviewing("confirm");
 
-    await runImportProjectFlow({ store: teammate, keyInput: noKeys(), directory, review: reviewing("confirm"), form, generateId });
+    await runImportProjectFlow({ store: teammate, keyInput: noKeys(), directory, review, form, generateId });
 
     const items = teammate.saved!.workspaces[0]!.items;
 
+    expect(form).not.toHaveBeenCalled();
+    expect(reviewText(review)).toContain("secret API_TOKEN  (you are asked for it when it first runs)");
     expect(items.map((item) => [item.kind, item.name, item.command])).toEqual(workspace.items.map((item) => [item.kind, item.name, item.command]));
-    expect(items[1]).toMatchObject({ env: { PORT: "3000", API_TOKEN: "their-token" }, after: [items[0]!.id] });
+    // The teammate gets everything except the secret's value, which they supply when it first runs.
+    expect(items[1]).toMatchObject({ env: { PORT: "3000" }, secrets: ["API_TOKEN"], after: [items[0]!.id] });
+    expect(JSON.stringify(teammate.saved)).not.toContain("s3cret");
   });
 });

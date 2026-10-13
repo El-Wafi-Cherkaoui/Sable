@@ -13,6 +13,9 @@ const itemFields = {
   after: z.array(z.string().trim().min(1, "An id in \"after\" can't be empty.")).default([]),
   // The name of the matching item in the project's sable.json, for items that came from it.
   fromProject: z.string().trim().min(1).optional(),
+  // Names of environment variables whose values must stay on this machine and out of any shared sable.json.
+  // Missing means the user never decided, which is not the same as deciding that none are secret.
+  secrets: z.array(z.string().trim().min(1)).optional(),
 };
 
 export const serviceConfigSchema = z.object({
@@ -37,6 +40,7 @@ export const projectBaseItemSchema = z.object({
   env: z.record(z.string(), z.string()),
   autoStart: z.boolean().optional(),
   after: z.array(z.string()),
+  secrets: z.array(z.string()).default([]),
 });
 
 export const workspaceProjectSchema = z.object({

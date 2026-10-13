@@ -20,6 +20,8 @@ const projectItemSchema = z
     autoStart: z.boolean().optional(),
     after: z.array(z.string().trim().min(1)).default([]),
     env: z.record(z.string(), z.string()).default({}),
+    // Variables each person sets for themselves: the file names them but never holds a value.
+    secrets: z.array(z.string().trim().min(1)).default([]),
   })
   .strict();
 
@@ -82,6 +84,22 @@ const projectFileSchema = z
         if (!envKey.test(key)) {
           context.addIssue({ code: "custom", message: `"${key}" is not a valid environment variable name.`, path: at("env", key) });
         }
+      }
+
+      const seenSecrets = new Set<string>();
+
+      for (const [secretIndex, key] of item.secrets.entries()) {
+        const where = at("secrets", secretIndex);
+
+        if (!envKey.test(key)) {
+          context.addIssue({ code: "custom", message: `"${key}" is not a valid environment variable name.`, path: where });
+        } else if (seenSecrets.has(key)) {
+          context.addIssue({ code: "custom", message: `"${key}" is listed twice.`, path: where });
+        } else if (item.env[key] !== undefined) {
+          context.addIssue({ code: "custom", message: `"${key}" is a secret, so it can't have a value in "env". Remove the value from the file.`, path: where });
+        }
+
+        seenSecrets.add(key);
       }
 
       const used = [
