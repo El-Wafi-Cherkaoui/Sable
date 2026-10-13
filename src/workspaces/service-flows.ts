@@ -42,6 +42,9 @@ export type DeleteCommandFlowOptions = ServiceFlowOptions & {
 };
 
 type ItemKind = "service" | "command";
+type WorkspaceItem = ServiceConfig | CommandConfig;
+
+const idPrefixes = { service: "svc", command: "cmd" } as const;
 
 export async function runAddWorkspaceItemFlow(
   options: ServiceFlowOptions,
@@ -68,84 +71,62 @@ export async function runAddWorkspaceItemFlow(
 
   const kind = kindOf(result.values);
   const generateId = options.generateId ?? generateShortId;
+  const item = itemFromValues(kind, generateId(idPrefixes[kind]), result.values, workspace);
 
-  if (kind === "service") {
-    const service: ServiceConfig = { id: generateId("svc"), ...serviceFromValues(result.values, workspace) };
+  await options.store.save(updateWorkspace(config, workspace.id, withItems(workspace, kind, [...itemsOf(workspace, kind), item])));
 
-    await options.store.save(updateWorkspace(config, workspace.id, { ...workspace, services: [...workspace.services, service] }));
-
-    return { type: "completed", message: `Added service "${service.name}".`, serviceId: service.id };
-  }
-
-  const command: CommandConfig = { id: generateId("cmd"), ...commandFromValues(result.values, workspace) };
-
-  await options.store.save(updateWorkspace(config, workspace.id, { ...workspace, commands: [...workspace.commands, command] }));
-
-  return { type: "completed", message: `Added command "${command.name}".`, commandId: command.id };
+  return completed(kind, item.id, `Added ${kind} "${item.name}".`);
 }
 
 export async function runEditServiceFlow(
   options: ServiceFlowOptions,
 ): Promise<ServiceFlowResult> {
-  const config = await options.store.load();
-  const workspace = findWorkspace(config, options.workspace.id);
-  const service = workspace?.services.find((candidate) => candidate.id === options.serviceId);
-
-  if (workspace === undefined || service === undefined) {
-    return { type: "back", message: "That service no longer exists." };
-  }
-
-  const result = await (options.form ?? runForm)({
-    title: `Edit service "${service.name}"`,
-    subtitle: workspace.name,
-    fields: () => itemFields("service", workspace, false, knownCommands(config, workspace)),
-    values: {
-      name: service.name,
-      command: service.command,
-      cwd: toDirectoryValue(service.cwd, workspace.projectDirectory),
-      autoStart: service.autoStart,
-      env: envToList(service.env),
-    },
-    validate: (values) => validateItem("service", values, workspace, service.id, options.directoryExists ?? defaultDirectoryExists),
-    keyInput: options.keyInput,
-    screen: options.screen,
-  });
-
-  if (result.type === "back") return { type: "back", message: "Edit cancelled." };
-  if (result.type === "exit") return { type: "exit" };
-
-  const nextService: ServiceConfig = { id: service.id, ...serviceFromValues(result.values, workspace) };
-
-  await options.store.save(updateWorkspace(config, workspace.id, {
-    ...workspace,
-    services: workspace.services.map((candidate) => candidate.id === service.id ? nextService : candidate),
-  }));
-
-  return { type: "completed", message: `Saved service "${nextService.name}".`, serviceId: nextService.id };
+  return runEditItemFlow("service", options, options.serviceId);
 }
 
 export async function runEditCommandFlow(
   options: ServiceFlowOptions,
 ): Promise<ServiceFlowResult> {
+  return runEditItemFlow("command", options, options.commandId);
+}
+
+export async function runDeleteCommandFlow(
+  options: DeleteCommandFlowOptions,
+): Promise<ServiceFlowResult> {
+  return runDeleteItemFlow("command", options, options.commandId);
+}
+
+export async function runDeleteServiceFlow(
+  options: DeleteServiceFlowOptions,
+): Promise<ServiceFlowResult> {
+  return runDeleteItemFlow("service", options, options.serviceId);
+}
+
+async function runEditItemFlow(
+  kind: ItemKind,
+  options: ServiceFlowOptions,
+  itemId: string | undefined,
+): Promise<ServiceFlowResult> {
   const config = await options.store.load();
   const workspace = findWorkspace(config, options.workspace.id);
-  const command = workspace?.commands.find((candidate) => candidate.id === options.commandId);
+  const item = workspace === undefined ? undefined : itemsOf(workspace, kind).find((candidate) => candidate.id === itemId);
 
-  if (workspace === undefined || command === undefined) {
-    return { type: "back", message: "That command no longer exists." };
+  if (workspace === undefined || item === undefined) {
+    return { type: "back", message: `That ${kind} no longer exists.` };
   }
 
   const result = await (options.form ?? runForm)({
-    title: `Edit command "${command.name}"`,
+    title: `Edit ${kind} "${item.name}"`,
     subtitle: workspace.name,
-    fields: () => itemFields("command", workspace, false, knownCommands(config, workspace)),
+    fields: () => itemFields(kind, workspace, false, knownCommands(config, workspace)),
     values: {
-      name: command.name,
-      command: command.command,
-      cwd: toDirectoryValue(command.cwd, workspace.projectDirectory),
-      env: envToList(command.env),
+      name: item.name,
+      command: item.command,
+      cwd: toDirectoryValue(item.cwd, workspace.projectDirectory),
+      ...("autoStart" in item && typeof item.autoStart === "boolean" ? { autoStart: item.autoStart } : {}),
+      env: envToList(item.env),
     },
-    validate: (values) => validateItem("command", values, workspace, command.id, options.directoryExists ?? defaultDirectoryExists),
+    validate: (values) => validateItem(kind, values, workspace, item.id, options.directoryExists ?? defaultDirectoryExists),
     keyInput: options.keyInput,
     screen: options.screen,
   });
@@ -153,18 +134,21 @@ export async function runEditCommandFlow(
   if (result.type === "back") return { type: "back", message: "Edit cancelled." };
   if (result.type === "exit") return { type: "exit" };
 
-  const nextCommand: CommandConfig = { id: command.id, ...commandFromValues(result.values, workspace) };
+  const nextItem = itemFromValues(kind, item.id, result.values, workspace);
 
-  await options.store.save(updateWorkspace(config, workspace.id, {
-    ...workspace,
-    commands: workspace.commands.map((candidate) => candidate.id === command.id ? nextCommand : candidate),
-  }));
+  await options.store.save(updateWorkspace(config, workspace.id, withItems(
+    workspace,
+    kind,
+    itemsOf(workspace, kind).map((candidate) => candidate.id === item.id ? nextItem : candidate),
+  )));
 
-  return { type: "completed", message: `Saved command "${nextCommand.name}".`, commandId: nextCommand.id };
+  return completed(kind, nextItem.id, `Saved ${kind} "${nextItem.name}".`);
 }
 
-export async function runDeleteCommandFlow(
-  options: DeleteCommandFlowOptions,
+async function runDeleteItemFlow(
+  kind: ItemKind,
+  options: ServiceFlowOptions,
+  itemId: string,
 ): Promise<ServiceFlowResult> {
   const config = await options.store.load();
   const workspace = findWorkspace(config, options.workspace.id);
@@ -173,88 +157,57 @@ export async function runDeleteCommandFlow(
     return { type: "back", message: `Workspace "${options.workspace.name}" was not found.` };
   }
 
-  const command = workspace.commands.find((candidate) => candidate.id === options.commandId);
+  const item = itemsOf(workspace, kind).find((candidate) => candidate.id === itemId);
 
-  if (command === undefined) {
+  if (item === undefined) {
     return { type: "back", message: "Delete cancelled." };
   }
 
   const confirmation = await (options.deleteDialog ?? runDeleteDialog)({
-    title: "Delete command",
+    title: `Delete ${kind}`,
     explanation: [
-      `This removes the command "${command.name}" from "${workspace.name}".`,
+      `This removes the ${kind} "${item.name}" from "${workspace.name}".`,
       "Your project files stay untouched.",
     ],
-    name: command.name,
+    name: item.name,
     keyInput: options.keyInput,
     screen: options.screen,
     background: options.background,
   });
 
   if (confirmation === "back") {
-    return { type: "back", message: "Delete command cancelled." };
+    return { type: "back", message: `Delete ${kind} cancelled.` };
   }
   if (confirmation === "exit") {
     return { type: "exit" };
   }
 
-  await options.store.save(updateWorkspace(config, workspace.id, {
-    ...workspace,
-    commands: workspace.commands.filter((candidate) => candidate.id !== command.id),
-  }));
+  await options.store.save(updateWorkspace(config, workspace.id, withItems(
+    workspace,
+    kind,
+    itemsOf(workspace, kind).filter((candidate) => candidate.id !== item.id),
+  )));
 
   return {
     type: "completed",
-    message: `Deleted command "${command.name}" from workspace "${workspace.name}".`,
-    removedCommandId: command.id,
+    message: `Deleted ${kind} "${item.name}" from workspace "${workspace.name}".`,
+    ...(kind === "service" ? { removedServiceId: item.id } : { removedCommandId: item.id }),
   };
 }
 
-export async function runDeleteServiceFlow(
-  options: DeleteServiceFlowOptions,
-): Promise<ServiceFlowResult> {
-  const config = await options.store.load();
-  const workspace = findWorkspace(config, options.workspace.id);
+function completed(kind: ItemKind, id: string, message: string): ServiceFlowResult {
+  return { type: "completed", message, ...(kind === "service" ? { serviceId: id } : { commandId: id }) };
+}
 
-  if (workspace === undefined) {
-    return { type: "back", message: `Workspace "${options.workspace.name}" was not found.` };
-  }
+function itemsOf(workspace: WorkspaceConfig, kind: ItemKind): WorkspaceItem[] {
+  return kind === "service" ? workspace.services : workspace.commands;
+}
 
-  const service = workspace.services.find((candidate) => candidate.id === options.serviceId);
-
-  if (service === undefined) {
-    return { type: "back", message: "Delete cancelled." };
-  }
-
-  const confirmation = await (options.deleteDialog ?? runDeleteDialog)({
-    title: "Delete service",
-    explanation: [
-      `This removes the service "${service.name}" from "${workspace.name}".`,
-      "Your project files stay untouched.",
-    ],
-    name: service.name,
-    keyInput: options.keyInput,
-    screen: options.screen,
-    background: options.background,
-  });
-
-  if (confirmation === "back") {
-    return { type: "back", message: "Delete service cancelled." };
-  }
-  if (confirmation === "exit") {
-    return { type: "exit" };
-  }
-
-  await options.store.save(updateWorkspace(config, workspace.id, {
-    ...workspace,
-    services: workspace.services.filter((candidate) => candidate.id !== service.id),
-  }));
-
-  return {
-    type: "completed",
-    message: `Deleted service "${service.name}" from workspace "${workspace.name}".`,
-    removedServiceId: service.id,
-  };
+function withItems(workspace: WorkspaceConfig, kind: ItemKind, items: WorkspaceItem[]): WorkspaceConfig {
+  // The items always come from itemsOf(workspace, kind), so they have the right shape for that list.
+  return kind === "service"
+    ? { ...workspace, services: items as ServiceConfig[] }
+    : { ...workspace, commands: items as CommandConfig[] };
 }
 
 // Commands already saved, for suggestions while typing: this workspace's first, then the
@@ -299,7 +252,7 @@ export function validateItem(
 ): FormErrors {
   const errors: FormErrors = {};
   const name = text(values.name);
-  const siblings: Array<{ id: string; name: string }> = kind === "service" ? workspace.services : workspace.commands;
+  const siblings = itemsOf(workspace, kind);
 
   if (name === "") {
     errors.name = "Name is required.";
@@ -334,17 +287,16 @@ export function validateItem(
   return errors;
 }
 
-function serviceFromValues(values: FormValues, workspace: WorkspaceConfig): Omit<ServiceConfig, "id"> {
-  return { ...commandFromValues(values, workspace), autoStart: values.autoStart === true };
-}
-
-function commandFromValues(values: FormValues, workspace: WorkspaceConfig): Omit<CommandConfig, "id"> {
-  return {
+function itemFromValues(kind: ItemKind, id: string, values: FormValues, workspace: WorkspaceConfig): WorkspaceItem {
+  const command: CommandConfig = {
+    id,
     name: text(values.name),
     command: text(values.command),
     cwd: path.resolve(workspace.projectDirectory, text(values.cwd) === "" ? "." : text(values.cwd)),
     env: listToEnv(list(values.env)),
   };
+
+  return kind === "service" ? { ...command, autoStart: values.autoStart === true } : command;
 }
 
 // Shows folders inside the project as relative paths, and anything else as-is.
