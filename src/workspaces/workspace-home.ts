@@ -31,7 +31,11 @@ import {
   type RenameWorkspaceFlowOptions,
   type RenameWorkspaceFlowResult,
 } from "./rename-workspace-flow.js";
+import { upgradeNoticeParagraphs } from "../config/upgrade-notice.js";
+import type { UpgradeNotice } from "../config/config-store.js";
 import type { LogFiles } from "../logs/log-files.js";
+import { runNoticeDialog } from "../tui/notice-dialog.js";
+import { displayPath } from "../tui/format.js";
 import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import { runUpdateDialog } from "../tui/update-dialog.js";
@@ -44,6 +48,8 @@ import { runtimeServices } from "../runtime/runtime-state.js";
 export type WorkspaceHomeConfigStore = {
   load(): Promise<AppConfig>;
   save(config: AppConfig): Promise<void>;
+  // News about an old-format file that was just found; given out once.
+  takeUpgradeNotice?(): UpgradeNotice | undefined;
 };
 
 // How long the welcome screen stays up (any key skips it).
@@ -65,6 +71,7 @@ export type RunWorkspaceHomeOptions = {
   runUpdateProject?: (options: ProjectFlowOptions & { workspace: WorkspaceConfig }) => Promise<ProjectFlowResult>;
   runExportProject?: (options: ProjectFlowOptions & { workspace: WorkspaceConfig }) => Promise<ProjectFlowResult>;
   update?: WorkspaceHomeUpdate;
+  showNotice?: typeof runNoticeDialog;
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
   logFiles?: LogFiles;
@@ -206,7 +213,7 @@ export async function runWorkspaceHome(
         activeRunningServiceCount: activeSession === undefined ? undefined : runtimeServices(activeSession.controller.getState())
           .filter((serviceState) => serviceState.process.status === "running").length,
         startupMomentMs: shouldShowStartupMoment && options.welcomeScreen !== false ? welcomeScreenMs : 0,
-        afterStartup: options.update === undefined || !shouldShowStartupMoment ? undefined : () => showUpdatePopup(options.update!, keyInput, options.screen),
+        afterStartup: shouldShowStartupMoment ? () => showStartupPopups(options, keyInput) : undefined,
         screen: options.screen,
       });
 
@@ -518,6 +525,29 @@ function formatLingeringProcesses(failures: ShutdownFailure[]): string {
   }
 
   return ` Still running: ${failures.map((failure) => failure.name).join(", ")}.`;
+}
+
+// The popups shown once at launch: what changed with the upgrade, then a newer version if there is one.
+async function showStartupPopups(
+  options: RunWorkspaceHomeOptions,
+  keyInput: KeyInput,
+): Promise<"continue" | "update" | "exit"> {
+  const notice = options.store.takeUpgradeNotice?.();
+
+  if (notice !== undefined) {
+    const shown = await (options.showNotice ?? runNoticeDialog)({
+      title: "Your workspaces were upgraded",
+      paragraphs: upgradeNoticeParagraphs(notice, displayPath(notice.backupFile)),
+      keyInput,
+      screen: options.screen,
+    });
+
+    if (shown === "exit") {
+      return "exit";
+    }
+  }
+
+  return options.update === undefined ? "continue" : showUpdatePopup(options.update, keyInput, options.screen);
 }
 
 async function showUpdatePopup(

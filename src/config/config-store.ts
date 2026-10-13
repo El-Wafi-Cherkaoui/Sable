@@ -45,14 +45,32 @@ export type ConfigStoreOptions = {
   directory?: string;
 };
 
+// Set when a version 1 file was found: the user should hear that their workspaces use a new format now.
+export type UpgradeNotice = {
+  // Where the copy of the old file is (or would have been).
+  backupFile: string;
+  // False when the copy could not be made.
+  backedUp: boolean;
+};
+
 export class ConfigStore {
   readonly paths: ConfigPaths;
+  private upgradeNotice: UpgradeNotice | undefined;
   // What this store last read or wrote, so a save can tell what changed in the file
   // since then (another Sable instance) and keep that instead of overwriting it.
   private lastSeen: AppConfig | undefined;
 
   constructor(options: ConfigStoreOptions = {}) {
     this.paths = resolveConfigPaths(options);
+  }
+
+  // The upgrade news, once: the first call after an old file was found returns it, later calls return nothing.
+  takeUpgradeNotice(): UpgradeNotice | undefined {
+    const notice = this.upgradeNotice;
+
+    this.upgradeNotice = undefined;
+
+    return notice;
   }
 
   async load(): Promise<AppConfig> {
@@ -85,7 +103,12 @@ export class ConfigStore {
     }
 
     if (isRecord(parsedConfig) && parsedConfig.version === 1) {
-      await backUpOldConfig(this.paths.file);
+      const outcome = await backUpOldConfig(this.paths.file);
+
+      // "existed" means an earlier run already made the copy and told the user.
+      if (outcome !== "existed") {
+        this.upgradeNotice ??= { backupFile: `${this.paths.file}.bak-0.3`, backedUp: outcome === "created" };
+      }
     }
 
     try {
@@ -218,11 +241,14 @@ function withKind(list: unknown, kind: "service" | "command"): unknown[] {
 }
 
 // Keeps a copy of the version 1 file the first time it is read, so a downgrade stays possible.
-async function backUpOldConfig(filePath: string): Promise<void> {
+async function backUpOldConfig(filePath: string): Promise<"created" | "existed" | "failed"> {
   try {
     await fs.copyFile(filePath, `${filePath}.bak-0.3`, constants.COPYFILE_EXCL);
-  } catch {
-    // Already backed up, or the folder is read-only; the file is still readable either way.
+
+    return "created";
+  } catch (error) {
+    // Already backed up is fine; a read-only folder just means no copy, and the file is still readable.
+    return isNodeError(error) && error.code === "EEXIST" ? "existed" : "failed";
   }
 }
 

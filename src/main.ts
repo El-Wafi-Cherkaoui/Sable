@@ -10,6 +10,7 @@ import {
   formatConfigError,
 } from "./config/config-store.js";
 import { resolveConfigPaths } from "./config/config-path.js";
+import { upgradeNoticeParagraphs } from "./config/upgrade-notice.js";
 import { createLogFiles, type LogFiles } from "./logs/log-files.js";
 import { loadSettingsControl, type SettingsControl } from "./settings/settings-control.js";
 import { product } from "./shared/product.js";
@@ -35,6 +36,29 @@ function logFilesFor(settings: SettingsControl, configDirectory: string): LogFil
     directory: settings.logsDirectory ?? path.join(configDirectory, "logs"),
     isEnabled: () => settings.persistLogs.isEnabled(),
   });
+}
+
+// Every command reads the workspaces file through one of these, so that a file found in the old
+// format is announced once, by whichever command met it first.
+const openedStores: ConfigStore[] = [];
+
+function openStore(): ConfigStore {
+  const store = new ConfigStore();
+
+  openedStores.push(store);
+
+  return store;
+}
+
+// The TUI shows this as a popup; the other commands (and a TUI that closed before showing it) print it.
+function printUpgradeNotices(): void {
+  for (const store of openedStores) {
+    const notice = store.takeUpgradeNotice();
+
+    if (notice !== undefined) {
+      console.error(["", ...upgradeNoticeParagraphs(notice).map((line) => line === "" ? "" : `sable: ${line}`), ""].join("\n"));
+    }
+  }
 }
 
 function handleConfigError(error: unknown): boolean {
@@ -75,7 +99,7 @@ program
 
     try {
       result = await runWorkspaceHome({
-        store: new ConfigStore(),
+        store: openStore(),
         launchDirectory: process.cwd(),
         logFiles,
         sound,
@@ -114,7 +138,7 @@ program
   .action(async (workspaceName: string) => {
     try {
       await runCreateWorkspaceCommand(workspaceName, {
-        store: new ConfigStore(),
+        store: openStore(),
         prompts: { confirm, input },
       });
     } catch (error) {
@@ -147,7 +171,7 @@ program
       settings = await loadSettingsControl(configDirectory);
       logFiles = logFilesFor(settings, configDirectory);
       await runWorkspaceCommand(workspaceName, {
-        store: new ConfigStore(),
+        store: openStore(),
         logFiles,
         sound: settings.sound,
         settings,
@@ -176,7 +200,7 @@ program
   .action(async () => {
     try {
       await runListWorkspacesCommand({
-        store: new ConfigStore(),
+        store: openStore(),
       });
     } catch (error) {
       if (handleConfigError(error)) {
@@ -194,7 +218,7 @@ program
   .action(async (workspaceName: string) => {
     try {
       await runDeleteWorkspaceCommand(workspaceName, {
-        store: new ConfigStore(),
+        store: openStore(),
         prompts: { confirm },
       });
     } catch (error) {
@@ -213,3 +237,4 @@ program
   });
 
 await program.parseAsync();
+printUpgradeNotices();
