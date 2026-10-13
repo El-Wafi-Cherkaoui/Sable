@@ -34,6 +34,8 @@ export type RenderLogsViewOptions = {
   search?: LogsSearch;
   highlightIndex?: number;
   message?: string;
+  // Why the item failed and what to do, shown when there is no message or search.
+  hint?: string;
   color?: boolean;
   style?: TuiStyle;
 };
@@ -224,7 +226,7 @@ function formatSearchLine(options: RenderLogsViewOptions, style: TuiStyle): stri
   const search = options.search;
 
   if (search === undefined) {
-    return "";
+    return options.hint === undefined ? "" : `${style.statusLabel("!")} ${options.hint}`;
   }
 
   if (search.editing) {

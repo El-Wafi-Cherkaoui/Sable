@@ -430,6 +430,38 @@ describe("runInteractiveDashboard", () => {
     expect(controller.startSelectedService).not.toHaveBeenCalled();
   });
 
+  it("passes the reason an item from sable.json failed to the dashboard and to the logs", async () => {
+    const base = createState();
+    const state = {
+      ...base,
+      items: base.items.map((itemState, index) => index === 0
+        ? { ...itemState, item: { ...itemState.item, fromProject: "backend" }, process: { status: "exited" as const, exitCode: 127, signal: null } }
+        : itemState),
+    };
+    const controller = createController(state, () => [{ stream: "stderr", line: "sh: pnpm: not found", timestamp: new Date(0) }]);
+    const dashboardHints: Array<string | undefined> = [];
+    const logHints: Array<string | undefined> = [];
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ name: "return" }, { name: "escape" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: (_state, renderOptions) => {
+        dashboardHints.push(renderOptions?.failureHint);
+
+        return "dashboard";
+      },
+      renderLogs: (logsOptions) => {
+        logHints.push(logsOptions.hint);
+
+        return "logs";
+      },
+    });
+
+    expect(dashboardHints[0]).toContain('"pnpm" isn\'t installed here');
+    expect(logHints[0]).toContain('"pnpm" isn\'t installed here');
+  });
+
   it("stops a running service with s", async () => {
     const baseState = createState();
     const state = {

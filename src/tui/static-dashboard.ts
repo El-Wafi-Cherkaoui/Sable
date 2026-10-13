@@ -17,6 +17,8 @@ export type RenderStaticDashboardOptions = {
   style?: TuiStyle;
   // Index into the state's items of the row to flash.
   pulseItemIndex?: number;
+  // Why the selected item failed and what to do, shown in the status line when there is no message.
+  failureHint?: string;
   selectedServiceLogs?: ServiceLogEntry[];
   columns?: number;
   rows?: number;
@@ -218,6 +220,10 @@ function formatStatusLine(
   const message = options.moving === true
     ? `Moving service "${getSelectedService(state)?.item.name ?? ""}"`
     : options.statusMessage;
+
+  if (message === undefined && options.failureHint !== undefined) {
+    return `${style.statusLabel("!")} ${options.failureHint}`;
+  }
 
   return message === undefined ? "" : `${style.statusLabel("›")} ${message}`;
 }

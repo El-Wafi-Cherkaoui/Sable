@@ -175,6 +175,15 @@ describe("renderLogsView", () => {
 
     expect(lines.at(-2)).toBe("› No errors in this output.");
   });
+
+  it("shows why the item failed when there is no message and no search, and lets those take over", () => {
+    const hint = "A port it needs is already in use here.";
+    const base = { state: createState(), logs: [], scrollOffset: 0, visibleLineCount: 1, hint };
+
+    expect(renderLogsView(base).split("\n").at(-2)).toBe(`! ${hint}`);
+    expect(renderLogsView({ ...base, message: "No errors in this output." }).split("\n").at(-2)).toBe("› No errors in this output.");
+    expect(renderLogsView({ ...base, search: { query: "err", editing: true } }).split("\n").at(-2)).toBe("/err▏");
+  });
 });
 
 describe("log scrolling", () => {
