@@ -34,7 +34,7 @@ describe("runListWorkspacesCommand", () => {
             name: "ecommerce",
             items: [
               {
-                kind: "service",
+                kind: "service", after: [],
                 id: "svc_backend",
                 name: "backend",
                 command: "npm run dev",
@@ -43,7 +43,7 @@ describe("runListWorkspacesCommand", () => {
                 env: {},
               },
               {
-                kind: "service",
+                kind: "service", after: [],
                 id: "svc_frontend",
                 name: "frontend",
                 command: "npm run dev",
@@ -79,7 +79,7 @@ describe("runListWorkspacesCommand", () => {
             name: "api",
             items: [
               {
-                kind: "service",
+                kind: "service", after: [],
                 id: "svc_backend",
                 name: "backend",
                 command: "npm run dev",

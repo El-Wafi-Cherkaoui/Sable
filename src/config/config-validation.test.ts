@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { safeValidateAppConfig } from "./config-schema.js";
 
 const validService = {
-  kind: "service",
+  kind: "service", after: [],
   id: "service-1",
   name: "backend",
   command: "npm run dev",
@@ -12,7 +12,7 @@ const validService = {
 };
 
 const validCommand = {
-  kind: "command",
+  kind: "command", after: [],
   id: "cmd-build",
   name: "build",
   command: "npm run build",
@@ -133,5 +133,38 @@ describe("config validation", () => {
     ]));
 
     expect(result.success).toBe(false);
+  });
+
+  it("defaults after to an empty list and accepts ids of other items", () => {
+    const result = safeValidateAppConfig(configWith([
+      validService,
+      { ...validCommand, after: ["service-1"] },
+    ]));
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.workspaces[0]?.items.map((item) => item.after)).toEqual([[], ["service-1"]]);
+  });
+
+  it("rejects an after id that matches no item", () => {
+    const result = safeValidateAppConfig(configWith([{ ...validService, after: ["ghost"] }]));
+
+    expect(result.success).toBe(false);
+    expect(!result.success && result.error.issues[0]?.message).toBe(
+      '"backend" waits for an item with id "ghost", which isn\'t in workspace "ecommerce".',
+    );
+  });
+
+  it("rejects items that wait for each other in a loop and names them", () => {
+    const result = safeValidateAppConfig(configWith([
+      { ...validService, after: ["cmd-build"] },
+      { ...validCommand, after: ["service-1"] },
+    ]));
+
+    expect(result.success).toBe(false);
+    expect(!result.success && result.error.issues[0]?.message).toBe("Items wait for each other in a loop: backend → build → backend.");
+  });
+
+  it("rejects an item that waits for itself", () => {
+    expect(safeValidateAppConfig(configWith([{ ...validService, after: ["service-1"] }])).success).toBe(false);
   });
 });

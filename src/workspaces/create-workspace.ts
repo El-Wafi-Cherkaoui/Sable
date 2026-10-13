@@ -139,6 +139,7 @@ async function promptForService(
 
   return {
     kind: "service",
+    after: [],
     id: generateId("svc"),
     name: name.trim(),
     command: command.trim(),

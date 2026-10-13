@@ -534,7 +534,7 @@ const workspaceWithService: WorkspaceConfig = {
   ...workspace,
   items: [
     {
-      kind: "service",
+      kind: "service", after: [],
       id: "svc_api",
       name: "api",
       command: "npm run dev",
@@ -555,7 +555,7 @@ const workspaceWithTwoServices: WorkspaceConfig = {
   items: [
     ...workspaceWithService.items,
     {
-      kind: "service",
+      kind: "service", after: [],
       id: "svc_worker",
       name: "worker",
       command: "npm run worker",

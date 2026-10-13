@@ -39,6 +39,7 @@ describe("ConfigStore", () => {
           items: [
             {
               kind: "service" as const,
+              after: [],
               id: "service-1",
               name: "backend",
               command: "npm run dev",
@@ -95,6 +96,7 @@ describe("ConfigStore", () => {
           items: [
             {
               kind: "service",
+              after: [],
               id: "service-1",
               name: "backend",
               command: "npm run dev",
@@ -158,7 +160,7 @@ describe("ConfigStore", () => {
           id: "ws-1",
           name: "shop",
           projectDirectory: "/projects/shop",
-          items: [{ kind: "service", ...service }, { kind: "command", ...command }],
+          items: [{ kind: "service", after: [], ...service }, { kind: "command", after: [], ...command }],
         }],
       });
     });
@@ -171,7 +173,7 @@ describe("ConfigStore", () => {
 
       const config = await store.load();
 
-      expect(config.workspaces[0]?.items).toEqual([{ kind: "service", ...service }]);
+      expect(config.workspaces[0]?.items).toEqual([{ kind: "service", after: [], ...service }]);
     });
 
     it("keeps a copy of the original file and leaves the file itself alone until a save", async () => {
@@ -329,7 +331,7 @@ describe("formatConfigError", () => {
         id,
         name: id,
         projectDirectory: `/projects/${id}`,
-        items: [{ kind: "service" as const, id: `${id}-svc`, name: "app", command, cwd: `/projects/${id}`, autoStart: true, env: {} }],
+        items: [{ kind: "service" as const, after: [], id: `${id}-svc`, name: "app", command, cwd: `/projects/${id}`, autoStart: true, env: {} }],
       };
     }
 

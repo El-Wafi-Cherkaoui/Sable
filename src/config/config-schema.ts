@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { findDependencyCycle } from "./workspace-items.js";
 
 const workspaceNamePattern = /^[A-Za-z0-9_-]+$/;
 
@@ -8,6 +9,8 @@ const itemFields = {
   command: z.string().trim().min(1, "Command is required."),
   cwd: z.string().trim().min(1, "Working directory is required."),
   env: z.record(z.string(), z.string()),
+  // Ids of the items that must be up (a service) or done (a command) before this one starts.
+  after: z.array(z.string().trim().min(1, "An id in \"after\" can't be empty.")).default([]),
 };
 
 export const serviceConfigSchema = z.object({
@@ -64,6 +67,28 @@ export const workspaceConfigSchema = z
       }
 
       seenNames.add(nameKey);
+    }
+
+    for (const [index, item] of workspace.items.entries()) {
+      for (const [afterIndex, afterId] of item.after.entries()) {
+        if (!seenIds.has(afterId)) {
+          context.addIssue({
+            code: "custom",
+            message: `"${item.name}" waits for an item with id "${afterId}", which isn't in workspace "${workspace.name}".`,
+            path: ["items", index, "after", afterIndex],
+          });
+        }
+      }
+    }
+
+    const cycle = findDependencyCycle(workspace.items);
+
+    if (cycle !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: `Items wait for each other in a loop: ${cycle.join(" → ")}.`,
+        path: ["items"],
+      });
     }
   });
 

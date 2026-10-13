@@ -160,7 +160,7 @@ describe("runCreateWorkspaceCommand", () => {
       projectDirectory,
       items: [
         {
-          kind: "service",
+          kind: "service", after: [],
           id: "svc_abcd1234",
           name: "backend",
           command: "npm run dev",

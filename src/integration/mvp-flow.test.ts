@@ -53,7 +53,7 @@ describe("MVP integration flows", () => {
       name: "shop",
       items: [
         {
-          kind: "service",
+          kind: "service", after: [],
           id: "svc_api",
           name: "api",
           cwd: path.join(projectDirectory, "api"),
