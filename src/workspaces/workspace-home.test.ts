@@ -952,6 +952,159 @@ describe("runWorkspaceHome", () => {
   });
 });
 
+describe("runWorkspaceHome with a sable.json", () => {
+  const folder = "/projects/shop";
+  const found = { type: "ok" as const, file: { version: 1 as const, placeholders: {}, items: [] }, hash: "h" };
+  const linkedWorkspace: WorkspaceConfig = {
+    ...workspace,
+    id: "ws_shop",
+    name: "shop",
+    projectDirectory: folder,
+    project: { hash: "old", values: {}, base: {}, removed: [] },
+  };
+
+  function homeOptions(overrides: Record<string, unknown> = {}) {
+    return {
+      keyInput: createKeyInput(),
+      runPicker: vi.fn().mockResolvedValue({ type: "exit" }),
+      runSession: vi.fn(async () => ({ type: "back" as const })),
+      createController: vi.fn(() => createFakeController()),
+      launchDirectory: folder,
+      readProjectFile: vi.fn(async () => found),
+      runImportProject: vi.fn(async () => ({ type: "completed" as const, message: 'Imported "shop" from sable.json: 1 service.', workspaceId: "ws_new" })),
+      runUpdateProject: vi.fn(async () => ({ type: "unchanged" as const })),
+      ...overrides,
+    };
+  }
+
+  it("offers to import a sable.json in the launch folder that has no workspace yet, and selects what was imported", async () => {
+    const options = homeOptions();
+
+    await runWorkspaceHome({ store: createStore(config), ...options });
+
+    expect(options.runImportProject).toHaveBeenCalledWith(expect.objectContaining({ directory: folder }));
+    expect(options.runUpdateProject).not.toHaveBeenCalled();
+    expect(options.runPicker).toHaveBeenCalledWith(expect.objectContaining({
+      statusMessage: 'Imported "shop" from sable.json: 1 service.',
+      selectedWorkspaceId: "ws_new",
+      projectFileHere: true,
+    }));
+  });
+
+  it("does nothing at launch without a sable.json, or when the folder already has a workspace made by hand", async () => {
+    const missing = homeOptions({ readProjectFile: vi.fn(async () => ({ type: "missing" as const })) });
+
+    await runWorkspaceHome({ store: createStore(config), ...missing });
+    expect(missing.runImportProject).not.toHaveBeenCalled();
+    expect(missing.runPicker).toHaveBeenCalledWith(expect.not.objectContaining({ projectFileHere: true }));
+
+    const madeByHand = homeOptions();
+
+    await runWorkspaceHome({ store: createStore({ version: 2, workspaces: [{ ...workspace, projectDirectory: folder }] }), ...madeByHand });
+    expect(madeByHand.runImportProject).not.toHaveBeenCalled();
+    expect(madeByHand.runUpdateProject).not.toHaveBeenCalled();
+  });
+
+  it("checks a workspace that is already linked to the folder for changes instead of importing again", async () => {
+    const options = homeOptions({ runUpdateProject: vi.fn(async () => ({ type: "completed" as const, message: 'Updated "shop" from sable.json: 1 changed.', workspaceId: "ws_shop" })) });
+
+    await runWorkspaceHome({ store: createStore({ version: 2, workspaces: [linkedWorkspace] }), ...options });
+
+    expect(options.runUpdateProject).toHaveBeenCalledWith(expect.objectContaining({ workspace: linkedWorkspace }));
+    expect(options.runImportProject).not.toHaveBeenCalled();
+    expect(options.runPicker).toHaveBeenCalledWith(expect.objectContaining({ statusMessage: 'Updated "shop" from sable.json: 1 changed.', selectedWorkspaceId: "ws_shop" }));
+  });
+
+  it("shows what is wrong with a broken sable.json, and quits when the review is answered with Ctrl+C", async () => {
+    const broken = homeOptions({ readProjectFile: vi.fn(async () => ({ type: "invalid" as const, message: "sable.json has problems:\n  - items.0.command: Every item needs a command." })) });
+
+    await runWorkspaceHome({ store: createStore(config), ...broken });
+    expect(broken.runPicker).toHaveBeenCalledWith(expect.objectContaining({ statusMessage: "sable.json has problems: - items.0.command: Every item needs a command." }));
+
+    const quitting = homeOptions({ runImportProject: vi.fn(async () => ({ type: "exit" as const })) });
+
+    await expect(runWorkspaceHome({ store: createStore(config), ...quitting })).resolves.toEqual({ type: "quit" });
+    expect(quitting.runPicker).not.toHaveBeenCalled();
+  });
+
+  it("imports with the i key from the picker", async () => {
+    const options = homeOptions({
+      runPicker: vi.fn().mockResolvedValueOnce({ type: "importProject" }).mockResolvedValueOnce({ type: "exit" }),
+      readProjectFile: vi.fn(async () => ({ type: "missing" as const })),
+      runImportProject: vi.fn(async () => ({ type: "back" as const, message: "There is no sable.json in /projects/shop." })),
+    });
+
+    await runWorkspaceHome({ store: createStore(config), ...options });
+
+    expect(options.runImportProject).toHaveBeenCalledOnce();
+    expect(options.runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({ statusMessage: "There is no sable.json in /projects/shop." }));
+  });
+
+  it("checks the file again when a linked workspace is opened, and opens the updated workspace with a message", async () => {
+    const updated = { ...linkedWorkspace, items: [{ kind: "command" as const, after: [], id: "cmd_new", name: "seed", command: "npm run seed", cwd: folder, env: {} }] };
+    let stored: AppConfig = { version: 2, workspaces: [linkedWorkspace] };
+    const store = { async load() { return stored; }, async save(next: AppConfig) { stored = next; } };
+    const options = homeOptions({
+      launchDirectory: undefined,
+      runPicker: vi.fn().mockResolvedValueOnce({ type: "run", workspace: linkedWorkspace }).mockResolvedValueOnce({ type: "exit" }),
+      runUpdateProject: vi.fn(async () => {
+        stored = { version: 2, workspaces: [updated] };
+
+        return { type: "completed" as const, message: 'Updated "shop" from sable.json: 1 added.', workspaceId: "ws_shop" };
+      }),
+    });
+
+    await runWorkspaceHome({ store, ...options });
+
+    expect(options.createController).toHaveBeenCalledWith(updated);
+    expect(options.runSession).toHaveBeenCalledWith(expect.objectContaining({ workspace: updated, initialMessage: 'Updated "shop" from sable.json: 1 added.' }));
+  });
+
+  it("opens the old settings when the user says not now, and still opens a workspace whose file has not changed", async () => {
+    const declined = homeOptions({
+      launchDirectory: undefined,
+      runPicker: vi.fn().mockResolvedValueOnce({ type: "run", workspace: linkedWorkspace }).mockResolvedValueOnce({ type: "exit" }),
+      runUpdateProject: vi.fn(async () => ({ type: "back" as const, message: 'Kept "shop" as it was. Open it again to update.' })),
+    });
+
+    await runWorkspaceHome({ store: createStore({ version: 2, workspaces: [linkedWorkspace] }), ...declined });
+    expect(declined.runSession).toHaveBeenCalledWith(expect.objectContaining({ workspace: linkedWorkspace, initialMessage: 'Kept "shop" as it was. Open it again to update.' }));
+
+    const unchanged = homeOptions({
+      launchDirectory: undefined,
+      runPicker: vi.fn().mockResolvedValueOnce({ type: "run", workspace: linkedWorkspace }).mockResolvedValueOnce({ type: "exit" }),
+    });
+
+    await runWorkspaceHome({ store: createStore({ version: 2, workspaces: [linkedWorkspace] }), ...unchanged });
+    expect(unchanged.runSession).toHaveBeenCalledWith(expect.objectContaining({ workspace: linkedWorkspace }));
+  });
+
+  it("does not swap the settings of a workspace that is already running", async () => {
+    const options = homeOptions({
+      launchDirectory: undefined,
+      runPicker: vi.fn()
+        .mockResolvedValueOnce({ type: "run", workspace: linkedWorkspace })
+        .mockResolvedValueOnce({ type: "run", workspace: linkedWorkspace })
+        .mockResolvedValueOnce({ type: "exit" }),
+    });
+
+    await runWorkspaceHome({ store: createStore({ version: 2, workspaces: [linkedWorkspace] }), ...options });
+
+    expect(options.runUpdateProject).toHaveBeenCalledOnce();
+  });
+
+  it("does not check workspaces that did not come from a sable.json", async () => {
+    const options = homeOptions({
+      launchDirectory: undefined,
+      runPicker: vi.fn().mockResolvedValueOnce({ type: "run", workspace }).mockResolvedValueOnce({ type: "exit" }),
+    });
+
+    await runWorkspaceHome({ store: createStore(config), ...options });
+
+    expect(options.runUpdateProject).not.toHaveBeenCalled();
+  });
+});
+
 function createStore(appConfig: AppConfig) {
   return {
     savedConfig: undefined as AppConfig | undefined,

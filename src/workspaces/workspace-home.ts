@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import { TerminalKeyInput, type KeyInput } from "../input/terminal-key-input.js";
 import {
@@ -35,6 +36,8 @@ import type { SoundControl } from "../sound/sound-control.js";
 import { runUpdateDialog } from "../tui/update-dialog.js";
 import { runSuggestServicesFlow, type SuggestServicesFlowOptions, type SuggestServicesFlowResult } from "./suggest-services-flow.js";
 import { servicesOf } from "../config/workspace-items.js";
+import { readProjectFile } from "../project/project-file.js";
+import { runImportProjectFlow, runUpdateProjectFlow, type ProjectFlowOptions, type ProjectFlowResult } from "./project-flows.js";
 import { runtimeServices } from "../runtime/runtime-state.js";
 
 export type WorkspaceHomeConfigStore = {
@@ -54,6 +57,11 @@ export type RunWorkspaceHomeOptions = {
   runDeleteWorkspace?: (options: DeleteWorkspaceFlowOptions) => Promise<DeleteWorkspaceFlowResult>;
   runRenameWorkspace?: (options: RenameWorkspaceFlowOptions) => Promise<RenameWorkspaceFlowResult>;
   runSuggestServices?: (options: SuggestServicesFlowOptions) => Promise<SuggestServicesFlowResult>;
+  // The folder Sable was started in. A sable.json there is offered for import at launch, and the `i` key imports it.
+  launchDirectory?: string;
+  readProjectFile?: typeof readProjectFile;
+  runImportProject?: (options: ProjectFlowOptions & { directory: string }) => Promise<ProjectFlowResult>;
+  runUpdateProject?: (options: ProjectFlowOptions & { workspace: WorkspaceConfig }) => Promise<ProjectFlowResult>;
   update?: WorkspaceHomeUpdate;
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
@@ -90,6 +98,9 @@ export async function runWorkspaceHome(
   const deleteWorkspace = options.runDeleteWorkspace ?? runDeleteWorkspaceFlow;
   const renameWorkspace = options.runRenameWorkspace ?? runRenameWorkspaceFlow;
   const suggestServices = options.runSuggestServices ?? runSuggestServicesFlow;
+  const importProject = options.runImportProject ?? runImportProjectFlow;
+  const updateProject = options.runUpdateProject ?? runUpdateProjectFlow;
+  const probeProjectFile = options.readProjectFile ?? readProjectFile;
   const shutdownAbortController = new AbortController();
   const signalSource = options.signalSource ?? process;
   let statusMessage: string | undefined;
@@ -108,7 +119,67 @@ export async function runWorkspaceHome(
     signalSource.once(signal, abortShutdown);
   }
 
+  const projectFlowOptions = { store: options.store, keyInput, screen: options.screen };
+
+  async function hasProjectFile(directory: string | undefined): Promise<boolean> {
+    return directory !== undefined && (await probeProjectFile(directory)).type !== "missing";
+  }
+
+  // At launch: a sable.json in this folder with no workspace of its own is offered for import, and a
+  // workspace already linked to it is checked for changes. A workspace made by hand for the folder is left alone.
+  async function checkLaunchDirectory(directory: string): Promise<{ type: "exit" } | { type: "done"; message?: string; workspaceId?: string }> {
+    const found = await probeProjectFile(directory);
+
+    if (found.type === "missing") {
+      return { type: "done" };
+    }
+
+    if (found.type === "invalid") {
+      return { type: "done", message: found.message.split("\n").slice(0, 2).join(" ").replace(/\s+/g, " ") };
+    }
+
+    const config = await options.store.load();
+    const here = config.workspaces.filter((workspace) => sameFolder(workspace.projectDirectory, directory));
+    const linked = here.find((workspace) => workspace.project !== undefined);
+
+    if (linked === undefined && here.length > 0) {
+      return { type: "done" };
+    }
+
+    let flowResult: ProjectFlowResult;
+
+    try {
+      flowResult = linked === undefined
+        ? await importProject({ ...projectFlowOptions, directory })
+        : await updateProject({ ...projectFlowOptions, workspace: linked });
+    } catch (error) {
+      return { type: "done", message: configUpdateFailedMessage(error) };
+    }
+
+    if (flowResult.type === "exit") {
+      return { type: "exit" };
+    }
+
+    return {
+      type: "done",
+      ...(flowResult.type === "unchanged" ? {} : { message: flowResult.message }),
+      ...(flowResult.type === "completed" ? { workspaceId: flowResult.workspaceId } : {}),
+    };
+  }
+
+
   try {
+    if (options.launchDirectory !== undefined) {
+      const launch = await checkLaunchDirectory(options.launchDirectory);
+
+      if (launch.type === "exit") {
+        return { type: "quit" };
+      }
+
+      statusMessage = launch.message;
+      selectedWorkspaceId = launch.workspaceId;
+    }
+
     while (!shutdownAbortController.signal.aborted) {
       const config = await options.store.load();
       const opening = workspaceToOpen === undefined
@@ -123,6 +194,7 @@ export async function runWorkspaceHome(
         keyInput,
         sound: options.sound,
         settings: options.settings,
+        projectFileHere: (await hasProjectFile(options.launchDirectory)) || undefined,
         abortSignal: shutdownAbortController.signal,
         statusMessage,
         selectedWorkspaceId,
@@ -191,6 +263,27 @@ export async function runWorkspaceHome(
             message: suggestion.type === "added" ? suggestion.message : `${flowResult.message} Press a to add a service.`,
           };
         }
+
+        continue;
+      }
+
+      if (pickerResult.type === "importProject") {
+        const directory = options.launchDirectory ?? process.cwd();
+        let flowResult: ProjectFlowResult;
+
+        try {
+          flowResult = await importProject({ ...projectFlowOptions, directory });
+        } catch (error) {
+          statusMessage = configUpdateFailedMessage(error);
+          continue;
+        }
+
+        if (flowResult.type === "exit") {
+          return { type: "quit" };
+        }
+
+        statusMessage = flowResult.type === "unchanged" ? "sable.json is already up to date." : flowResult.message;
+        selectedWorkspaceId = flowResult.type === "completed" ? flowResult.workspaceId : undefined;
 
         continue;
       }
@@ -310,23 +403,50 @@ export async function runWorkspaceHome(
         continue;
       }
 
+      let openedWorkspace = pickerResult.workspace;
+      let sessionMessage = openingMessage;
+
+      // A workspace set up from a sable.json is checked against the file every time it is opened,
+      // unless it is already running (its settings are not swapped underneath it).
+      if (openedWorkspace.project !== undefined && activeSession?.workspaceId !== openedWorkspace.id) {
+        let flowResult: ProjectFlowResult;
+
+        try {
+          flowResult = await updateProject({ ...projectFlowOptions, workspace: openedWorkspace });
+        } catch (error) {
+          flowResult = { type: "back", message: configUpdateFailedMessage(error) };
+        }
+
+        if (flowResult.type === "exit") {
+          return { type: "quit" };
+        }
+
+        if (flowResult.type === "completed") {
+          openedWorkspace = (await options.store.load()).workspaces.find((workspace) => workspace.id === openedWorkspace.id) ?? openedWorkspace;
+        }
+
+        if (flowResult.type !== "unchanged") {
+          sessionMessage = flowResult.message;
+        }
+      }
+
       let shouldStartAutoStartServices = false;
 
-      if (activeSession !== undefined && activeSession.workspaceId !== pickerResult.workspace.id) {
+      if (activeSession !== undefined && activeSession.workspaceId !== openedWorkspace.id) {
         shutdownFailures.push(...await activeSession.controller.shutdown());
         activeSession = undefined;
       }
 
       if (activeSession === undefined) {
         activeSession = {
-          workspaceId: pickerResult.workspace.id,
-          controller: createController(pickerResult.workspace),
+          workspaceId: openedWorkspace.id,
+          controller: createController(openedWorkspace),
         };
         shouldStartAutoStartServices = true;
       }
 
       const sessionResult = await runSession({
-        workspace: pickerResult.workspace,
+        workspace: openedWorkspace,
         controller: activeSession.controller,
         keyInput,
         sound: options.sound,
@@ -336,7 +456,7 @@ export async function runWorkspaceHome(
         store: options.store,
         startAutoStartServices: shouldStartAutoStartServices,
         shutdownOnReturn: false,
-        initialMessage: openingMessage,
+        initialMessage: sessionMessage,
       });
 
       statusMessage = undefined;
@@ -359,6 +479,12 @@ export async function runWorkspaceHome(
     keyInput.close();
     reportShutdownFailures(shutdownFailures, options.warn);
   }
+}
+
+function sameFolder(left: string, right: string): boolean {
+  const normalize = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
+
+  return normalize(left) === normalize(right);
 }
 
 function formatLingeringProcesses(failures: ShutdownFailure[]): string {

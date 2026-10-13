@@ -24,11 +24,14 @@ export type WorkspacePickerState = {
   activeRunningServiceCount?: number;
   // Shows the settings key in the footer.
   settingsAvailable?: boolean;
+  // The folder Sable was started in has a sable.json, so the import key is worth showing.
+  projectFileHere?: boolean;
 };
 
 export type WorkspacePickerResult =
   | { type: "run"; workspace: WorkspaceConfig }
   | { type: "createWorkspace" }
+  | { type: "importProject" }
   | { type: "deleteWorkspace"; workspace: WorkspaceConfig; background?: string }
   | { type: "renameWorkspace"; workspace: WorkspaceConfig }
   | { type: "stopActiveWorkspace"; workspace: WorkspaceConfig }
@@ -78,6 +81,7 @@ export type RunWorkspacePickerOptions = {
   // Runs once at launch, after the startup logo if there is one and before the list appears (e.g. the update popup).
   sound?: SoundControl;
   settings?: SettingsControl;
+  projectFileHere?: boolean;
   runSettings?: typeof runSettingsDialog;
   afterStartup?: () => Promise<"continue" | "update" | "exit">;
 };
@@ -114,6 +118,7 @@ export async function runWorkspacePicker(
     ),
     activeRunningServiceCount: options.activeRunningServiceCount,
     settingsAvailable: options.settings !== undefined,
+    projectFileHere: options.projectFileHere,
   };
   let mode: PickerMode = "picker";
   let stateBeforeMove: WorkspacePickerState | undefined;
@@ -229,6 +234,8 @@ export async function runWorkspacePicker(
       }
       case "createWorkspace":
         return { type: "createWorkspace" };
+      case "importProject":
+        return { type: "importProject" };
       case "deleteWorkspace": {
         const workspace = getSelectedWorkspace(state);
 
@@ -701,7 +708,15 @@ function baseKeyHints(state: WorkspacePickerState): KeyHint[] {
     return [["↑↓", "select"], ["Enter", "open"], ["s", "stop"], ["r", "restart"], ["?", "help"], ["q", "quit"]];
   }
 
-  return [["↑↓", "select"], ["Enter", "open"], ["a", "add"], ["e", "rename"], ["?", "help"], ["q", "quit"]];
+  return [
+    ["↑↓", "select"],
+    ["Enter", "open"],
+    ["a", "add"],
+    ...(state.projectFileHere === true ? [["i", "import sable.json"] as KeyHint] : []),
+    ["e", "rename"],
+    ["?", "help"],
+    ["q", "quit"],
+  ];
 }
 
 function formatPickerStatusLine(
@@ -725,6 +740,7 @@ export function renderWorkspacePickerHelp(options: HelpViewOptions = {}): string
       heading: "Workspaces",
       rows: [
         "a           add a workspace",
+        "i           set up a workspace from the sable.json in this folder",
         "e           rename selected workspace",
         "d           delete selected workspace",
         "m           move selected workspace (↑ ↓, then Enter)",
