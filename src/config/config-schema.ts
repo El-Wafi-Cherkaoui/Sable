@@ -11,6 +11,8 @@ const itemFields = {
   env: z.record(z.string(), z.string()),
   // Ids of the items that must be up (a service) or done (a command) before this one starts.
   after: z.array(z.string().trim().min(1, "An id in \"after\" can't be empty.")).default([]),
+  // The name of the matching item in the project's sable.json, for items that came from it.
+  fromProject: z.string().trim().min(1).optional(),
 };
 
 export const serviceConfigSchema = z.object({
@@ -26,6 +28,27 @@ export const commandConfigSchema = z.object({
 
 export const itemConfigSchema = z.discriminatedUnion("kind", [serviceConfigSchema, commandConfigSchema]);
 
+// What the project's sable.json said for one item, after placeholders were filled in. Kept so a
+// later sync can tell the file's changes apart from changes made on this machine.
+export const projectBaseItemSchema = z.object({
+  kind: z.enum(["service", "command"]),
+  command: z.string(),
+  cwd: z.string(),
+  env: z.record(z.string(), z.string()),
+  autoStart: z.boolean().optional(),
+  after: z.array(z.string()),
+});
+
+export const workspaceProjectSchema = z.object({
+  // Hash of the sable.json content the user approved.
+  hash: z.string().trim().min(1),
+  // This machine's answers for the file's placeholders.
+  values: z.record(z.string(), z.string()).default({}),
+  base: z.record(z.string(), projectBaseItemSchema).default({}),
+  // Items of the file the user removed here; a sync does not bring them back.
+  removed: z.array(z.string()).default([]),
+});
+
 export const workspaceConfigSchema = z
   .object({
     id: z.string().trim().min(1, "Workspace id is required."),
@@ -39,6 +62,7 @@ export const workspaceConfigSchema = z
       ),
     projectDirectory: z.string().trim().min(1, "Workspace project directory is required."),
     items: z.array(itemConfigSchema),
+    project: workspaceProjectSchema.optional(),
   })
   .superRefine((workspace, context) => {
     const seenIds = new Set<string>();

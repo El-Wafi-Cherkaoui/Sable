@@ -1,7 +1,8 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import type { AppConfig, ItemConfig, ItemKind, WorkspaceConfig } from "../config/config-types.js";
-import { addItem, afterNames, findDependencyCycle, findItem, itemsOfKind, removeItem, replaceItem } from "../config/workspace-items.js";
+import { addItem, afterNames, findDependencyCycle, findItem, itemsOfKind, replaceItem } from "../config/workspace-items.js";
+import { removeItemHere } from "../project/project-sync.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { generateShortId } from "../shared/id.js";
 import { runForm, type FormErrors, type FormField, type FormValues } from "../tui/form-view.js";
@@ -85,7 +86,7 @@ export async function runEditItemFlow(
 
   const result = await (options.form ?? runForm)({
     title: `Edit ${kind} "${item.name}"`,
-    subtitle: workspace.name,
+    subtitle: item.fromProject === undefined ? workspace.name : `${workspace.name} · from sable.json, your changes stay on this machine`,
     fields: () => itemFields(kind, workspace, false, knownCommands(config, workspace)),
     values: {
       name: item.name,
@@ -132,7 +133,9 @@ export async function runDeleteItemFlow(
     title: `Delete ${kind}`,
     explanation: [
       `This removes the ${kind} "${item.name}" from "${workspace.name}".`,
-      "Your project files stay untouched.",
+      item.fromProject === undefined
+        ? "Your project files stay untouched."
+        : "It comes from sable.json, so it is removed on this machine only. The file stays as it is.",
     ],
     name: item.name,
     keyInput: options.keyInput,
@@ -147,7 +150,7 @@ export async function runDeleteItemFlow(
     return { type: "exit" };
   }
 
-  await options.store.save(updateWorkspace(config, workspace.id, removeItem(workspace, item.id)));
+  await options.store.save(updateWorkspace(config, workspace.id, removeItemHere(workspace, item.id)));
 
   return {
     type: "completed",
