@@ -14,7 +14,10 @@ export type FormField =
   | { type: "text"; key: string; label: string; hint?: string; pathBase?: string; suggestions?: string[] }
   | { type: "toggle"; key: string; label: string }
   | { type: "choice"; key: string; label: string; choices: Array<{ value: string; label: string }> }
-  | { type: "list"; key: string; label: string; hint?: string; addLabel: string };
+  | { type: "list"; key: string; label: string; hint?: string; addLabel: string }
+  // Pick any number of the options; the value is the list of chosen option values. Each option is
+  // a row of its own, toggled with Space. `emptyText` is shown when there is nothing to pick.
+  | { type: "multi"; key: string; label: string; hint?: string; options: Array<{ value: string; label: string }>; emptyText?: string };
 
 export type FormValue = string | boolean | string[];
 export type FormValues = Record<string, FormValue>;
@@ -43,7 +46,8 @@ export type FormResult =
 type FormRow =
   | { kind: "field"; field: FormField }
   | { kind: "item"; field: Extract<FormField, { type: "list" }>; index: number }
-  | { kind: "add"; field: Extract<FormField, { type: "list" }> };
+  | { kind: "add"; field: Extract<FormField, { type: "list" }> }
+  | { kind: "option"; field: Extract<FormField, { type: "multi" }>; index: number };
 
 export type FormState = {
   values: FormValues;
@@ -171,6 +175,23 @@ export function applyFormKey(options: Pick<RunFormOptions, "fields" | "completeP
     return state;
   }
 
+  // A pick-list with nothing to pick has no text to edit.
+  if (row.kind === "field" && row.field.type === "multi") {
+    return state;
+  }
+
+  if (row.kind === "option") {
+    if (keypress.name === "space" || keypress.sequence === " ") {
+      const chosen = listOf(state.values, row.field.key);
+      const value = row.field.options[row.index]!.value;
+      const next = chosen.includes(value) ? chosen.filter((item) => item !== value) : [...chosen, value];
+
+      return { ...withoutError(state, row.field.key), values: { ...state.values, [row.field.key]: next } };
+    }
+
+    return state;
+  }
+
   if (row.kind === "add") {
     return state;
   }
@@ -238,7 +259,7 @@ export function renderForm(
 
   for (const [index, row] of rows.entries()) {
     const focused = index === state.focus;
-    const label = row.kind === "field" || (row.kind === "item" && row.index === 0) || (row.kind === "add" && listOf(state.values, row.field.key).length === 0)
+    const label = row.kind === "field" || ((row.kind === "item" || row.kind === "option") && row.index === 0) || (row.kind === "add" && listOf(state.values, row.field.key).length === 0)
       ? row.field.label
       : "";
     const completions = pathCompletions(options, row, state);
@@ -247,7 +268,7 @@ export function renderForm(
 
     lines.push(focused && color ? style.selected(padVisibleEnd(line, Math.min(columns - 1, labelWidth + valueWidth + 3))) : line);
 
-    const errorKey = row.kind === "item" ? `${row.field.key}.${row.index}` : row.kind === "field" ? row.field.key : undefined;
+    const errorKey = row.kind === "item" ? `${row.field.key}.${row.index}` : row.kind === "field" || (row.kind === "option" && row.index === 0) ? row.field.key : undefined;
     const error = errorKey === undefined ? undefined : state.errors[errorKey];
     const indent = " ".repeat(labelWidth + 2);
 
@@ -266,6 +287,17 @@ export function renderForm(
 function renderRowValue(row: FormRow, state: FormState, focused: boolean, style: TuiStyle, color: boolean, width: number, completion: string | undefined): string {
   if (row.kind === "add") {
     return focused ? `+ ${row.field.addLabel}` : style.muted(`+ ${row.field.addLabel}`);
+  }
+
+  if (row.kind === "option") {
+    const option = row.field.options[row.index]!;
+    const chosen = listOf(state.values, row.field.key).includes(option.value);
+
+    return `${chosen ? style.title("[x]") : style.muted("[ ]")} ${chosen || focused ? option.label : style.muted(option.label)}`;
+  }
+
+  if (row.kind === "field" && row.field.type === "multi") {
+    return style.muted(row.field.emptyText ?? "Nothing to pick yet");
   }
 
   if (row.kind === "field" && row.field.type === "toggle") {
@@ -336,9 +368,11 @@ function truncateEnd(text: string, width: number): string {
 function getFormKeyHints(row: FormRow | undefined, completions: string[], completionIndex: number): KeyHint[] {
   const change: KeyHint[] = row?.kind === "field" && (row.field.type === "toggle" || row.field.type === "choice")
     ? [["Space", "change"]]
-    : row?.kind === "add"
-      ? [["Enter", "add"]]
-      : [];
+    : row?.kind === "option"
+      ? [["Space", "pick"]]
+      : row?.kind === "add"
+        ? [["Enter", "add"]]
+        : [];
   const save: KeyHint[] = [["Ctrl+S", "save"], ["Esc", "cancel"]];
 
   if (completions.length === 0) {
@@ -367,6 +401,7 @@ function trySubmit(
   const rows = buildRows(options.fields(values), values);
   const firstInvalid = rows.findIndex((row) =>
     (row.kind === "field" && errors[row.field.key] !== undefined) ||
+    (row.kind === "option" && row.index === 0 && errors[row.field.key] !== undefined) ||
     (row.kind === "item" && errors[`${row.field.key}.${row.index}`] !== undefined),
   );
   const focus = firstInvalid >= 0 ? firstInvalid : state.focus;
@@ -378,12 +413,20 @@ function trySubmit(
 }
 
 function buildRows(fields: FormField[], values: FormValues): FormRow[] {
-  return fields.flatMap((field): FormRow[] => field.type === "list"
-    ? [
-      ...listOf(values, field.key).map((_, index) => ({ kind: "item" as const, field, index })),
-      { kind: "add" as const, field },
-    ]
-    : [{ kind: "field" as const, field }]);
+  return fields.flatMap((field): FormRow[] => {
+    if (field.type === "list") {
+      return [
+        ...listOf(values, field.key).map((_, index) => ({ kind: "item" as const, field, index })),
+        { kind: "add" as const, field },
+      ];
+    }
+
+    if (field.type === "multi" && field.options.length > 0) {
+      return field.options.map((_, index) => ({ kind: "option" as const, field, index }));
+    }
+
+    return [{ kind: "field" as const, field }];
+  });
 }
 
 function firstRow(options: RunFormOptions): FormRow | undefined {

@@ -46,6 +46,24 @@ export function dependentsOf(workspace: WorkspaceConfig, itemId: string): ItemCo
   return workspace.items.filter((item) => item.after.includes(itemId));
 }
 
+// Every item that waits for this one, directly or through others. Making this item wait for any of
+// them would close a loop.
+export function dependentsClosure(workspace: WorkspaceConfig, itemId: string): Set<string> {
+  const found = new Set<string>();
+  const queue = [itemId];
+
+  for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+    for (const dependent of dependentsOf(workspace, id)) {
+      if (!found.has(dependent.id)) {
+        found.add(dependent.id);
+        queue.push(dependent.id);
+      }
+    }
+  }
+
+  return found;
+}
+
 // The names of the items this one waits for, in the order they are listed.
 export function afterNames(workspace: WorkspaceConfig, item: ItemConfig): string[] {
   return item.after.flatMap((id) => {

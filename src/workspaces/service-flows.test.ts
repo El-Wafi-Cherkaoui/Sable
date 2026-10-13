@@ -4,6 +4,7 @@ import type { AppConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import type { FormResult, RunFormOptions } from "../tui/form-view.js";
 import {
+  itemFields,
   runAddWorkspaceItemFlow,
   runDeleteItemFlow,
   runEditItemFlow,
@@ -173,43 +174,57 @@ describe("dependencies in the form", () => {
   };
   const dbConfig: AppConfig = { version: 2, workspaces: [dbWorkspace] };
   const base = { name: "worker", command: "x", cwd: "." };
+  const afterField = (fields: ReturnType<typeof itemFields>) => fields.find((field) => field.key === "after");
 
-  it("accepts names of other items, in any case, and rejects the rest row by row", () => {
-    expect(validateItem("service", { ...base, after: ["DB", "build"] }, dbWorkspace, undefined, exists)).toEqual({});
-    expect(validateItem("service", { ...base, after: ["db", "ghost", "", "db"] }, dbWorkspace, undefined, exists)).toEqual({
-      "after.1": 'There is no service or command named "ghost".',
-      "after.2": "Type the name of an item.",
-      "after.3": '"db" is listed twice.',
+  it("offers every other item to pick from, with its kind", () => {
+    const field = afterField(itemFields("service", dbWorkspace, true, [], "svc_api"));
+
+    expect(field).toMatchObject({
+      type: "multi",
+      options: [{ value: "cmd_build", label: "build (command)" }, { value: "svc_db", label: "db (service)" }].sort((a, b) => dbWorkspace.items.findIndex((item) => item.id === a.value) - dbWorkspace.items.findIndex((item) => item.id === b.value)),
     });
   });
 
-  it("says which name is ambiguous when a service and a command share it", () => {
-    const shared = { ...dbWorkspace, items: [...dbWorkspace.items, { ...dbWorkspace.items[2]!, id: "svc_build", kind: "service" as const, autoStart: false }] };
+  it("offers all items when adding, since nothing waits for a new item yet", () => {
+    const field = afterField(itemFields("service", dbWorkspace, true));
 
-    expect(validateItem("service", { ...base, after: ["build"] }, shared, undefined, exists))
-      .toEqual({ "after.0": 'Two items are named "build". Rename one of them first.' });
+    expect(field && "options" in field && field.options.map((option) => option.value)).toEqual(["svc_db", "svc_api", "cmd_build"]);
   });
 
-  it("refuses an item that waits for itself or closes a loop", () => {
-    expect(validateItem("service", { name: "api", command: "x", cwd: ".", after: ["api"] }, dbWorkspace, "svc_api", exists))
-      .toEqual({ "after.0": "An item can't wait for itself." });
-    expect(validateItem("service", { name: "db", command: "x", cwd: ".", after: ["api"] }, dbWorkspace, "svc_db", exists))
-      .toEqual({ "after.0": "That would make items wait for each other: db → api → db." });
+  it("leaves out items that already wait for this one, so a loop cannot be picked", () => {
+    const field = afterField(itemFields("service", dbWorkspace, false, [], "svc_db"));
+
+    expect(field && "options" in field && field.options.map((option) => option.value)).toEqual(["cmd_build"]);
   });
 
-  it("saves the ids of the chosen items and shows names when editing", async () => {
+  it("says there is nothing to pick in a workspace with no other items", () => {
+    const field = afterField(itemFields("service", { ...workspace, items: [workspace.items[0]!] }, false, [], workspace.items[0]!.id));
+
+    expect(field).toMatchObject({ type: "multi", options: [], emptyText: "No other items yet" });
+  });
+
+  it("accepts picked ids, and rejects ones that are gone, itself, or that would close a loop", () => {
+    expect(validateItem("service", { ...base, after: ["svc_db", "cmd_build"] }, dbWorkspace, undefined, exists)).toEqual({});
+    expect(validateItem("service", { ...base, after: ["svc_ghost"] }, dbWorkspace, undefined, exists)).toEqual({ after: "One of these items no longer exists." });
+    expect(validateItem("service", { name: "api", command: "x", cwd: ".", after: ["svc_api"] }, dbWorkspace, "svc_api", exists))
+      .toEqual({ after: "An item can't wait for itself." });
+    expect(validateItem("service", { name: "db", command: "x", cwd: ".", after: ["svc_api"] }, dbWorkspace, "svc_db", exists))
+      .toEqual({ after: "That would make items wait for each other: db → api → db." });
+  });
+
+  it("prefills the picked ids when editing and saves the new choice", async () => {
     const store = createStore(dbConfig);
-    const form = fakeForm({ name: "api", command: "npm run dev", cwd: ".", autoStart: true, after: ["db", "build"], env: [] });
+    const form = fakeForm({ name: "api", command: "npm run dev", cwd: ".", autoStart: true, after: ["svc_db", "cmd_build"], env: [] });
 
     await runEditItemFlow({ store, workspace: dbWorkspace, keyInput: createKeyInput([]), itemId: "svc_api", form, directoryExists: exists });
 
-    expect(form.mock.calls[0]![0].values).toMatchObject({ after: ["db"] });
+    expect(form.mock.calls[0]![0].values).toMatchObject({ after: ["svc_db"] });
     expect(store.savedConfig?.workspaces[0]?.items.find((item) => item.id === "svc_api")?.after).toEqual(["svc_db", "cmd_build"]);
   });
 
-  it("saves the ids when adding an item", async () => {
+  it("saves the picked ids when adding an item", async () => {
     const store = createStore(dbConfig);
-    const form = fakeForm({ type: "command", name: "seed", command: "npm run seed", cwd: ".", after: ["db"], env: [] });
+    const form = fakeForm({ type: "command", name: "seed", command: "npm run seed", cwd: ".", after: ["svc_db"], env: [] });
 
     await runAddWorkspaceItemFlow({ store, workspace: dbWorkspace, keyInput: createKeyInput([]), form, generateId: () => "cmd_seed", directoryExists: exists });
 

@@ -260,3 +260,90 @@ describe("suggested values", () => {
     expect(renderForm({ title: "t", ...suggestOptions }, suggestState("yarn"))).not.toContain("complete command");
   });
 });
+
+describe("pick list", () => {
+  const pickFields = (): FormField[] => [
+    { type: "text", key: "name", label: "Name" },
+    {
+      type: "multi",
+      key: "after",
+      label: "After",
+      hint: "Start these first",
+      options: [{ value: "svc_db", label: "db (service)" }, { value: "cmd_build", label: "build (command)" }, { value: "svc_cache", label: "cache (service)" }],
+    },
+    { type: "list", key: "env", label: "Env", addLabel: "add variable" },
+  ];
+  const pickValues: FormValues = { name: "api", after: ["cmd_build"], env: [] };
+  const at = (focus: number, current: FormValues = pickValues): FormState => ({ values: current, focus, cursor: 0, errors: {} });
+
+  it("shows one row per option with a check mark for the chosen ones, and the label only once", () => {
+    const rows = renderForm({ title: "Edit", fields: pickFields }, at(1)).split("\n");
+
+    expect(rows).toContain("> After  [ ] db (service)");
+    expect(rows).toContain("         [x] build (command)");
+    expect(rows).toContain("         [ ] cache (service)");
+    expect(rows.join("\n")).toContain("Start these first");
+    expect(rows.at(-1)).toContain("[Space] pick");
+  });
+
+  it("toggles the focused option with Space, keeping the others, and walks the options with ↑↓", () => {
+    const picked = applyFormKey({ fields: pickFields }, at(1), { name: "space", sequence: " " });
+
+    expect(picked.values.after).toEqual(["cmd_build", "svc_db"]);
+
+    const second = applyFormKey({ fields: pickFields }, { ...picked, focus: 2 }, { name: "space", sequence: " " });
+
+    expect(second.values.after).toEqual(["svc_db"]);
+    expect(applyFormKey({ fields: pickFields }, at(1), { name: "down" }).focus).toBe(2);
+    expect(applyFormKey({ fields: pickFields }, at(3), { name: "down" }).focus).toBe(4);
+  });
+
+  it("does not type into an option row, and Enter moves on instead of toggling", () => {
+    const typed = applyFormKey({ fields: pickFields }, at(1), { sequence: "x" });
+
+    expect(typed.values).toEqual(pickValues);
+    expect(applyFormKey({ fields: pickFields }, at(1), { name: "return" }).focus).toBe(2);
+    expect(applyFormKey({ fields: pickFields }, at(1), { name: "return" }).values.after).toEqual(["cmd_build"]);
+  });
+
+  it("shows a quiet line instead of rows when there is nothing to pick, and ignores keys there", () => {
+    const empty = (): FormField[] => [{ type: "multi", key: "after", label: "After", options: [], emptyText: "No other items yet" }];
+    const state = at(0, { after: [] });
+
+    expect(renderForm({ title: "New", fields: empty }, state)).toContain("After  No other items yet");
+    expect(applyFormKey({ fields: empty }, state, { sequence: "x" }).values).toEqual({ after: [] });
+    expect(applyFormKey({ fields: empty }, state, { name: "space", sequence: " " }).values).toEqual({ after: [] });
+  });
+
+  it("puts an error under the first option and focuses it", async () => {
+    const rendered = renderForm({ title: "Edit", fields: pickFields }, { ...at(0), errors: { after: "That would make a loop." } });
+
+    expect(rendered).toContain("That would make a loop.");
+
+    const submit = vi.fn();
+    const keyInput: KeyInput = {
+      readKey: vi.fn()
+        .mockResolvedValueOnce({ name: "s", ctrl: true, sequence: "\u0013" })
+        .mockResolvedValueOnce({ name: "escape" }),
+      close: vi.fn(),
+    };
+    const result = await runForm({ title: "Edit", fields: pickFields, values: pickValues, validate: () => ({ after: "Nope." }), keyInput, screen: { clear: submit, write: submit } });
+
+    expect(result).toEqual({ type: "back" });
+    expect(submit.mock.calls.some(([frame]) => typeof frame === "string" && frame.includes("> After  [ ] db (service)") && frame.includes("Nope."))).toBe(true);
+  });
+
+  it("submits the chosen values", async () => {
+    const keyInput: KeyInput = {
+      readKey: vi.fn()
+        .mockResolvedValueOnce({ name: "down" })
+        .mockResolvedValueOnce({ name: "space", sequence: " " })
+        .mockResolvedValueOnce({ name: "s", ctrl: true, sequence: "\u0013" }),
+      close: vi.fn(),
+    };
+    const result = await runForm({ title: "Edit", fields: pickFields, values: pickValues, keyInput, screen: { clear: vi.fn(), write: vi.fn() } });
+
+    expect(result).toEqual({ type: "submit", values: { name: "api", after: ["cmd_build", "svc_db"], env: [] } });
+  });
+});
+
