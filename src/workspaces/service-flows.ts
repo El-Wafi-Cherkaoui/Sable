@@ -201,7 +201,7 @@ export function itemFields(kind: ItemKind, workspace: WorkspaceConfig, includeTy
       type: "multi",
       key: "after",
       label: "After",
-      hint: kind === "service" ? "Start only once these are up (services) or done (commands)" : "Run only once these are up (services) or done (commands)",
+      hint: "waits until it is up (service) or done (command)",
       options: waitOptions(workspace, selfId),
       emptyText: "No other items yet",
     },

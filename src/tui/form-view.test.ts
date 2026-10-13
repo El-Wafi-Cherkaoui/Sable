@@ -279,10 +279,13 @@ describe("pick list", () => {
   it("shows one row per option with a check mark for the chosen ones, and the label only once", () => {
     const rows = renderForm({ title: "Edit", fields: pickFields }, at(1)).split("\n");
 
-    expect(rows).toContain("> After  [ ] db (service)");
+    
     expect(rows).toContain("         [x] build (command)");
     expect(rows).toContain("         [ ] cache (service)");
-    expect(rows.join("\n")).toContain("Start these first");
+    // The hint shares the focused option's line instead of adding a line of its own.
+    expect(rows).toContain("> After  [ ] db (service)   Start these first");
+    expect(rows.filter((row) => row.includes("Start these first"))).toHaveLength(1);
+    expect(rows).toHaveLength(renderForm({ title: "Edit", fields: pickFields }, at(2)).split("\n").length);
     expect(rows.at(-1)).toContain("[Space] pick");
   });
 

@@ -274,7 +274,7 @@ export function renderForm(
 
     if (error !== undefined) {
       lines.push(`${indent}${style.failed(error)}`);
-    } else if (focused && "hint" in row.field && row.field.hint !== undefined && row.kind !== "add") {
+    } else if (focused && "hint" in row.field && row.field.hint !== undefined && row.kind !== "add" && row.kind !== "option") {
       lines.push(`${indent}${style.muted(row.field.hint)}`);
     }
   }
@@ -293,7 +293,10 @@ function renderRowValue(row: FormRow, state: FormState, focused: boolean, style:
     const option = row.field.options[row.index]!;
     const chosen = listOf(state.values, row.field.key).includes(option.value);
 
-    return `${chosen ? style.title("[x]") : style.muted("[ ]")} ${chosen || focused ? option.label : style.muted(option.label)}`;
+    const shown = `${chosen ? style.title("[x]") : style.muted("[ ]")} ${chosen || focused ? option.label : style.muted(option.label)}`;
+
+    // The hint sits on the focused option's own line, so moving through the list never shifts the rows.
+    return focused && row.field.hint !== undefined ? `${shown}   ${style.muted(row.field.hint)}` : shown;
   }
 
   if (row.kind === "field" && row.field.type === "multi") {
