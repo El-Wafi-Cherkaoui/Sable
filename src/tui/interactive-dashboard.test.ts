@@ -506,6 +506,84 @@ describe("runInteractiveDashboard", () => {
     expect(messages).toContain("Saved logs are not available here.");
   });
 
+  describe("an item that needs a secret", () => {
+    const needing = () => {
+      const base = createState();
+
+      return { ...base, items: base.items.map((itemState, index) => index === 0 ? { ...itemState, item: { ...itemState.item, secrets: ["STRIPE_KEY"] } } : itemState) };
+    };
+    const run = async (keysToPress: Array<{ sequence?: string }>, onMissingSecrets?: Parameters<typeof runInteractiveDashboard>[0]["onMissingSecrets"]) => {
+      const controller = createController(needing(), () => []);
+      const messages: Array<string | undefined> = [];
+      const hints: Array<string | undefined> = [];
+      const result = await runInteractiveDashboard({
+        controller,
+        keyInput: createKeyInput([...keysToPress, { sequence: "q" }]),
+        screen: { clear: vi.fn(), write: vi.fn() },
+        render: (_state, renderOptions) => {
+          messages.push(renderOptions?.statusMessage);
+          hints.push(renderOptions?.failureHint);
+
+          return "THE DASHBOARD";
+        },
+        onMissingSecrets,
+      });
+
+      return { controller, messages, hints, result };
+    };
+
+    it("asks for the secret before starting, with the item and the screen it came from, then starts once it is set", async () => {
+      const onMissingSecrets = vi.fn(async () => ({ type: "ready" as const }));
+      const { controller } = await run([{ sequence: "s" }], onMissingSecrets);
+
+      expect(onMissingSecrets).toHaveBeenCalledWith({ itemId: "svc_backend", background: "THE DASHBOARD" });
+      expect(controller.startSelectedService).toHaveBeenCalledOnce();
+    });
+
+    it("leaves it stopped, with the reason, when the user does not set it", async () => {
+      const { controller, messages } = await run([{ sequence: "s" }], async () => ({ type: "cancelled" as const, message: '"backend" was not started: it needs STRIPE_KEY.' }));
+
+      expect(controller.startSelectedService).not.toHaveBeenCalled();
+      expect(messages).toContain('"backend" was not started: it needs STRIPE_KEY.');
+    });
+
+    it("quits Sable when the question is answered with Ctrl+C", async () => {
+      const { controller, result } = await run([{ sequence: "s" }], async () => ({ type: "exit" as const }));
+
+      expect(result).toEqual({ type: "exit" });
+      expect(controller.startSelectedService).not.toHaveBeenCalled();
+    });
+
+    it("asks before a restart too, and refuses with a message when nothing can ask", async () => {
+      const onMissingSecrets = vi.fn(async () => ({ type: "ready" as const }));
+      const asked = await run([{ sequence: "r" }], onMissingSecrets);
+
+      expect(onMissingSecrets).toHaveBeenCalledOnce();
+      expect(asked.controller.restartSelectedService).toHaveBeenCalledOnce();
+
+      const refused = await run([{ sequence: "s" }]);
+
+      expect(refused.controller.startSelectedService).not.toHaveBeenCalled();
+      expect(refused.messages).toContain('"backend" needs STRIPE_KEY.');
+    });
+
+    it("says what is missing before anything is pressed", async () => {
+      const { hints } = await run([]);
+
+      expect(hints[0]).toBe("Needs STRIPE_KEY on this machine (kept out of sable.json). Press s to set it.");
+    });
+
+    it("does not ask for an item that has what it needs", async () => {
+      const onMissingSecrets = vi.fn(async () => ({ type: "ready" as const }));
+      const controller = createController(createState(), () => []);
+
+      await runInteractiveDashboard({ controller, keyInput: createKeyInput([{ sequence: "s" }, { sequence: "q" }]), screen: { clear: vi.fn(), write: vi.fn() }, render: () => "dashboard", onMissingSecrets });
+
+      expect(onMissingSecrets).not.toHaveBeenCalled();
+      expect(controller.startSelectedService).toHaveBeenCalledOnce();
+    });
+  });
+
   it("stops a running service with s", async () => {
     const baseState = createState();
     const state = {

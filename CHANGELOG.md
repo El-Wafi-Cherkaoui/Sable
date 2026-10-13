@@ -10,6 +10,8 @@
 
 - Saved logs: turn on **Save logs** in Settings (`,`) to also write each service's and command's output to a file in the config folder (`logs/<workspace>/<item>.log`, with timestamps), so it can be read after Sable closes or a service crashes. It is off by default. Each file is kept to 2 MB (the previous one is kept as `.log.1`), `L` (on the dashboard or the workspace list) shows how much is saved and deletes the saved logs of one item, one workspace, or everything after a confirmation, and when you reopen an item's logs the output saved from the last run appears above the new output. When a log includes saved output from an earlier run (or lines from an earlier day), the logs view shows the month and day with each time.
 
+- Secret variables: in the add and edit form, tick the environment variables that are secret. Their values never go into a shared `sable.json` (it only names them under `secrets`), and whoever runs the item is asked for them, with hidden input, the first time it starts: they are saved only on that machine, or the whole item can be edited instead. Start all and auto-start skip an item that is missing a secret and say what it needs.
+
 ### Changed
 
 - Suggestions for a new workspace are no longer only for JavaScript: Sable also reads `Makefile` and `justfile` targets, Docker Compose files, `Cargo.toml`, `go.mod`, Django (`manage.py`), pytest, Rails and Laravel, and merges what it finds into one checklist (names like `make build`, `cargo run`). Only the first service of each file is ticked to begin with. The checklist scrolls when the list is longer than the terminal.

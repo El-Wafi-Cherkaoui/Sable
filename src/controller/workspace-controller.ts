@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { ItemConfig, ItemKind, WorkspaceConfig } from "../config/config-types.js";
 import type { ManagedProcessState, ServiceLogEntry, StopFailure } from "../process/process-manager.js";
+import { missingSecretsOf } from "../config/workspace-items.js";
 import { runStartPlan, type StartPlan } from "./start-plan.js";
 import {
   addItemToRuntimeState,
@@ -144,6 +145,17 @@ export class WorkspaceController {
 
     this.droppedIds.delete(itemId);
     this.setQueue(itemId, undefined);
+
+    // Never run an item without a secret it needs: it would fail in a confusing way, or run against the wrong thing.
+    const missing = missingSecretsOf(item);
+
+    if (missing.length > 0) {
+      const refused: ManagedProcessState = { status: "failed", error: new Error(`needs ${missing.join(", ")}`) };
+
+      this.state = updateProcessState(this.state, itemId, refused);
+
+      return refused;
+    }
 
     return this.runProcessAction(itemId, () =>
       this.processManager.start(this.withResolvedDirectory(item)),
@@ -323,6 +335,12 @@ export class WorkspaceController {
       start: (itemId) => this.startItem(itemId),
       mark: (itemId, mark) => this.setQueue(itemId, mark),
       isDropped: (itemId) => this.closing || this.droppedIds.has(itemId),
+      blockedReason: (itemId) => {
+        const item = this.findItem(itemId);
+        const missing = item === undefined ? [] : missingSecretsOf(item);
+
+        return missing.length === 0 ? undefined : `needs ${missing.join(", ")}`;
+      },
       ...this.timing,
     });
     const tracked = plan.done.finally(() => {

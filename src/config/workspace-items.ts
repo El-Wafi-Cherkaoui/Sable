@@ -12,6 +12,11 @@ export function itemsOfKind(workspace: WorkspaceConfig, kind: ItemKind): ItemCon
   return workspace.items.filter((item) => item.kind === kind);
 }
 
+// The secret variables an item needs that have no value on this machine.
+export function missingSecretsOf(item: ItemConfig): string[] {
+  return [...new Set(item.secrets ?? [])].filter((key) => (item.env[key] ?? "") === "");
+}
+
 export function findItem(workspace: WorkspaceConfig, itemId: string | undefined): ItemConfig | undefined {
   return workspace.items.find((item) => item.id === itemId);
 }

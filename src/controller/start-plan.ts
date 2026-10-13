@@ -22,6 +22,8 @@ export type StartPlanDeps = {
   mark(itemId: string, mark: QueueMark | undefined): void;
   // The user stopped this item (or the app is closing) before the plan got to it.
   isDropped(itemId: string): boolean;
+  // Why an item cannot be started at all (e.g. a secret it needs is not set); it is skipped, and so is what waits for it.
+  blockedReason?(itemId: string): string | undefined;
   // How long a service must stay alive before the items that wait for it may start.
   upAfterMs: number;
   pollMs: number;
@@ -125,6 +127,16 @@ async function execute(deps: StartPlanDeps, firstPassDone: () => void): Promise<
           mark(id, { status: "skipped", reason: `${byId.get(blocker)!.name} ${failure.get(blocker) ?? "did not start"}` });
           progressed = true;
         } else if (waitsFor.every((afterId) => phase.get(afterId) === "ready")) {
+          const blocked = deps.blockedReason?.(id);
+
+          if (blocked !== undefined) {
+            phase.set(id, "failed");
+            failure.set(id, "was skipped");
+            mark(id, { status: "skipped", reason: blocked });
+            progressed = true;
+            continue;
+          }
+
           phase.set(id, waitedFor.has(id) ? "starting" : "ready");
           startedAt.set(id, deps.now());
           mark(id, undefined);

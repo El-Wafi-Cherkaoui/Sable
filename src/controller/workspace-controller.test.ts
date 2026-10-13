@@ -581,6 +581,65 @@ describe("WorkspaceController start order", () => {
   });
 });
 
+describe("WorkspaceController secrets", () => {
+  const needing = (secrets: string[], env: Record<string, string> = {}): WorkspaceConfig => ({
+    id: "ws_secrets",
+    name: "secrets",
+    projectDirectory: process.cwd(),
+    items: [
+      createService({ id: "svc_api", name: "api", env, secrets } as Partial<ServiceConfig>),
+      createService({ id: "svc_web", name: "web", after: ["svc_api"] }),
+      createService({ id: "svc_free", name: "free" }),
+    ],
+  });
+
+  it("does not start an item that is missing a secret, and says what it needs", async () => {
+    const processManager = createFakeProcessManager();
+    const controller = new WorkspaceController({ workspace: needing(["STRIPE_KEY"]), processManager });
+
+    const state = await controller.startItem("svc_api");
+
+    expect(state).toMatchObject({ status: "failed" });
+    expect(state.status === "failed" && state.error.message).toBe("needs STRIPE_KEY");
+    expect(processManager.startedServiceIds).toEqual([]);
+    expect(controller.getState().items[0]?.process.status).toBe("failed");
+  });
+
+  it("starts it once the secret has a value", async () => {
+    const processManager = createFakeProcessManager();
+    const workspace = needing(["STRIPE_KEY"]);
+    const controller = new WorkspaceController({ workspace, processManager });
+
+    controller.updateItem({ ...workspace.items[0]!, env: { STRIPE_KEY: "sk_live" } });
+    await controller.startItem("svc_api");
+
+    expect(processManager.startedServiceIds).toEqual(["svc_api"]);
+  });
+
+  it("skips such an item, and what waits for it, when starting everything, while the rest starts", async () => {
+    const processManager = createFakeProcessManager();
+    const controller = new WorkspaceController({ workspace: needing(["STRIPE_KEY"]), processManager, upAfterMs: 0, pollMs: 1, sleep: async () => undefined });
+
+    controller.startAll();
+    await controller.whenStarted();
+
+    const queue = (id: string) => controller.getState().items[controller.getState().itemIndexById[id]!]?.queue;
+
+    expect(processManager.startedServiceIds).toEqual(["svc_free"]);
+    expect(queue("svc_api")).toEqual({ status: "skipped", reason: "needs STRIPE_KEY" });
+    expect(queue("svc_web")).toEqual({ status: "skipped", reason: "api was skipped" });
+  });
+
+  it("treats an item whose secrets were never reviewed as needing nothing", async () => {
+    const processManager = createFakeProcessManager();
+    const controller = new WorkspaceController({ workspace: needing(undefined as never), processManager });
+
+    await controller.startItem("svc_api");
+
+    expect(processManager.startedServiceIds).toEqual(["svc_api"]);
+  });
+});
+
 describe("WorkspaceController earlier output", () => {
   const saved = (line: string): ServiceLogEntry => ({ stream: "stdout", line, timestamp: new Date("2026-10-12T09:00:00Z") });
   const flush = () => new Promise<void>((resolve) => setImmediate(resolve));

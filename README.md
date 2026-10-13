@@ -217,7 +217,7 @@ Put a `sable.json` in your project and commit it. A teammate who starts Sable in
   "items": [
     { "type": "service", "name": "db", "command": "docker compose up db" },
     { "type": "service", "name": "api", "command": "npm run dev", "cwd": "api",
-      "after": ["db"], "env": { "PORT": "{{API_PORT}}" } },
+      "after": ["db"], "env": { "PORT": "{{API_PORT}}" }, "secrets": ["STRIPE_KEY"] },
     { "type": "command", "name": "build", "command": "npm run build" }
   ]
 }
@@ -225,15 +225,17 @@ Put a `sable.json` in your project and commit it. A teammate who starts Sable in
 
 - `type` is `service` or `command`. `cwd` is a folder inside the project (default `.`), `autoStart: false` keeps a service from starting with the workspace, and `after` lists items by name (see Start order).
 - `{{NAME}}` is a placeholder. Declare it under `placeholders` with an optional `description` and `default`. Each person gives their own value when they import the file, and it stays on their machine.
-- Don't put secrets in the file. Use a placeholder with no default and everyone enters their own.
+- `secrets` names environment variables whose values must never be in the file. Each person gives their own value the first time the item runs (see below), and it stays on their machine. A name listed under `secrets` can't also have a value in `env`.
 
-**Writing the file.** In the picker, select a workspace and press `x`. A workspace that has no `sable.json` yet shows a one-line tip about this under the list; switch **Tips** off in Settings (`,`) to hide it. Sable shows exactly what it will write, then writes `sable.json` into the workspace's folder. Variables with names like `TOKEN`, `SECRET` or `KEY` become placeholders and their values stay out of the file. Look the file over before you commit it: Sable can't tell whether a command contains something private.
+**Writing the file.** In the picker, select a workspace and press `x`. A workspace that has no `sable.json` yet shows a one-line tip about this under the list; switch **Tips** off in Settings (`,`) to hide it. Sable shows exactly what it will write, then writes `sable.json` into the workspace's folder. You decide what is private: in the add or edit form, tick the variables typed under **Env** in the **Secret** list. A ticked variable is left out of `sable.json` with its value (the file only names it under `secrets`). Names that look private (`TOKEN`, `KEY`, `PASSWORD`...) are marked `(looks secret)` as a nudge, and for an item you never reviewed Sable assumes those are secret when it writes the file and says so. Look the file over before you commit it: Sable can only protect environment variables, so a token written inside a command (`--token abc123`) is not detected; move it into a variable.
 
 **Using the file.** Start `sable` in a folder that has a `sable.json` and no workspace yet, or press `i` in the picker. Sable shows every command the file would run, and only after you press Enter does it create the workspace. Nothing starts before you agree. Sable asks for the placeholder values, then the workspace appears in the picker.
 
 **Staying in sync.** When you open the workspace (or start Sable in its folder), Sable compares the file with the one you agreed to. If it changed, you see what changed, the old and the new command side by side, and nothing is applied until you agree. Press Esc to keep your current version and look again later.
 
 **Making it fit your machine.** Editing an imported item (`e`) changes it only for you, and a later update from the file keeps your change. Fields you did not touch follow the file. Deleting an imported item removes it only for you. If an imported item fails, Sable explains the likely cause in the status line, such as a program that isn't installed, a port in use or a missing folder, and tells you to press `e` to adjust it here.
+
+**Secrets.** An item that needs a secret you haven't set shows `Needs STRIPE_KEY on this machine` under the list. Press `s` and Sable asks for the value (hidden as you type), saves it only in your own config, and starts the item; or press `e` there to edit the whole item and take a different approach. Start all and auto-start don't ask: they skip the item, and what waits for it, with `needs STRIPE_KEY`, so you can fix it with `s`. Values are kept as plain text in your local `workspaces.json`, like every other environment variable.
 
 Sable looks for `sable.json` in the folder it is started in, not in parent folders.
 
