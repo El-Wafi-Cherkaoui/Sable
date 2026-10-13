@@ -23,6 +23,7 @@ import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import type { PromptScreen } from "../tui/prompt-view.js";
 import { requireWorkspaceByName } from "./find-workspace.js";
+import { runWorkspaceSavedLogs } from "./saved-logs-flow.js";
 import { runAddWorkspaceItemFlow, runDeleteItemFlow, runEditItemFlow } from "./service-flows.js";
 
 export type WorkspaceConfigReader = {
@@ -43,6 +44,7 @@ export type RunWorkspaceController = {
   stopSelectedService(): Promise<ManagedProcessState>;
   restartSelectedService(): Promise<ManagedProcessState>;
   startItem(itemId: string): Promise<ManagedProcessState>;
+  clearEarlierOutput(itemIds?: string[]): void;
   startPlan(itemIds: string[]): Promise<void>;
   startAll: WorkspaceController["startAll"];
   isStarting: WorkspaceController["isStarting"];
@@ -295,6 +297,20 @@ export async function runWorkspaceSession(
 
           return { type: "continue", message: flowResult.message };
         }),
+      onManageSavedLogs: options.logFiles === undefined
+        ? undefined
+        : async (context: { background?: string }) => {
+          const result = await runWorkspaceSavedLogs({
+            logFiles: options.logFiles!,
+            controller,
+            keyInput: options.keyInput,
+            screen: options.promptScreen,
+            background: context.background,
+            saving: options.settings?.persistLogs.isEnabled() ?? false,
+          });
+
+          return result === "exit" ? { type: "exit" as const } : { type: "continue" as const };
+        },
       onMoveServiceUp: options.store === undefined
         ? undefined
         : guardConfigUpdate(async () => moveSelectedService({

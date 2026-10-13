@@ -254,6 +254,13 @@ export class WorkspaceController {
       : [...earlier, { stream: "system", line: "saved output above, new output below", timestamp: last.timestamp, saved: true }, ...current];
   }
 
+  // Forgets the saved output shown above an item's new output, after its saved logs were deleted.
+  clearEarlierOutput(itemIds?: string[]): void {
+    for (const itemId of itemIds ?? [...this.earlier.keys()]) {
+      this.earlier.delete(itemId);
+    }
+  }
+
   // What a log file needs to know about an item: which workspace, name and kind it belongs to.
   describeItem(itemId: string): DescribedItem | undefined {
     const item = this.findItem(itemId);

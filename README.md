@@ -135,6 +135,7 @@ Enter       open selected workspace
 a           add a workspace
 i           set up a workspace from the sable.json in the folder Sable was started in
 x           write a sable.json for the selected workspace, to share it
+L           saved logs: see what is stored and delete it
 e           rename selected workspace
 d           delete selected workspace
 m           move selected workspace (↑ ↓, then Enter; Esc cancels)
@@ -162,6 +163,7 @@ Enter       show logs or output
 s           start or stop selected item
 r           restart service, or run command
 S           start every service, in the order set by "After" (see below)
+L           saved logs: delete what was saved for an item, or for all
 a           add a service or command
 e           edit selected item (changes apply on restart)
 d           delete selected item (stop it first)
@@ -243,6 +245,7 @@ Turn on **Save logs** in Settings (`,`, then `↑↓` and `Space`) and Sable als
 - Each line has its time and stream: `2026-10-13T11:42:01.123Z [stderr] Error: ...`. They are plain text, so `grep`, `tail -f` and sharing work as usual.
 - A file stops growing at 2 MB: it is renamed to `.log.1` (replacing the previous `.log.1`) and a new file starts, so an item uses at most about 4 MB.
 - When you look at an item's logs after restarting Sable, its saved output from the last run appears above the new output, after a line that says "saved output above, new output below" (the last 300 lines). Whenever the logs include saved output from an earlier run, or lines from an earlier day, every line shows the month and day (`10-12 09:15:00`) so old and new output can be told apart; otherwise only the time is shown.
+- To delete saved logs, press `L` in the workspace dashboard (one item, or everything in that workspace) or in the workspace list (one workspace, or everything). The popup shows how much each one takes; `d` or `Enter` asks, and `Enter` again deletes. Nothing is deleted without that second step. It works even while saving is off, for files saved earlier.
 - If a file can't be written (disk full, no permission), Sable carries on without saving it.
 
 Sable is not a log shipper or a service manager: this is a local convenience for development. Logs of things you run in production belong to the tool that runs them.

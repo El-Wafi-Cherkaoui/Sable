@@ -212,3 +212,97 @@ describe("readEarlier", () => {
     expect(lines.every((item) => item.line === "last" || item.line === "y".repeat(100))).toBe(true);
   });
 });
+
+describe("measuring and deleting saved logs", () => {
+  const other: LogTarget = { workspace: "blog", name: "site", kind: "service" };
+
+  async function saveSome() {
+    const files = logFiles();
+
+    files.append(api, entry("one"));
+    files.append(api, entry("two"));
+    files.append(build, entry("built"));
+    files.append(other, entry("hello"));
+    await files.flush();
+
+    return files;
+  }
+
+  it("measures one item, a workspace and everything, counting the older copy too", async () => {
+    const files = await saveSome();
+    await fs.writeFile(`${files.pathFor(api)}.1`, "older\n");
+
+    const one = await files.usage(api);
+    const shop = await files.workspaceUsage("shop");
+    const all = await files.totalUsage();
+
+    expect(one.files).toBe(2);
+    expect(one.bytes).toBe((await fs.stat(files.pathFor(api))).size + 6);
+    expect(shop.files).toBe(3);
+    expect(all.files).toBe(4);
+    expect(all.bytes).toBeGreaterThan(shop.bytes);
+    expect(await files.usage({ workspace: "shop", name: "nothing", kind: "service" })).toEqual({ bytes: 0, files: 0 });
+    expect(await files.workspaceUsage("nobody")).toEqual({ bytes: 0, files: 0 });
+  });
+
+  it("deletes the chosen items' files, and their older copies, and leaves the rest", async () => {
+    const files = await saveSome();
+    await fs.writeFile(`${files.pathFor(api)}.1`, "older\n");
+
+    await files.remove([api]);
+
+    await expect(fs.access(files.pathFor(api))).rejects.toThrow();
+    await expect(fs.access(`${files.pathFor(api)}.1`)).rejects.toThrow();
+    expect((await files.usage(build)).files).toBe(1);
+    expect((await files.workspaceUsage("shop")).files).toBe(1);
+  });
+
+  it("writes what is still waiting first, so it is deleted too instead of reappearing", async () => {
+    const files = logFiles();
+
+    files.append(api, entry("not written yet"));
+    await files.remove([api]);
+    await files.close();
+
+    await expect(fs.access(files.pathFor(api))).rejects.toThrow();
+  });
+
+  it("deletes a whole workspace's folder, or everything", async () => {
+    const files = await saveSome();
+
+    await files.removeWorkspace("shop");
+    expect((await files.workspaceUsage("shop")).files).toBe(0);
+    expect((await files.workspaceUsage("blog")).files).toBe(1);
+
+    await files.removeAll();
+    expect(await files.totalUsage()).toEqual({ bytes: 0, files: 0 });
+    await expect(fs.access(directory)).rejects.toThrow();
+  });
+
+  it("starts a fresh file for an item that keeps printing, with nothing from before", async () => {
+    const files = await saveSome();
+
+    await files.remove([api]);
+    files.append(api, entry("after the delete"));
+    await files.flush();
+
+    expect(await read(files.pathFor(api))).toBe("2026-10-13T11:42:01.123Z [stdout] after the delete\n");
+    expect(await files.readEarlier(api, 10)).toEqual([]);
+  });
+
+  it("forgets the size it remembered, so the size limit counts from the new file", async () => {
+    const files = logFiles({ maxBytes: 300 });
+
+    for (let index = 0; index < 4; index += 1) {
+      files.append(api, entry(`${"x".repeat(60)} ${index}`));
+    }
+
+    await files.flush();
+    await files.removeAll();
+    files.append(api, entry("small"));
+    await files.flush();
+
+    await expect(fs.access(`${files.pathFor(api)}.1`)).rejects.toThrow();
+    expect(await read(files.pathFor(api))).toContain("small");
+  });
+});

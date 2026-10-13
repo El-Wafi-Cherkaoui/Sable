@@ -15,12 +15,23 @@ export type LogFilesOptions = {
   flushMs?: number;
 };
 
+export type LogUsage = { bytes: number; files: number };
+
 export type LogFiles = {
   // Queues a line; it reaches the file within a moment.
   append(target: LogTarget, entry: ServiceLogEntry): void;
   // The last lines saved before this run of Sable first touched the file.
   readEarlier(target: LogTarget, maxLines: number): Promise<ServiceLogEntry[]>;
   pathFor(target: LogTarget): string;
+  // How much is saved for one item (its file and the older copy), a whole workspace, or everything.
+  usage(target: LogTarget): Promise<LogUsage>;
+  workspaceUsage(workspace: string): Promise<LogUsage>;
+  totalUsage(): Promise<LogUsage>;
+  // Deletes saved logs. Lines still waiting to be written are written first, so they go too; an item
+  // that is still running simply starts a new file with its next line.
+  remove(targets: LogTarget[]): Promise<void>;
+  removeWorkspace(workspace: string): Promise<void>;
+  removeAll(): Promise<void>;
   flush(): Promise<void>;
   close(): Promise<void>;
 };
@@ -101,6 +112,18 @@ export function createLogFiles(options: LogFilesOptions): LogFiles {
     }
   };
 
+  // Drops what is remembered about a file, or about every file under a folder (a prefix ending in a separator),
+  // so the next line written to it starts from what is actually on disk.
+  const forget = (fileOrFolder: string): void => {
+    for (const map of [sizes, startOffsets, failures]) {
+      for (const key of [...map.keys()]) {
+        if (key === fileOrFolder || (fileOrFolder.endsWith(path.sep) && key.startsWith(fileOrFolder))) {
+          map.delete(key);
+        }
+      }
+    }
+  };
+
   const flush = (): Promise<void> => {
     if (timer !== undefined) {
       clearTimeout(timer);
@@ -166,12 +189,90 @@ export function createLogFiles(options: LogFilesOptions): LogFiles {
 
     pathFor: (target) => filePath(options.directory, target),
 
+    async usage(target) {
+      return sizeOfFiles([filePath(options.directory, target), `${filePath(options.directory, target)}.1`]);
+    },
+
+    workspaceUsage: (workspace) => sizeOfFolder(workspaceFolder(options.directory, workspace)),
+
+    totalUsage: () => sizeOfFolder(options.directory),
+
+    async remove(targets) {
+      await flush();
+
+      for (const target of targets) {
+        const file = filePath(options.directory, target);
+
+        await fs.rm(file, { force: true });
+        await fs.rm(`${file}.1`, { force: true });
+        forget(file);
+      }
+    },
+
+    async removeWorkspace(workspace) {
+      await flush();
+
+      const folder = workspaceFolder(options.directory, workspace);
+
+      await fs.rm(folder, { recursive: true, force: true });
+      forget(folder + path.sep);
+    },
+
+    async removeAll() {
+      await flush();
+      await fs.rm(options.directory, { recursive: true, force: true });
+      forget(options.directory + path.sep);
+    },
+
     flush,
 
     async close() {
       await flush();
     },
   };
+}
+
+function workspaceFolder(directory: string, workspace: string): string {
+  return path.join(directory, safeSegment(workspace));
+}
+
+async function sizeOfFiles(files: string[]): Promise<LogUsage> {
+  let usage: LogUsage = { bytes: 0, files: 0 };
+
+  for (const file of files) {
+    try {
+      const stats = await fs.stat(file);
+
+      if (stats.isFile()) {
+        usage = { bytes: usage.bytes + stats.size, files: usage.files + 1 };
+      }
+    } catch {
+      // Not there: nothing saved.
+    }
+  }
+
+  return usage;
+}
+
+async function sizeOfFolder(folder: string): Promise<LogUsage> {
+  let usage: LogUsage = { bytes: 0, files: 0 };
+  let entries: Array<import("node:fs").Dirent>;
+
+  try {
+    entries = await fs.readdir(folder, { withFileTypes: true });
+  } catch {
+    return usage;
+  }
+
+  for (const entry of entries) {
+    const inner = entry.isDirectory()
+      ? await sizeOfFolder(path.join(folder, entry.name))
+      : entry.isFile() ? await sizeOfFiles([path.join(folder, entry.name)]) : { bytes: 0, files: 0 };
+
+    usage = { bytes: usage.bytes + inner.bytes, files: usage.files + inner.files };
+  }
+
+  return usage;
 }
 
 function filePath(directory: string, target: LogTarget): string {

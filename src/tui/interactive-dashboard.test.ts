@@ -462,6 +462,50 @@ describe("runInteractiveDashboard", () => {
     expect(logHints[0]).toContain('"pnpm" isn\'t installed here');
   });
 
+  it("opens the saved logs with L over the dashboard, and carries on after it closes", async () => {
+    const onManageSavedLogs = vi.fn(async () => ({ type: "continue" as const }));
+    const controller = createController(createState(), () => []);
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "L" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: () => "THE DASHBOARD",
+      onManageSavedLogs,
+    });
+
+    expect(onManageSavedLogs).toHaveBeenCalledWith({ background: "THE DASHBOARD" });
+  });
+
+  it("leaves Sable when the saved logs popup was closed with Ctrl+C", async () => {
+    const result = await runInteractiveDashboard({
+      controller: createController(createState(), () => []),
+      keyInput: createKeyInput([{ sequence: "L" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: () => "dashboard",
+      onManageSavedLogs: async () => ({ type: "exit" }),
+    });
+
+    expect(result).toEqual({ type: "exit" });
+  });
+
+  it("says saved logs are not available when nothing can manage them", async () => {
+    const messages: Array<string | undefined> = [];
+
+    await runInteractiveDashboard({
+      controller: createController(createState(), () => []),
+      keyInput: createKeyInput([{ sequence: "L" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: (_state, renderOptions) => {
+        messages.push(renderOptions?.statusMessage);
+
+        return "dashboard";
+      },
+    });
+
+    expect(messages).toContain("Saved logs are not available here.");
+  });
+
   it("stops a running service with s", async () => {
     const baseState = createState();
     const state = {

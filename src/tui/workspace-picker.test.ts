@@ -616,6 +616,17 @@ describe("runWorkspacePicker", () => {
       .resolves.toEqual({ type: "exportProject", workspace: workspaces[0] });
   });
 
+  it("opens the saved logs with L, over the list as it was drawn", async () => {
+    const result = await runWorkspacePicker({
+      workspaces,
+      keyInput: createKeyInput([{ sequence: "L" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: () => "THE LIST",
+    });
+
+    expect(result).toEqual({ type: "savedLogs", background: "THE LIST" });
+  });
+
   it("exits on Ctrl+C", async () => {
     await expect(
       runWorkspacePicker({

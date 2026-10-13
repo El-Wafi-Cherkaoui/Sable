@@ -37,6 +37,7 @@ const dashboardHelp: HelpSection[] = [
       "e           edit selected item (changes apply on restart)",
       "d           delete selected item (stop it first)",
       "m           move selected service (↑ ↓, then Enter)",
+      "L           saved logs: delete what was saved for an item, or for all",
     ],
   },
   {
