@@ -12,7 +12,7 @@ describe("renderHelpView", () => {
     expect(rendered).toContain("m           move selected service (↑ ↓, then Enter)");
     expect(rendered).toContain("Esc, q      back");
     expect(rendered.split("\n").at(-1)!.trim()).toBe("[Esc] close");
-    expect(rendered).not.toContain("S  ");
+    expect(rendered).toContain("S           start every service, in order of 'After'");
     expect(rendered).not.toContain("command mode");
   });
 

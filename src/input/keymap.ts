@@ -17,6 +17,7 @@ export type DashboardAction =
   | "openSettings"
   | "toggle"
   | "restart"
+  | "startAll"
   | "addService"
   | "editService"
   | "deleteService"
@@ -124,6 +125,8 @@ export function mapDashboardKey(keypress: Keypress): DashboardAction {
       return "toggle";
     case "r":
       return "restart";
+    case "S":
+      return "startAll";
     case "a":
       return "addService";
     case "e":

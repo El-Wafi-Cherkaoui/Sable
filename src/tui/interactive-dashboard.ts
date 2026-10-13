@@ -24,6 +24,9 @@ export type InteractiveDashboardController = {
   stopSelectedService(): Promise<ManagedProcessState>;
   restartSelectedService(): Promise<ManagedProcessState>;
   getSelectedServiceLogs(): ServiceLogEntry[];
+  // Starts every service in dependency order without waiting for it to finish.
+  startAll?(): "started" | "busy" | "nothing";
+  isStarting?(): boolean;
 };
 
 export type InteractiveDashboardScreen = {
@@ -80,6 +83,8 @@ export async function runInteractiveDashboard(
   let shouldQuit = false;
   let pulseItem: number | undefined;
   let pulseTimer: ReturnType<typeof setTimeout> | undefined;
+  const startingGraceTicks = 3;
+  let refreshGraceTicks = 0;
   let mode = "dashboard" as ViewMode;
   let helpReturnMode: HelpReturnMode = "dashboard";
   // Net number of positions the service moved in move mode, so Esc can undo it.
@@ -234,6 +239,24 @@ export async function runInteractiveDashboard(
         schedulePulseClear();
         renderDashboardFrame();
         break;
+      case "startAll": {
+        clearPulse();
+
+        const outcome = options.controller.startAll?.() ?? "nothing";
+
+        if (outcome === "started") {
+          options.sound?.play("started");
+        }
+
+        dashboardMessage = outcome === "started"
+          ? "Starting all services..."
+          : outcome === "busy"
+            ? "Already starting."
+            : "No services to start.";
+        refreshGraceTicks = startingGraceTicks;
+        renderDashboardFrame();
+        break;
+      }
       case "addService": {
         clearPulse();
 
@@ -406,7 +429,25 @@ export async function runInteractiveDashboard(
   }
 
   function shouldRefreshDashboardPreview(): boolean {
-    return (mode === "dashboard" || mode === "move") && process.stdout.columns !== undefined && process.stdout.columns >= 100;
+    if (mode !== "dashboard" && mode !== "move") {
+      return false;
+    }
+
+    // While items are starting in order, keep redrawing so "waiting" turns into "running" on its own;
+    // a couple of extra redraws after the last start catch the final change.
+    if (options.controller.isStarting?.() === true) {
+      refreshGraceTicks = startingGraceTicks;
+
+      return true;
+    }
+
+    if (refreshGraceTicks > 0) {
+      refreshGraceTicks -= 1;
+
+      return true;
+    }
+
+    return process.stdout.columns !== undefined && process.stdout.columns >= 100;
   }
 
   // Stopping can take a few seconds while the loop waits, so say what is happening first.
@@ -517,8 +558,11 @@ function isCtrlC(keypress: Awaited<ReturnType<KeyInput["readKey"]>>): boolean {
   return keypress.ctrl === true && keypress.name === "c";
 }
 
+// An item held back by the start-all plan counts as running: s cancels its start instead of starting it.
 function isSelectedItemRunning(state: RuntimeWorkspaceState): boolean {
-  return getSelectedItem(state)?.process.status === "running";
+  const selected = getSelectedItem(state);
+
+  return selected?.process.status === "running" || selected?.queue?.status === "waiting";
 }
 
 function renderFrame(screen: InteractiveDashboardScreen, contents: string): void {

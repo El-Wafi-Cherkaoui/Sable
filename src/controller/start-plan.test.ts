@@ -63,6 +63,16 @@ describe("runStartPlan", () => {
     expect(run.started).toEqual([["a", 0], ["b", 0]]);
   });
 
+  it("does not keep the plan open for items nothing waits for", async () => {
+    const run = simulate([service("db"), service("api", "db")], ["api"]);
+
+    await run.plan.done;
+
+    // db had to prove itself for 5s before api started; api itself needed no such wait.
+    expect(run.time()).toBe(5000);
+    expect(run.started).toEqual([["db", 0], ["api", 5000]]);
+  });
+
   it("starts a service only once the one it waits for has stayed up for five seconds", async () => {
     const run = simulate([service("db"), service("api", "db")], ["db", "api"]);
 

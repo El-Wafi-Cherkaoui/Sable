@@ -141,6 +141,7 @@ In `sable run`, or after opening a workspace from the picker:
 Enter       show logs or output
 s           start or stop selected item
 r           restart service, or run command
+S           start every service, in the order set by "After" (see below)
 a           add a service or command
 e           edit selected item (changes apply on restart)
 d           delete selected item (stop it first)
@@ -167,6 +168,18 @@ Esc, q      clear the search, or go back to the dashboard
 ```
 
 Logs/output are kept in memory, up to 2,000 lines (and about 2 million characters) per service or command. They are not persisted to disk. Sable keeps a program's colors but drops other terminal control sequences (screen clears, cursor moves) so a noisy tool can't scramble the display, and asks programs for color unless `NO_COLOR` is set.
+
+## Start order
+
+An item can wait for others. In the add or edit form, the **After** rows take the names of the services or commands that must come first, for example `db` for an API that needs its database:
+
+- A service counts as ready once it has stayed alive for 5 seconds.
+- A command counts as ready when it exits with code 0, so `npm run build` can finish before `npm start` begins.
+- Items that wait for nothing start together.
+
+Sable follows this order when it opens a workspace (services marked auto-start) and when you press `S` (every service, plus the commands they wait for). Items still held back show `◌ waiting for db`. If something they wait for stops early or fails, they show `✕ skipped: db stopped early` and are not started. Press `s` on a waiting item to cancel its start. Starting one item with `s` or `r` always starts just that item.
+
+Conditions belong in the command itself: `test -f dist/main.js || npm run build` only builds when the file is missing.
 
 ## Sound
 

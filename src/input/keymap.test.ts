@@ -67,9 +67,13 @@ describe("mapDashboardKey", () => {
   it("no longer maps the pre-0.3 keys", () => {
     expect(mapDashboardKey({ sequence: "j" })).toBe("none");
     expect(mapDashboardKey({ sequence: "k" })).toBe("none");
-    expect(mapDashboardKey({ sequence: "S" })).toBe("none");
     expect(mapDashboardKey({ sequence: "K" })).toBe("none");
     expect(mapDashboardKey({ sequence: "J" })).toBe("none");
+  });
+
+  it("starts every service with a capital S", () => {
+    expect(mapDashboardKey({ sequence: "S" })).toBe("startAll");
+    expect(mapDashboardKey({ sequence: "s" })).toBe("toggle");
   });
 
   it("no longer opens command mode", () => {

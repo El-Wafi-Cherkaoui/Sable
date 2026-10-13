@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Start order: an item can wait for others. The add and edit form has a new **After** field that takes the names of the services or commands that must come first. A service is ready once it has stayed up for 5 seconds; a command is ready when it exits with code 0. Sable follows this order for auto-start services and for the new **`S`** key, which starts every service (and the commands they wait for). Held-back items show `◌ waiting for …`, and items whose prerequisite failed show `✕ skipped: …`. `s` on a waiting item cancels its start. Deleting an item removes it from the "After" lists of the items that waited for it.
+
 ### Changed
 
 - The workspace file (`workspaces.json`) now keeps services and commands in one `items` list and has `"version": 2`. Sable converts an older file the first time it reads it and keeps a copy of the original next to it as `workspaces.json.bak-0.3`. Older Sable versions can't read the new file; to go back, restore that copy.

@@ -345,6 +345,91 @@ describe("runInteractiveDashboard", () => {
     expect(write).toHaveBeenCalledTimes(3);
   });
 
+  it("starts everything with S and says so, then keeps redrawing while items start in order", async () => {
+    const state = createState();
+    let starting = true;
+    const controller = {
+      ...createController(state, () => []),
+      startAll: vi.fn(() => "started" as const),
+      isStarting: vi.fn(() => starting),
+    };
+    const frames: Array<string | undefined> = [];
+    const render = vi.fn((_state: RuntimeWorkspaceState, renderOptions?: { statusMessage?: string }) => {
+      frames.push(renderOptions?.statusMessage);
+
+      return "dashboard";
+    });
+    let keysRead = 0;
+
+    await runInteractiveDashboard({
+      controller,
+      // The refresh timer fires before the next key because the dashboard keeps redrawing while starting.
+      keyInput: {
+        async readKey() {
+          keysRead += 1;
+
+          if (keysRead === 1) {
+            return { sequence: "S" };
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          starting = false;
+
+          return { sequence: "q" };
+        },
+        close() {},
+      },
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render,
+      logsRefreshIntervalMs: 5,
+    });
+
+    expect(controller.startAll).toHaveBeenCalledOnce();
+    expect(frames).toContain("Starting all services...");
+    // More than the first frame, the S frame and nothing else: it redrew on its own while starting.
+    expect(render.mock.calls.length).toBeGreaterThan(3);
+  });
+
+  it.each([
+    ["busy", "Already starting."],
+    ["nothing", "No services to start."],
+  ] as const)("tells the user when S has nothing to do (%s)", async (outcome, message) => {
+    const controller = { ...createController(createState(), () => []), startAll: vi.fn(() => outcome) };
+    const frames: Array<string | undefined> = [];
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "S" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: (_state, renderOptions) => {
+        frames.push(renderOptions?.statusMessage);
+
+        return "dashboard";
+      },
+    });
+
+    expect(frames).toContain(message);
+  });
+
+  it("stops the selected item with s while it is waiting, instead of starting it", async () => {
+    const base = createState();
+    const state = {
+      ...base,
+      items: base.items.map((itemState, index) => index === 0 ? { ...itemState, queue: { status: "waiting" as const, for: ["db"] } } : itemState),
+    };
+    const controller = createController(state, () => []);
+
+    await runInteractiveDashboard({
+      controller,
+      keyInput: createKeyInput([{ sequence: "s" }, { sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      render: () => "dashboard",
+    });
+
+    expect(controller.stopSelectedService).toHaveBeenCalledOnce();
+    expect(controller.startSelectedService).not.toHaveBeenCalled();
+  });
+
   it("stops a running service with s", async () => {
     const baseState = createState();
     const state = {

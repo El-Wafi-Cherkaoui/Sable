@@ -1,6 +1,6 @@
 import { getSelectedCommand, getSelectedItem, getSelectedService, runtimeServices, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import type { ServiceLogEntry } from "../process/process-manager.js";
-import { displayPath, formatStatus, type ItemKind } from "./format.js";
+import { displayPath, formatItemStatus, type ItemKind } from "./format.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { appendAnchoredFooter, clipLines } from "./layout.js";
 import { formatLogEntry } from "./log-lines.js";
@@ -150,7 +150,7 @@ function createItemRows(
       kind,
       index,
       itemState.item.name,
-      formatStatus(itemState.process, kind, style),
+      formatItemStatus(itemState, style),
       index === state.selectedItemIndex,
       index === options.pulseItemIndex,
     );
@@ -177,16 +177,24 @@ function renderPreview(
   width: number,
   height: number,
 ): string[] {
-  const name = getSelectedItem(state)?.item.name;
+  const selected = getSelectedItem(state);
 
-  if (name === undefined) {
+  if (selected === undefined) {
     return [];
   }
+
+  const waitsFor = selected.item.after.flatMap((id) => {
+    const found = state.items[state.itemIndexById[id] ?? -1];
+
+    return found === undefined ? [] : [found.item.name];
+  });
+  const skipped = selected.queue?.status === "skipped" ? ` · skipped: ${selected.queue.reason}` : "";
+  const name = waitsFor.length === 0 ? selected.item.name : `${selected.item.name} (after ${waitsFor.join(", ")})`;
 
   const logs = options.selectedServiceLogs ?? [];
   const lineCount = Math.max(1, height - 1);
   const latest = logs.slice(Math.max(0, logs.length - lineCount));
-  const heading = style.muted(latest.length === 0 ? `${name} · no output yet` : `${name} · last ${latest.length} lines`);
+  const heading = style.muted(`${name}${skipped} · ${latest.length === 0 ? "no output yet" : `last ${latest.length} lines`}`);
 
   return [
     heading,
@@ -236,12 +244,20 @@ function baseDashboardKeyHints(
     return [["↑↓", "move"], ["Enter", "done"], ["Esc", "cancel"]];
   }
 
+  const startAll: KeyHint[] = runtimeServices(state).length > 0 ? [["S", "start all"]] : [];
+  const selected = getSelectedItem(state);
+
+  // An item the start-all plan is holding back: s cancels its start.
+  if (selected?.queue?.status === "waiting") {
+    return [["s", "cancel"], ["Enter", selected.item.kind === "command" ? "output" : "logs"], ["e", "edit"], ["?", "help"], ...startAll, back];
+  }
+
   const command = getSelectedCommand(state);
 
   if (command !== undefined) {
     return command.process.status === "running"
-      ? [["s", "stop"], ["Enter", "output"], ["e", "edit"], ["?", "help"], back]
-      : [["r", "run"], ["Enter", "output"], ["e", "edit"], ["a", "add"], ["?", "help"], back];
+      ? [["s", "stop"], ["Enter", "output"], ["e", "edit"], ["?", "help"], ...startAll, back]
+      : [["r", "run"], ["Enter", "output"], ["e", "edit"], ["a", "add"], ["?", "help"], ...startAll, back];
   }
 
   const service = getSelectedService(state);
@@ -251,7 +267,7 @@ function baseDashboardKeyHints(
   }
 
   return service.process.status === "running"
-    ? [["s", "stop"], ["r", "restart"], ["Enter", "logs"], ["e", "edit"], ["?", "help"], back]
-    : [["s", "start"], ["Enter", "logs"], ["e", "edit"], ["a", "add"], ["?", "help"], back];
+    ? [["s", "stop"], ["r", "restart"], ["Enter", "logs"], ["e", "edit"], ["?", "help"], ...startAll, back]
+    : [["s", "start"], ["Enter", "logs"], ["e", "edit"], ["a", "add"], ["?", "help"], ...startAll, back];
 }
 
