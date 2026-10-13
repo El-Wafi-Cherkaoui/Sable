@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import path from "node:path";
 import { Command } from "commander";
 import { confirm, input } from "@inquirer/prompts";
 import {
@@ -9,6 +10,7 @@ import {
   formatConfigError,
 } from "./config/config-store.js";
 import { resolveConfigPaths } from "./config/config-path.js";
+import { createLogFiles, type LogFiles } from "./logs/log-files.js";
 import { loadSettingsControl, type SettingsControl } from "./settings/settings-control.js";
 import { product } from "./shared/product.js";
 import { requireTerminal, TerminalRequiredError } from "./shared/require-terminal.js";
@@ -26,6 +28,14 @@ import { runListWorkspacesCommand } from "./workspaces/list-workspaces.js";
 import { WorkspaceLookupError } from "./workspaces/find-workspace.js";
 import { runWorkspaceCommand } from "./workspaces/run-workspace.js";
 import { runWorkspaceHome } from "./workspaces/workspace-home.js";
+
+// Saved logs are written only while the "Save logs" setting is on, and can be switched at any time.
+function logFilesFor(settings: SettingsControl, configDirectory: string): LogFiles {
+  return createLogFiles({
+    directory: settings.logsDirectory ?? path.join(configDirectory, "logs"),
+    isEnabled: () => settings.persistLogs.isEnabled(),
+  });
+}
 
 function handleConfigError(error: unknown): boolean {
   if (error instanceof ConfigParseError || error instanceof ConfigValidationError) {
@@ -60,12 +70,14 @@ program
     const updateCheck = startUpdateCheck({ cacheFile: updateCacheFile(configDirectory) });
     const settings = await loadSettingsControl(configDirectory);
     const { sound } = settings;
+    const logFiles = logFilesFor(settings, configDirectory);
     let result: Awaited<ReturnType<typeof runWorkspaceHome>>;
 
     try {
       result = await runWorkspaceHome({
         store: new ConfigStore(),
         launchDirectory: process.cwd(),
+        logFiles,
         sound,
         settings,
         welcomeScreen: settings.welcomeScreen.isEnabled(),
@@ -85,6 +97,7 @@ program
     } finally {
       updateCheck.cancel();
       sound.close();
+      await logFiles.close();
     }
 
     if (result.type === "update") {
@@ -125,12 +138,17 @@ program
   .description("run a saved workspace")
   .action(async (workspaceName: string) => {
     let settings: SettingsControl | undefined;
+    let logFiles: LogFiles | undefined;
 
     try {
       requireTerminal();
-      settings = await loadSettingsControl(resolveConfigPaths().directory);
+      const configDirectory = resolveConfigPaths().directory;
+
+      settings = await loadSettingsControl(configDirectory);
+      logFiles = logFilesFor(settings, configDirectory);
       await runWorkspaceCommand(workspaceName, {
         store: new ConfigStore(),
+        logFiles,
         sound: settings.sound,
         settings,
       });
@@ -148,6 +166,7 @@ program
       throw error;
     } finally {
       settings?.sound.close();
+      await logFiles?.close();
     }
   });
 

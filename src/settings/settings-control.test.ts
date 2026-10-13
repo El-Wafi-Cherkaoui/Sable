@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createWelcomeScreenToggle } from "./settings-control.js";
+import { createPersistLogsToggle, createWelcomeScreenToggle } from "./settings-control.js";
 import type { SettingsStore } from "./settings-store.js";
 
 function createStore(update: SettingsStore["update"] = vi.fn(async () => {})): SettingsStore {
@@ -22,5 +22,17 @@ describe("createWelcomeScreenToggle", () => {
 
     await expect(toggle.setEnabled(false)).resolves.toBeUndefined();
     expect(toggle.isEnabled()).toBe(false);
+  });
+});
+
+describe("createPersistLogsToggle", () => {
+  it("applies the choice and saves it under its own name", async () => {
+    const store = createStore();
+    const toggle = createPersistLogsToggle(store, false);
+
+    await toggle.setEnabled(true);
+
+    expect(toggle.isEnabled()).toBe(true);
+    expect(store.update).toHaveBeenCalledWith({ persistLogs: true });
   });
 });

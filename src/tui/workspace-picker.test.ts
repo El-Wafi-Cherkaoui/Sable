@@ -647,7 +647,7 @@ const toggle = (enabled = true) => {
 
   return { isEnabled: () => on, setEnabled: vi.fn(async (next: boolean) => { on = next; }) };
 };
-const fakeSettings = () => ({ sound: { play: vi.fn(), close: vi.fn(), ...toggle() }, welcomeScreen: toggle() });
+const fakeSettings = () => ({ sound: { play: vi.fn(), close: vi.fn(), ...toggle() }, welcomeScreen: toggle(), persistLogs: toggle() });
 
 const workspaces: WorkspaceConfig[] = [
   {

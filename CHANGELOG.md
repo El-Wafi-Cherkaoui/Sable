@@ -8,6 +8,8 @@
 
 - Shared workspaces: put a `sable.json` in a project and teammates get the same services and commands. Starting Sable in a folder with one (or pressing `i`) shows every command the file would run and creates the workspace only after you agree; Sable asks for the file's `{{PLACEHOLDER}}` values, which stay on your machine. Opening that workspace later compares the file with the one you approved and shows what changed before applying it. Changes you make here (`e`, or deleting an item) are kept when the file updates. `x` writes a `sable.json` for a workspace and keeps secret-looking values out of it. If an imported item fails, the status line explains likely causes (missing program, port in use, missing folder) and how to fix it on your machine.
 
+- Saved logs: turn on **Save logs** in Settings (`,`) to also write each service's and command's output to a file in the config folder (`logs/<workspace>/<item>.log`, with timestamps), so it can be read after Sable closes or a service crashes. It is off by default. Each file is kept to 2 MB (the previous one is kept as `.log.1`), and when you reopen an item's logs the output saved from the last run appears above the new output.
+
 ### Changed
 
 - The workspace file (`workspaces.json`) now keeps services and commands in one `items` list and has `"version": 2`. Sable converts an older file the first time it reads it and keeps a copy of the original next to it as `workspaces.json.bak-0.3`. Older Sable versions can't read the new file; to go back, restore that copy.

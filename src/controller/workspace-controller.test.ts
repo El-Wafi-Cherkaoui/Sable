@@ -1,7 +1,7 @@
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { CommandConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
-import type { ManagedProcessState } from "../process/process-manager.js";
+import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
 import {
   formatShutdownFailure,
   WorkspaceController,
@@ -578,6 +578,61 @@ describe("WorkspaceController start order", () => {
     controller.removeItem("svc_db");
 
     expect(controller.getState().items.map((itemState) => itemState.item.after)).toEqual([[]]);
+  });
+});
+
+describe("WorkspaceController earlier output", () => {
+  const saved = (line: string): ServiceLogEntry => ({ stream: "stdout", line, timestamp: new Date("2026-10-12T09:00:00Z") });
+  const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+  it("shows output saved by an earlier run above this run's, once it has been read", async () => {
+    const earlierOutput = vi.fn(async () => [saved("crashed: out of memory")]);
+    const processManager = createFakeProcessManager({ getLogs: vi.fn(() => [saved("service started")]) });
+    const controller = new WorkspaceController({ workspace: createWorkspace(), processManager, earlierOutput });
+
+    expect(controller.getItemLogs("svc_backend").map((entry) => entry.line)).toEqual(["service started"]);
+
+    await flush();
+
+    expect(earlierOutput).toHaveBeenCalledWith({ workspace: "ecommerce", name: "backend", kind: "service" });
+    expect(controller.getItemLogs("svc_backend").map((entry) => entry.line)).toEqual([
+      "crashed: out of memory",
+      "earlier run above, this run below",
+      "service started",
+    ]);
+  });
+
+  it("asks for each item's saved output only once, and not for items that do not exist", async () => {
+    const earlierOutput = vi.fn(async () => [] as ServiceLogEntry[]);
+    const controller = new WorkspaceController({ workspace: createWorkspace(), processManager: createFakeProcessManager(), earlierOutput });
+
+    controller.getItemLogs("svc_backend");
+    controller.getItemLogs("svc_backend");
+    controller.getItemLogs("svc_frontend");
+    controller.getItemLogs("missing");
+    await flush();
+
+    expect(earlierOutput).toHaveBeenCalledTimes(2);
+    expect(controller.getItemLogs("svc_backend")).toEqual([]);
+  });
+
+  it("carries on when reading the saved output fails", async () => {
+    const earlierOutput = vi.fn(async () => {
+      throw new Error("unreadable");
+    });
+    const controller = new WorkspaceController({ workspace: createWorkspace(), processManager: createFakeProcessManager(), earlierOutput });
+
+    controller.getItemLogs("svc_backend");
+    await flush();
+
+    expect(controller.getItemLogs("svc_backend")).toEqual([]);
+  });
+
+  it("describes an item for the log file: its workspace, name and kind", () => {
+    const controller = new WorkspaceController({ workspace: createWorkspace(), processManager: createFakeProcessManager() });
+
+    expect(controller.describeItem("svc_worker")).toEqual({ workspace: "ecommerce", name: "worker", kind: "service" });
+    expect(controller.describeItem("missing")).toBeUndefined();
   });
 });
 

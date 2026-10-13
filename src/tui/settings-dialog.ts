@@ -1,8 +1,8 @@
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { isResize, mapSettingsKey } from "../input/keymap.js";
 import type { SettingsControl } from "../settings/settings-control.js";
-import { wrapAnsi } from "./ansi-text.js";
 import { dialogMaxWidth, renderDialogBox, renderDialogScreen } from "./dialog-box.js";
+import { displayPath } from "./format.js";
 import { formatKeyHints } from "./key-hints.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
 import { padVisibleEnd } from "./width.js";
@@ -41,6 +41,11 @@ export async function runSettingsDialog(options: SettingsDialogOptions): Promise
   const items = (): SettingsRow[] => [
     { label: "Sound", enabled: settings.sound.isEnabled(), description: "Soft tones as you move, open, start and stop, and a chime when a process ends on its own." },
     { label: "Welcome screen", enabled: settings.welcomeScreen.isEnabled(), description: "The logo animation at launch. Off goes straight to your workspaces." },
+    {
+      label: "Save logs",
+      enabled: settings.persistLogs.isEnabled(),
+      description: `Also write each item's output to a file${settings.logsDirectory === undefined ? "" : ` under ${displayPath(settings.logsDirectory)}`}, up to 2 MB each, so you can read it after Sable closes.`,
+    },
   ];
   const render = () => {
     screen.clear();
@@ -88,8 +93,10 @@ export async function runSettingsDialog(options: SettingsDialogOptions): Promise
         if (next) {
           settings.sound.play("open");
         }
-      } else {
+      } else if (selected === 1) {
         await settings.welcomeScreen.setEnabled(!settings.welcomeScreen.isEnabled());
+      } else {
+        await settings.persistLogs.setEnabled(!settings.persistLogs.isEnabled());
       }
 
       render();
@@ -115,7 +122,7 @@ export function renderSettingsDialog(options: {
 
   // Room for the longest description, wrapped, so the box never grows or shrinks.
   const textWidth = Math.min(descriptionWidth, Math.max(8, (maxWidth ?? Number.POSITIVE_INFINITY) - 6));
-  const wrapped = options.items.map((item) => wrapAnsi(item.description, textWidth));
+  const wrapped = options.items.map((item) => wrapWords(item.description, textWidth));
   const height = Math.max(...wrapped.map((description) => description.length));
   const description = Array.from({ length: height }, (_, index) =>
     style.muted(padVisibleEnd(wrapped[options.selected]?.[index] ?? "", textWidth)));
@@ -143,3 +150,35 @@ const terminalScreen = {
     process.stdout.write(contents);
   },
 };
+
+// Breaks text at spaces so a word is never split; a single word longer than the line is cut.
+function wrapWords(text: string, width: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+
+  for (const word of text.split(" ")) {
+    let rest = word;
+
+    while (rest.length > width) {
+      if (line !== "") {
+        lines.push(line);
+        line = "";
+      }
+
+      lines.push(rest.slice(0, width));
+      rest = rest.slice(width);
+    }
+
+    if (line === "") {
+      line = rest;
+    } else if (line.length + 1 + rest.length <= width) {
+      line = `${line} ${rest}`;
+    } else {
+      lines.push(line);
+      line = rest;
+    }
+  }
+
+  return line === "" ? lines : [...lines, line];
+}
+
