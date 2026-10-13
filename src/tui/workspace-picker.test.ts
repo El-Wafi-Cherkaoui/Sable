@@ -73,6 +73,40 @@ describe("renderWorkspacePicker", () => {
       ].join("\n"),
     );
   });
+  describe("a changed sable.json", () => {
+    const changedState = (extra: Partial<ReturnType<typeof createWorkspacePickerState>> = {}) => ({
+      ...createWorkspacePickerState(workspaces),
+      projectChangedIds: [workspaces[1]!.id],
+      ...extra,
+    });
+    const lines = (state: ReturnType<typeof createWorkspacePickerState>) => renderWorkspacePicker(state).split("\n");
+
+    it("marks the workspace in the list, aligned, even when it is not the selected one", () => {
+      const rows = lines(changedState());
+
+      expect(rows.find((row) => row.includes("portfolio"))).toContain("⟳ changed");
+      expect(rows.find((row) => row.includes("ecommerce"))).not.toContain("⟳");
+      // The folder column starts at the same place in both rows.
+      expect(rows.find((row) => row.includes("ecommerce"))!.indexOf("/")).toBe(rows.find((row) => row.includes("portfolio"))!.indexOf("/"));
+    });
+
+    it("explains it under the list when that workspace is selected, ahead of any tip", () => {
+      const selected = changedState({ selectedWorkspaceIndex: 1, shareTipIds: [workspaces[1]!.id] });
+
+      expect(lines(selected).at(-2)).toBe("⟳ Its sable.json changed since you last agreed to it. Open the workspace to see what changed.");
+      expect(lines(changedState()).at(-2)).toBe("");
+    });
+
+    it("never replaces a message, and is quiet while moving", () => {
+      expect(lines(changedState({ selectedWorkspaceIndex: 1, statusMessage: "Renamed." })).at(-2)).toBe("› Renamed.");
+      expect(lines(changedState({ selectedWorkspaceIndex: 1, moving: true })).at(-2)).toBe("");
+    });
+
+    it("changes nothing in the list when no workspace changed", () => {
+      expect(renderWorkspacePicker({ ...createWorkspacePickerState(workspaces), projectChangedIds: [] })).toBe(renderWorkspacePicker(createWorkspacePickerState(workspaces)));
+    });
+  });
+
   describe("the share tip", () => {
     const tipState = (extra: Partial<ReturnType<typeof createWorkspacePickerState>> = {}) => ({
       ...createWorkspacePickerState(workspaces),

@@ -1194,6 +1194,42 @@ describe("runWorkspaceHome with a sable.json", () => {
     });
   });
 
+  describe("a changed sable.json", () => {
+    const linked = (id: string, hash: string): WorkspaceConfig => ({ ...workspace, id, name: id, project: { hash, values: {}, base: {}, removed: [] } });
+
+    it("by default compares each linked workspace's file hash with the approved one", async () => {
+      const root = await fsPromises.mkdtemp(path.join(os.tmpdir(), "sable-changed-"));
+      const write = async (name: string, content: unknown) => {
+        const directory = path.join(root, name);
+
+        await fsPromises.mkdir(directory);
+        await fsPromises.writeFile(path.join(directory, "sable.json"), JSON.stringify(content));
+
+        return directory;
+      };
+      const { parseProjectFile } = await import("../project/project-file.js");
+      const original = { version: 1, items: [{ type: "service", name: "a", command: "x" }] };
+      const approved = parseProjectFile(JSON.stringify(original));
+      const hash = approved.type === "ok" ? approved.hash : "";
+      const workspaces: WorkspaceConfig[] = [
+        { ...linked("same", hash), projectDirectory: await write("same", original) },
+        { ...linked("changed", hash), projectDirectory: await write("changed", { ...original, items: [{ type: "service", name: "a", command: "rm -rf /" }] }) },
+        { ...linked("broken", hash), projectDirectory: await write("broken", { nope: true }) },
+        { ...linked("gone", hash), projectDirectory: path.join(root, "gone") },
+        { ...workspace, id: "plain", name: "plain", projectDirectory: await write("plain", original) },
+      ];
+      const runPicker = vi.fn().mockResolvedValue({ type: "exit" });
+
+      try {
+        await runWorkspaceHome({ store: createStore({ version: 2, workspaces }), keyInput: createKeyInput(), runPicker, runSession: vi.fn() });
+
+        expect(runPicker.mock.calls[0]![0].projectChangedIds).toEqual(["changed"]);
+      } finally {
+        await fsPromises.rm(root, { recursive: true, force: true });
+      }
+    });
+  });
+
   it("opens the saved logs from the list with L and passes the workspaces and the running one", async () => {
     const showSavedLogs = vi.fn(async () => "close" as const);
     const runPicker = vi.fn()

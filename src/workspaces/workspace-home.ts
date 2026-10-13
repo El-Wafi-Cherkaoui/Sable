@@ -138,6 +138,25 @@ export async function runWorkspaceHome(
 
   const projectFlowOptions = { store: options.store, keyInput, screen: options.screen };
 
+  // Ids of the workspaces whose sable.json is different from the one the user agreed to, so the list can say so.
+  async function workspacesWithChangedProjectFile(workspaces: WorkspaceConfig[]): Promise<string[] | undefined> {
+    const ids: string[] = [];
+
+    for (const workspace of workspaces) {
+      if (workspace.project === undefined) {
+        continue;
+      }
+
+      const read = await probeProjectFile(workspace.projectDirectory);
+
+      if (read.type === "ok" && read.hash !== workspace.project.hash) {
+        ids.push(workspace.id);
+      }
+    }
+
+    return ids.length === 0 ? undefined : ids;
+  }
+
   // Ids of the workspaces the list should hint at sharing; none while tips are switched off.
   async function workspacesToSuggestSharing(workspaces: WorkspaceConfig[]): Promise<string[] | undefined> {
     if (options.settings?.tips.isEnabled() !== true) {
@@ -231,6 +250,7 @@ export async function runWorkspaceHome(
         settings: options.settings,
         projectFileHere: (await hasProjectFile(options.launchDirectory)) || undefined,
         shareTipIds: await workspacesToSuggestSharing(config.workspaces),
+        projectChangedIds: await workspacesWithChangedProjectFile(config.workspaces),
         abortSignal: shutdownAbortController.signal,
         statusMessage,
         selectedWorkspaceId,

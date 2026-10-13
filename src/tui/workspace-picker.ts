@@ -26,6 +26,8 @@ export type WorkspacePickerState = {
   settingsAvailable?: boolean;
   // The folder Sable was started in has a sable.json, so the import key is worth showing.
   projectFileHere?: boolean;
+  // Workspaces whose sable.json is no longer the one the user agreed to (a teammate's change was pulled).
+  projectChangedIds?: string[];
   // Workspaces that could be shared but have no sable.json yet: the status line suggests it when one is selected.
   shareTipIds?: string[];
 };
@@ -86,6 +88,7 @@ export type RunWorkspacePickerOptions = {
   sound?: SoundControl;
   settings?: SettingsControl;
   projectFileHere?: boolean;
+  projectChangedIds?: string[];
   shareTipIds?: string[];
   runSettings?: typeof runSettingsDialog;
   afterStartup?: () => Promise<"continue" | "update" | "exit">;
@@ -125,6 +128,7 @@ export async function runWorkspacePicker(
     settingsAvailable: options.settings !== undefined,
     projectFileHere: options.projectFileHere,
     shareTipIds: options.shareTipIds,
+    projectChangedIds: options.projectChangedIds,
   };
   let mode: PickerMode = "picker";
   let stateBeforeMove: WorkspacePickerState | undefined;
@@ -576,8 +580,11 @@ function renderPickerLines(
       : `${total} ${total === 1 ? "service" : "services"}`;
   };
   const servicesWidth = Math.max(...state.workspaces.map((workspace) => servicesText(workspace).length));
+  // A mark beside any workspace whose sable.json changed, so it is seen without opening anything.
+  const changedMark = "⟳ changed";
+  const changedWidth = (state.projectChangedIds?.length ?? 0) > 0 ? changedMark.length : 0;
   // Name, status, and service count are aligned columns; the folder fills what is left.
-  const pathStart = 2 + nameWidth + 2 + statusWidth + 2 + servicesWidth + 2;
+  const pathStart = 2 + nameWidth + 2 + statusWidth + 2 + servicesWidth + 2 + (changedWidth > 0 ? changedWidth + 2 : 0);
   const rows = state.workspaces.map((workspace, index) => {
     const selected = index === state.selectedWorkspaceIndex;
     const isRunning = workspace.id === state.activeWorkspaceId && state.activeRunningServiceCount !== 0;
@@ -585,7 +592,7 @@ function renderPickerLines(
     const moving = state.moving === true && selected ? `  ${style.muted("↕ moving")}` : "";
     const folder = truncateVisible(displayPath(workspace.projectDirectory), Math.max(8, maxWidth - pathStart - visibleLength(moving)));
 
-    return `${selected ? "> " : "  "}${padVisibleEnd(workspace.name, nameWidth)}  ${padVisibleEnd(status, statusWidth)}  ${style.muted(padVisibleEnd(servicesText(workspace), servicesWidth))}  ${style.muted(folder)}${moving}`;
+    return `${selected ? "> " : "  "}${padVisibleEnd(workspace.name, nameWidth)}  ${padVisibleEnd(status, statusWidth)}  ${style.muted(padVisibleEnd(servicesText(workspace), servicesWidth))}  ${changedWidth > 0 ? `${padVisibleEnd(state.projectChangedIds?.includes(workspace.id) === true ? style.statusLabel(changedMark) : "", changedWidth)}  ` : ""}${style.muted(folder)}${moving}`;
   });
   const rowWidth = Math.min(maxWidth, Math.max(...rows.map((row) => visibleLength(row))));
 
@@ -746,12 +753,20 @@ function formatPickerStatusLine(
 
   const selected = getSelectedWorkspace(state);
 
+  if (selected === undefined || state.moving === true) {
+    return "";
+  }
+
+  // A changed project file matters more than a tip: it is something a teammate did that needs a decision.
+  if (state.projectChangedIds?.includes(selected.id) === true) {
+    return `${style.statusLabel("⟳")} ${projectChangedNotice}`;
+  }
+
   // A tip never replaces a message, and shows only for a workspace that has something to share.
-  return selected !== undefined && state.shareTipIds?.includes(selected.id) === true && state.moving !== true
-    ? style.muted(shareTip)
-    : "";
+  return state.shareTipIds?.includes(selected.id) === true ? style.muted(shareTip) : "";
 }
 
+const projectChangedNotice = "Its sable.json changed since you last agreed to it. Open the workspace to see what changed.";
 const shareTip = "Tip: press x to write a sable.json. Teammates then get this workspace just by running sable in the folder.";
 
 export function renderWorkspacePickerHelp(options: HelpViewOptions = {}): string {
