@@ -249,6 +249,7 @@ export async function runWorkspaceHome(
         sound: options.sound,
         settings: options.settings,
         projectFileHere: (await hasProjectFile(options.launchDirectory)) || undefined,
+        savedLogsAvailable: (options.logFiles !== undefined && options.settings?.persistLogs.isEnabled() === true) || undefined,
         shareTipIds: await workspacesToSuggestSharing(config.workspaces),
         projectChangedIds: await workspacesWithChangedProjectFile(config.workspaces),
         abortSignal: shutdownAbortController.signal,

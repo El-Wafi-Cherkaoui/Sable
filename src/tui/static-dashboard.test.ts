@@ -46,6 +46,15 @@ describe("renderStaticDashboard", () => {
     expect(renderStaticDashboard(createState(), { failureHint: hint, statusMessage: "Saved." }).split("\n").at(-2)).toBe("› Saved.");
   });
 
+  it("shows the saved logs key in the footer, before settings, only when asked", () => {
+    const footer = (extra: Parameters<typeof renderStaticDashboard>[1]) => renderStaticDashboard(createState(), { quitLabel: "back", ...extra }).split("\n").at(-1);
+
+    expect(footer({ savedLogsAvailable: true, settingsAvailable: true })).toBe("[s] stop  [r] restart  [Enter] logs  [e] edit  [?] help  [S] start all  [L] saved logs  [,] settings  [q] back");
+    expect(footer({ savedLogsAvailable: true })).toContain("[L] saved logs  [q] back");
+    expect(footer({ settingsAvailable: true })).not.toContain("saved logs");
+    expect(footer({ savedLogsAvailable: true, moving: true })).not.toContain("saved logs");
+  });
+
   it("only shows real messages in the status line", () => {
     expect(renderStaticDashboard(createState()).split("\n").at(-2)).toBe("");
     expect(renderStaticDashboard(createState(), { statusMessage: "Saved." }).split("\n").at(-2)).toBe("› Saved.");

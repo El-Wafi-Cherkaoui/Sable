@@ -1253,6 +1253,21 @@ describe("runWorkspaceHome with a sable.json", () => {
     expect(runPicker).toHaveBeenCalledTimes(3);
   });
 
+  it("tells the list to show the saved logs key only when there are log files and saving is on", async () => {
+    const settings = (saving: boolean) => ({ sound: { play: vi.fn(), close: vi.fn(), isEnabled: () => false, setEnabled: vi.fn() }, welcomeScreen: { isEnabled: () => false, setEnabled: vi.fn() }, persistLogs: { isEnabled: () => saving, setEnabled: vi.fn() }, tips: { isEnabled: () => false, setEnabled: vi.fn() } });
+    const seen = async (saving: boolean, withFiles: boolean) => {
+      const runPicker = vi.fn().mockResolvedValue({ type: "exit" });
+
+      await runWorkspaceHome({ store: createStore(config), keyInput: createKeyInput(), runPicker, runSession: vi.fn(), settings: settings(saving), logFiles: withFiles ? ({} as never) : undefined });
+
+      return runPicker.mock.calls[0]![0].savedLogsAvailable;
+    };
+
+    expect(await seen(true, true)).toBe(true);
+    expect(await seen(false, true)).toBeUndefined();
+    expect(await seen(true, false)).toBeUndefined();
+  });
+
   it("hands the log files to the dashboard session, which needs them to manage saved logs", async () => {
     const logFiles = { totalUsage: vi.fn() } as never;
     const runSession = vi.fn(async () => ({ type: "back" as const }));

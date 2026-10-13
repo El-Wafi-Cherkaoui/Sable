@@ -13,6 +13,8 @@ export type RenderStaticDashboardOptions = {
   moving?: boolean;
   // Shows the settings key in the footer.
   settingsAvailable?: boolean;
+  // Shows the saved logs key in the footer (saving logs is on).
+  savedLogsAvailable?: boolean;
   color?: boolean;
   style?: TuiStyle;
   // Index into the state's items of the row to flash.
@@ -234,10 +236,13 @@ function getDashboardKeyHints(
 ): KeyHint[] {
   const hints = baseDashboardKeyHints(state, options);
 
-  // Settings sits just before the last hint (back), so narrow terminals trim it first.
-  return options.settingsAvailable === true && options.moving !== true
-    ? [...hints.slice(0, -1), [",", "settings"], ...hints.slice(-1)]
-    : hints;
+  // Saved logs and settings sit just before the last hint (back), so narrow terminals trim them first.
+  const extra: KeyHint[] = options.moving === true ? [] : [
+    ...(options.savedLogsAvailable === true ? [["L", "saved logs"] as KeyHint] : []),
+    ...(options.settingsAvailable === true ? [[",", "settings"] as KeyHint] : []),
+  ];
+
+  return extra.length === 0 ? hints : [...hints.slice(0, -1), ...extra, ...hints.slice(-1)];
 }
 
 function baseDashboardKeyHints(

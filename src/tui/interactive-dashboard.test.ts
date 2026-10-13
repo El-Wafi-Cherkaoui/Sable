@@ -477,6 +477,27 @@ describe("runInteractiveDashboard", () => {
     expect(onManageSavedLogs).toHaveBeenCalledWith({ background: "THE DASHBOARD" });
   });
 
+  it("shows the saved logs key in the footer only while saving logs is on", async () => {
+    const flags: Array<boolean | undefined> = [];
+    const run = async (saving: boolean) => runInteractiveDashboard({
+      controller: createController(createState(), () => []),
+      keyInput: createKeyInput([{ sequence: "q" }]),
+      screen: { clear: vi.fn(), write: vi.fn() },
+      settings: { ...fakeSettings(), persistLogs: { isEnabled: () => saving, setEnabled: vi.fn() } } as never,
+      onManageSavedLogs: async () => ({ type: "continue" }),
+      render: (_state, renderOptions) => {
+        flags.push(renderOptions?.savedLogsAvailable);
+
+        return "dashboard";
+      },
+    });
+
+    await run(true);
+    await run(false);
+
+    expect(flags).toEqual([true, false]);
+  });
+
   it("leaves Sable when the saved logs popup was closed with Ctrl+C", async () => {
     const result = await runInteractiveDashboard({
       controller: createController(createState(), () => []),

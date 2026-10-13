@@ -26,6 +26,8 @@ export type WorkspacePickerState = {
   settingsAvailable?: boolean;
   // The folder Sable was started in has a sable.json, so the import key is worth showing.
   projectFileHere?: boolean;
+  // Shows the saved logs key in the footer (saving logs is on).
+  savedLogsAvailable?: boolean;
   // Workspaces whose sable.json is no longer the one the user agreed to (a teammate's change was pulled).
   projectChangedIds?: string[];
   // Workspaces that could be shared but have no sable.json yet: the status line suggests it when one is selected.
@@ -88,6 +90,7 @@ export type RunWorkspacePickerOptions = {
   sound?: SoundControl;
   settings?: SettingsControl;
   projectFileHere?: boolean;
+  savedLogsAvailable?: boolean;
   projectChangedIds?: string[];
   shareTipIds?: string[];
   runSettings?: typeof runSettingsDialog;
@@ -129,6 +132,7 @@ export async function runWorkspacePicker(
     projectFileHere: options.projectFileHere,
     shareTipIds: options.shareTipIds,
     projectChangedIds: options.projectChangedIds,
+    savedLogsAvailable: options.savedLogsAvailable,
   };
   let mode: PickerMode = "picker";
   let stateBeforeMove: WorkspacePickerState | undefined;
@@ -713,10 +717,13 @@ function centerVisible(value: string, columns: number | undefined): string {
 function getPickerKeyHints(state: WorkspacePickerState): KeyHint[] {
   const hints = baseKeyHints(state);
 
-  // Settings sits just before the last hint (quit), so narrow terminals trim it first.
-  return state.settingsAvailable === true && state.moving !== true
-    ? [...hints.slice(0, -1), [",", "settings"], ...hints.slice(-1)]
-    : hints;
+  // Saved logs and settings sit just before the last hint (quit), so narrow terminals trim them first.
+  const extra: KeyHint[] = state.moving === true ? [] : [
+    ...(state.savedLogsAvailable === true ? [["L", "saved logs"] as KeyHint] : []),
+    ...(state.settingsAvailable === true ? [[",", "settings"] as KeyHint] : []),
+  ];
+
+  return extra.length === 0 ? hints : [...hints.slice(0, -1), ...extra, ...hints.slice(-1)];
 }
 
 function baseKeyHints(state: WorkspacePickerState): KeyHint[] {
