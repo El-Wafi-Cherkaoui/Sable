@@ -1,11 +1,14 @@
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
-import { projectFileName, readProjectFile } from "../project/project-file.js";
+import { buildProjectFile } from "../project/project-export.js";
+import { parseProjectFile, projectFileName, projectFilePath, readProjectFile } from "../project/project-file.js";
 import { changesReviewLines, importReviewLines } from "../project/review-lines.js";
 import {
   declaredPlaceholders,
   describeProjectChanges,
+  linkWorkspaceToFile,
   missingPlaceholders,
   resolveProjectItems,
   syncProject,
@@ -15,7 +18,7 @@ import { generateShortId } from "../shared/id.js";
 import { runForm, type FormField, type FormValues } from "../tui/form-view.js";
 import { displayPath } from "../tui/format.js";
 import type { PromptScreen } from "../tui/prompt-view.js";
-import { runReview } from "../tui/review-view.js";
+import { runReview, type ReviewLine } from "../tui/review-view.js";
 
 export type ProjectFlowStore = {
   load(): Promise<AppConfig>;
@@ -198,6 +201,108 @@ export async function runUpdateProjectFlow(
     message: nothingToShow ? `Checked ${projectFileName} for "${current.name}": nothing to change.` : `Updated "${current.name}" from ${projectFileName}: ${describeSummary(synced.summary)}.`,
     workspaceId: current.id,
   };
+}
+
+// Writes the workspace out as a sable.json in its project folder, after showing exactly what goes into it,
+// and links the workspace to the file so a teammate's later changes reach it.
+export async function runExportProjectFlow(
+  options: ProjectFlowOptions & { workspace: WorkspaceConfig; writeFile?: (target: string, text: string) => Promise<void> },
+): Promise<ProjectFlowResult> {
+  const { workspace } = options;
+
+  if (!(await folderExists(workspace.projectDirectory))) {
+    return { type: "back", message: `The folder ${displayPath(workspace.projectDirectory)} does not exist.` };
+  }
+
+  if (workspace.items.length === 0) {
+    return { type: "back", message: `"${workspace.name}" has nothing to share yet. Add a service or command first.` };
+  }
+
+  let built: ReturnType<typeof buildProjectFile>;
+
+  try {
+    built = buildProjectFile(workspace);
+  } catch (error) {
+    return { type: "back", message: error instanceof Error ? error.message : String(error) };
+  }
+
+  const target = projectFilePath(workspace.projectDirectory);
+  const replacing = await fileExists(target);
+  const lines: ReviewLine[] = [
+    ...(built.notes.length === 0 ? [] : [
+      { text: "Check before you commit it:", tone: "heading" as const },
+      ...built.notes.map((note): ReviewLine => ({ text: `  ! ${note}`, tone: "removed" })),
+      { text: "" },
+    ]),
+    { text: `${projectFileName}:`, tone: "heading" },
+    ...built.text.trimEnd().split("\n").map((text): ReviewLine => ({ text: `  ${text}`, tone: "muted" })),
+  ];
+  const verdict = await (options.review ?? runReview)({
+    title: `Write ${projectFileName}?`,
+    intro: [
+      `This writes ${displayPath(target)} so your team can set up the same workspace. Commit it to share it.`,
+      replacing ? `A ${projectFileName} is already there. It will be replaced.` : "Look through it for anything private first.",
+    ],
+    lines,
+    confirmLabel: "write file",
+    cancelLabel: "cancel",
+    keyInput: options.keyInput,
+    screen: options.screen,
+  });
+
+  if (verdict === "exit") return { type: "exit" };
+  if (verdict === "cancel") return { type: "back", message: `Did not write ${projectFileName}.` };
+
+  await (options.writeFile ?? writeFileAtomically)(target, built.text);
+
+  const written = parseProjectFile(built.text);
+
+  if (written.type !== "ok") {
+    return { type: "back", message: `Wrote ${projectFileName}, but could not link "${workspace.name}" to it.` };
+  }
+
+  const config = await options.store.load();
+
+  await options.store.save({
+    ...config,
+    workspaces: config.workspaces.map((candidate) => candidate.id === workspace.id
+      ? linkWorkspaceToFile({ workspace: candidate, file: written.file, hash: written.hash, values: built.values, names: built.names })
+      : candidate),
+  });
+
+  return {
+    type: "completed",
+    message: `Wrote ${projectFileName} (${countItems(workspace)}). Commit it so your team gets the same workspace.`,
+    workspaceId: workspace.id,
+  };
+}
+
+async function writeFileAtomically(target: string, text: string): Promise<void> {
+  const temporary = `${target}.${process.pid}.tmp`;
+
+  try {
+    await fs.writeFile(temporary, text, "utf8");
+    await fs.rename(temporary, target);
+  } catch (error) {
+    await fs.rm(temporary, { force: true });
+    throw error;
+  }
+}
+
+async function folderExists(directory: string): Promise<boolean> {
+  try {
+    return (await fs.stat(directory)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function fileExists(target: string): Promise<boolean> {
+  try {
+    return (await fs.stat(target)).isFile();
+  } catch {
+    return false;
+  }
 }
 
 type SettingsAnswers =

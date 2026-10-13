@@ -37,12 +37,13 @@ describe("mapWorkspacePickerKey", () => {
 
   it("imports a project file with i", () => {
     expect(mapWorkspacePickerKey({ sequence: "i" })).toBe("importProject");
+    expect(mapWorkspacePickerKey({ sequence: "x" })).toBe("exportProject");
   });
 
   it("does not quit on Escape or unknown keys", () => {
     expect(mapWorkspacePickerKey({ name: "escape" })).toBe("none");
     expect(mapWorkspacePickerKey({ sequence: "S" })).toBe("none");
-    expect(mapWorkspacePickerKey({ sequence: "x" })).toBe("none");
+    expect(mapWorkspacePickerKey({ sequence: "z" })).toBe("none");
   });
 });
 

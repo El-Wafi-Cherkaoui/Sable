@@ -602,11 +602,18 @@ describe("runWorkspacePicker", () => {
   it("ignores service action keys in the picker", async () => {
     const result = await runWorkspacePicker({
       workspaces,
-      keyInput: createKeyInput([{ sequence: "x" }, { sequence: "q" }]),
+      keyInput: createKeyInput([{ sequence: "z" }, { sequence: "q" }]),
       screen: { clear: vi.fn(), write: vi.fn() },
     });
 
     expect(result).toEqual({ type: "exit" });
+  });
+
+  it("asks to import with i and to write a sable.json for the selected workspace with x", async () => {
+    await expect(runWorkspacePicker({ workspaces, keyInput: createKeyInput([{ sequence: "i" }]), screen: { clear: vi.fn(), write: vi.fn() } }))
+      .resolves.toEqual({ type: "importProject" });
+    await expect(runWorkspacePicker({ workspaces, keyInput: createKeyInput([{ sequence: "x" }]), screen: { clear: vi.fn(), write: vi.fn() } }))
+      .resolves.toEqual({ type: "exportProject", workspace: workspaces[0] });
   });
 
   it("exits on Ctrl+C", async () => {

@@ -37,7 +37,7 @@ import { runUpdateDialog } from "../tui/update-dialog.js";
 import { runSuggestServicesFlow, type SuggestServicesFlowOptions, type SuggestServicesFlowResult } from "./suggest-services-flow.js";
 import { servicesOf } from "../config/workspace-items.js";
 import { readProjectFile } from "../project/project-file.js";
-import { runImportProjectFlow, runUpdateProjectFlow, type ProjectFlowOptions, type ProjectFlowResult } from "./project-flows.js";
+import { runExportProjectFlow, runImportProjectFlow, runUpdateProjectFlow, type ProjectFlowOptions, type ProjectFlowResult } from "./project-flows.js";
 import { runtimeServices } from "../runtime/runtime-state.js";
 
 export type WorkspaceHomeConfigStore = {
@@ -62,6 +62,7 @@ export type RunWorkspaceHomeOptions = {
   readProjectFile?: typeof readProjectFile;
   runImportProject?: (options: ProjectFlowOptions & { directory: string }) => Promise<ProjectFlowResult>;
   runUpdateProject?: (options: ProjectFlowOptions & { workspace: WorkspaceConfig }) => Promise<ProjectFlowResult>;
+  runExportProject?: (options: ProjectFlowOptions & { workspace: WorkspaceConfig }) => Promise<ProjectFlowResult>;
   update?: WorkspaceHomeUpdate;
   screen?: RunWorkspacePickerOptions["screen"];
   createController?: (workspace: WorkspaceConfig) => RunWorkspaceController;
@@ -100,6 +101,7 @@ export async function runWorkspaceHome(
   const suggestServices = options.runSuggestServices ?? runSuggestServicesFlow;
   const importProject = options.runImportProject ?? runImportProjectFlow;
   const updateProject = options.runUpdateProject ?? runUpdateProjectFlow;
+  const exportProject = options.runExportProject ?? runExportProjectFlow;
   const probeProjectFile = options.readProjectFile ?? readProjectFile;
   const shutdownAbortController = new AbortController();
   const signalSource = options.signalSource ?? process;
@@ -284,6 +286,27 @@ export async function runWorkspaceHome(
 
         statusMessage = flowResult.type === "unchanged" ? "sable.json is already up to date." : flowResult.message;
         selectedWorkspaceId = flowResult.type === "completed" ? flowResult.workspaceId : undefined;
+
+        continue;
+      }
+
+      if (pickerResult.type === "exportProject") {
+        let flowResult: ProjectFlowResult;
+
+        try {
+          flowResult = await exportProject({ ...projectFlowOptions, workspace: pickerResult.workspace });
+        } catch (error) {
+          statusMessage = configUpdateFailedMessage(error);
+          selectedWorkspaceId = pickerResult.workspace.id;
+          continue;
+        }
+
+        if (flowResult.type === "exit") {
+          return { type: "quit" };
+        }
+
+        statusMessage = flowResult.type === "unchanged" ? undefined : flowResult.message;
+        selectedWorkspaceId = pickerResult.workspace.id;
 
         continue;
       }

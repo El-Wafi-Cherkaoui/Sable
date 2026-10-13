@@ -128,6 +128,33 @@ export function syncProject(options: ProjectSyncOptions): { workspace: Workspace
   };
 }
 
+// After a workspace has been written out as a sable.json: marks its items as coming from that file,
+// so teammates' later changes to the file reach this workspace like any other imported one.
+export function linkWorkspaceToFile(options: {
+  workspace: WorkspaceConfig;
+  file: ProjectFile;
+  hash: string;
+  values: Record<string, string>;
+  names: Map<string, string>;
+}): WorkspaceConfig {
+  const resolved = resolveProjectItems(options.file, options.values, options.workspace.projectDirectory);
+
+  return {
+    ...options.workspace,
+    items: options.workspace.items.map((item) => {
+      const name = options.names.get(item.id);
+
+      return name === undefined ? item : { ...item, fromProject: name };
+    }),
+    project: {
+      hash: options.hash,
+      values: options.values,
+      base: Object.fromEntries(resolved.map(({ name, ...base }) => [name, base])),
+      removed: [],
+    },
+  };
+}
+
 // Removes an item and, when it came from the project file, remembers that so a sync keeps it away.
 export function removeItemHere(workspace: WorkspaceConfig, itemId: string): WorkspaceConfig {
   const item = workspace.items.find((candidate) => candidate.id === itemId);

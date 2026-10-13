@@ -1040,6 +1040,22 @@ describe("runWorkspaceHome with a sable.json", () => {
     expect(options.runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({ statusMessage: "There is no sable.json in /projects/shop." }));
   });
 
+  it("writes a sable.json for the selected workspace with the x key and keeps it selected", async () => {
+    const options = homeOptions({
+      launchDirectory: undefined,
+      runPicker: vi.fn().mockResolvedValueOnce({ type: "exportProject", workspace }).mockResolvedValueOnce({ type: "exit" }),
+      runExportProject: vi.fn(async () => ({ type: "completed" as const, message: "Wrote sable.json (1 service). Commit it so your team gets the same workspace.", workspaceId: workspace.id })),
+    });
+
+    await runWorkspaceHome({ store: createStore(config), ...options });
+
+    expect(options.runExportProject).toHaveBeenCalledWith(expect.objectContaining({ workspace }));
+    expect(options.runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      statusMessage: "Wrote sable.json (1 service). Commit it so your team gets the same workspace.",
+      selectedWorkspaceId: workspace.id,
+    }));
+  });
+
   it("checks the file again when a linked workspace is opened, and opens the updated workspace with a message", async () => {
     const updated = { ...linkedWorkspace, items: [{ kind: "command" as const, after: [], id: "cmd_new", name: "seed", command: "npm run seed", cwd: folder, env: {} }] };
     let stored: AppConfig = { version: 2, workspaces: [linkedWorkspace] };

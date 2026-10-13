@@ -32,6 +32,7 @@ export type WorkspacePickerResult =
   | { type: "run"; workspace: WorkspaceConfig }
   | { type: "createWorkspace" }
   | { type: "importProject" }
+  | { type: "exportProject"; workspace: WorkspaceConfig }
   | { type: "deleteWorkspace"; workspace: WorkspaceConfig; background?: string }
   | { type: "renameWorkspace"; workspace: WorkspaceConfig }
   | { type: "stopActiveWorkspace"; workspace: WorkspaceConfig }
@@ -236,6 +237,15 @@ export async function runWorkspacePicker(
         return { type: "createWorkspace" };
       case "importProject":
         return { type: "importProject" };
+      case "exportProject": {
+        const workspace = getSelectedWorkspace(state);
+
+        if (workspace !== undefined) {
+          return { type: "exportProject", workspace };
+        }
+
+        break;
+      }
       case "deleteWorkspace": {
         const workspace = getSelectedWorkspace(state);
 
@@ -741,6 +751,7 @@ export function renderWorkspacePickerHelp(options: HelpViewOptions = {}): string
       rows: [
         "a           add a workspace",
         "i           set up a workspace from the sable.json in this folder",
+        "x           write a sable.json for the selected workspace, to share it",
         "e           rename selected workspace",
         "d           delete selected workspace",
         "m           move selected workspace (↑ ↓, then Enter)",
