@@ -73,6 +73,14 @@ describe("renderWorkspacePicker", () => {
       ].join("\n"),
     );
   });
+  it("shows the saved logs key in the footer before settings, only when saving logs is on", () => {
+    const footer = (extra: Partial<ReturnType<typeof createWorkspacePickerState>>) => renderWorkspacePicker({ ...createWorkspacePickerState(workspaces), ...extra }).split("\n").at(-1);
+
+    expect(footer({ savedLogsAvailable: true, settingsAvailable: true })).toBe("[↑↓] select  [Enter] open  [a] add  [e] rename  [?] help  [L] saved logs  [,] settings  [q] quit");
+    expect(footer({ settingsAvailable: true })).not.toContain("saved logs");
+    expect(footer({ savedLogsAvailable: true, moving: true })).not.toContain("saved logs");
+  });
+
   describe("a changed sable.json", () => {
     const changedState = (extra: Partial<ReturnType<typeof createWorkspacePickerState>> = {}) => ({
       ...createWorkspacePickerState(workspaces),

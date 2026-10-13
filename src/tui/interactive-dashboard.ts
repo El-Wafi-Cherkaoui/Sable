@@ -464,6 +464,7 @@ export async function runInteractiveDashboard(
       quitLabel: options.dashboardQuitLabel,
       moving: mode === "move",
       settingsAvailable: options.settings !== undefined,
+      savedLogsAvailable: options.onManageSavedLogs !== undefined && options.settings?.persistLogs.isEnabled() === true,
       statusMessage: dashboardMessage,
       pulseItemIndex: pulseItem,
       selectedServiceLogs,
