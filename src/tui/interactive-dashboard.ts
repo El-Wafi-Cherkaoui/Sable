@@ -9,6 +9,7 @@ import { renderHelpView, type HelpContext } from "./help-view.js";
 import { createDashboardEventReader } from "./dashboard-events.js";
 import { createLogsSession } from "./logs-session.js";
 import { renderLogsView } from "./logs-view.js";
+import { explainFailure } from "../runtime/failure-hint.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
 import { shouldUseColor } from "./style.js";
 
@@ -374,9 +375,13 @@ export async function runInteractiveDashboard(
 
   function renderLogsFrame(): void {
     lastDashboardContents = undefined;
+    const state = options.controller.getState();
+    const view = logsSession.viewProps();
+
     lastScreenContents = renderLogs({
-      ...logsSession.viewProps(),
-      state: options.controller.getState(),
+      ...view,
+      state,
+      hint: explainFailure(getSelectedItem(state), view.logs),
       color,
     });
     renderFrame(screen, lastScreenContents);
@@ -407,13 +412,16 @@ export async function runInteractiveDashboard(
   }
 
   function renderDashboardFrame(renderOptions: { skipUnchanged?: boolean } = {}): void {
-    const contents = render(options.controller.getState(), {
+    const state = options.controller.getState();
+    const selectedServiceLogs = options.controller.getSelectedServiceLogs();
+    const contents = render(state, {
       quitLabel: options.dashboardQuitLabel,
       moving: mode === "move",
       settingsAvailable: options.settings !== undefined,
       statusMessage: dashboardMessage,
       pulseItemIndex: pulseItem,
-      selectedServiceLogs: options.controller.getSelectedServiceLogs(),
+      selectedServiceLogs,
+      failureHint: explainFailure(getSelectedItem(state), selectedServiceLogs),
       columns: process.stdout.columns,
       rows: process.stdout.rows,
       color,

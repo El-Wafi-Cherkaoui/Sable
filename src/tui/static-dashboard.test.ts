@@ -39,6 +39,13 @@ describe("renderStaticDashboard", () => {
     expect(rendered.split("\n")[0]).toBe("ecommerce · /srv/shop");
   });
 
+  it("shows why the selected item failed in the status line, unless there is a message to show", () => {
+    const hint = "From sable.json, so it may expect a setup you don't have.";
+
+    expect(renderStaticDashboard(createState(), { failureHint: hint }).split("\n").at(-2)).toBe(`! ${hint}`);
+    expect(renderStaticDashboard(createState(), { failureHint: hint, statusMessage: "Saved." }).split("\n").at(-2)).toBe("› Saved.");
+  });
+
   it("only shows real messages in the status line", () => {
     expect(renderStaticDashboard(createState()).split("\n").at(-2)).toBe("");
     expect(renderStaticDashboard(createState(), { statusMessage: "Saved." }).split("\n").at(-2)).toBe("› Saved.");
