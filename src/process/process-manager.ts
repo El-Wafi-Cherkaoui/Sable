@@ -19,6 +19,8 @@ export type ServiceLogEntry = {
   stream: ServiceLogStream;
   line: string;
   timestamp: Date;
+  // Read back from a saved log file, not printed during this run.
+  saved?: boolean;
 };
 
 export type RunnableConfig = Pick<ServiceConfig | CommandConfig, "id" | "name" | "command" | "cwd" | "env">;

@@ -597,7 +597,7 @@ describe("WorkspaceController earlier output", () => {
     expect(earlierOutput).toHaveBeenCalledWith({ workspace: "ecommerce", name: "backend", kind: "service" });
     expect(controller.getItemLogs("svc_backend").map((entry) => entry.line)).toEqual([
       "crashed: out of memory",
-      "earlier run above, this run below",
+      "saved output above, new output below",
       "service started",
     ]);
   });
