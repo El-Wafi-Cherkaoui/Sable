@@ -1,4 +1,5 @@
-import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
+import type { AppConfig, CommandConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
+import { findCommand, findService, moveService, servicesOf } from "../config/workspace-items.js";
 import {
   formatShutdownFailure,
   WorkspaceController,
@@ -41,10 +42,10 @@ export type RunWorkspaceController = {
   restartSelectedService(): Promise<ManagedProcessState>;
   startService(serviceId: string): Promise<ManagedProcessState>;
   startCommand(commandId: string): Promise<ManagedProcessState>;
-  addService(service: WorkspaceConfig["services"][number]): ReturnType<WorkspaceController["addService"]>;
-  addCommand(command: WorkspaceConfig["commands"][number]): ReturnType<WorkspaceController["addCommand"]>;
-  updateService(service: WorkspaceConfig["services"][number]): ReturnType<WorkspaceController["updateService"]>;
-  updateCommand(command: WorkspaceConfig["commands"][number]): ReturnType<WorkspaceController["updateCommand"]>;
+  addService(service: ServiceConfig): ReturnType<WorkspaceController["addService"]>;
+  addCommand(command: CommandConfig): ReturnType<WorkspaceController["addCommand"]>;
+  updateService(service: ServiceConfig): ReturnType<WorkspaceController["updateService"]>;
+  updateCommand(command: CommandConfig): ReturnType<WorkspaceController["updateCommand"]>;
   removeService(serviceId: string): ReturnType<WorkspaceController["removeService"]>;
   removeCommand(commandId: string): ReturnType<WorkspaceController["removeCommand"]>;
   moveService(serviceId: string, direction: "up" | "down"): ReturnType<WorkspaceController["moveService"]>;
@@ -182,7 +183,7 @@ export async function runWorkspaceSession(
           if (flowResult.type === "completed" && flowResult.serviceId !== undefined) {
             const config = await options.store!.load();
             const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
-            const service = workspace?.services.find((candidate) => candidate.id === flowResult.serviceId);
+            const service = findService(workspace, flowResult.serviceId);
 
             if (service !== undefined) {
               controller.addService(service);
@@ -196,7 +197,7 @@ export async function runWorkspaceSession(
           if (flowResult.type === "completed" && flowResult.commandId !== undefined) {
             const config = await options.store!.load();
             const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
-            const command = workspace?.commands.find((candidate) => candidate.id === flowResult.commandId);
+            const command = findCommand(workspace, flowResult.commandId);
 
             if (command !== undefined) {
               controller.addCommand(command);
@@ -232,7 +233,7 @@ export async function runWorkspaceSession(
             if (flowResult.type === "completed" && flowResult.commandId !== undefined) {
               const config = await options.store!.load();
               const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
-              const command = workspace?.commands.find((candidate) => candidate.id === flowResult.commandId);
+              const command = findCommand(workspace, flowResult.commandId);
 
               if (command !== undefined) {
                 controller.updateCommand(command);
@@ -261,7 +262,7 @@ export async function runWorkspaceSession(
           if (flowResult.type === "completed" && flowResult.serviceId !== undefined) {
             const config = await options.store!.load();
             const workspace = config.workspaces.find((candidate) => candidate.id === options.workspace.id);
-            const service = workspace?.services.find((candidate) => candidate.id === flowResult.serviceId);
+            const service = findService(workspace, flowResult.serviceId);
 
             if (service !== undefined) {
               controller.updateService(service);
@@ -422,35 +423,25 @@ async function moveSelectedService(
     return { type: "continue", message: `Workspace "${options.workspace.name}" was not found.` };
   }
 
-  const serviceIndex = workspace.services.findIndex((service) => service.id === selectedServiceState.service.id);
-
-  if (serviceIndex < 0) {
-    return { type: "continue", message: `Service "${selectedServiceState.service.name}" was not found.` };
-  }
-
-  const targetIndex = options.direction === "up" ? serviceIndex - 1 : serviceIndex + 1;
-
-  if (targetIndex < 0) {
-    return { type: "continue", message: `Service "${selectedServiceState.service.name}" is already first.` };
-  }
-
-  if (targetIndex >= workspace.services.length) {
-    return { type: "continue", message: `Service "${selectedServiceState.service.name}" is already last.` };
-  }
-
-  const nextServices = [...workspace.services];
-  const [service] = nextServices.splice(serviceIndex, 1);
+  const services = servicesOf(workspace);
+  const serviceIndex = services.findIndex((service) => service.id === selectedServiceState.service.id);
+  const service = services[serviceIndex];
 
   if (service === undefined) {
     return { type: "continue", message: `Service "${selectedServiceState.service.name}" was not found.` };
   }
 
-  nextServices.splice(targetIndex, 0, service);
+  if (serviceIndex === (options.direction === "up" ? 0 : services.length - 1)) {
+    return {
+      type: "continue",
+      message: `Service "${service.name}" is already ${options.direction === "up" ? "first" : "last"}.`,
+    };
+  }
 
   await options.store.save({
     ...config,
     workspaces: config.workspaces.map((candidate) =>
-      candidate.id === workspace.id ? { ...candidate, services: nextServices } : candidate,
+      candidate.id === workspace.id ? moveService(candidate, service.id, options.direction) : candidate,
     ),
   });
 

@@ -2,6 +2,7 @@ import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { runDeleteDialog } from "../tui/delete-dialog.js";
 import type { PromptScreen } from "../tui/prompt-view.js";
+import { commandsOf, servicesOf } from "../config/workspace-items.js";
 
 export type DeleteWorkspaceFlowResult =
   | { type: "completed"; selectedWorkspaceId?: string; message: string }
@@ -77,9 +78,11 @@ export async function runDeleteWorkspaceFlow(
 
 function describeContents(workspace: WorkspaceConfig): string {
   const count = (amount: number, noun: string) => `${amount} ${noun}${amount === 1 ? "" : "s"}`;
+  const services = servicesOf(workspace).length;
+  const commands = commandsOf(workspace).length;
   const parts = [
-    ...(workspace.services.length > 0 ? [count(workspace.services.length, "service")] : []),
-    ...((workspace.commands ?? []).length > 0 ? [count(workspace.commands.length, "command")] : []),
+    ...(services > 0 ? [count(services, "service")] : []),
+    ...(commands > 0 ? [count(commands, "command")] : []),
   ];
 
   return parts.length === 0 ? "its settings" : `its ${parts.join(" and ")}`;

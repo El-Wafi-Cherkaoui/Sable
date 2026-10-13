@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- The workspace file (`workspaces.json`) now keeps services and commands in one `items` list and has `"version": 2`. Sable converts an older file the first time it reads it and keeps a copy of the original next to it as `workspaces.json.bak-0.3`. Older Sable versions can't read the new file; to go back, restore that copy.
+
 ## 0.3.3 - Tweaks
 
 ### Added

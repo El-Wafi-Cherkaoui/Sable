@@ -1,5 +1,6 @@
 import type { CommandConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { ManagedProcessState } from "../process/process-manager.js";
+import { commandsOf, servicesOf } from "../config/workspace-items.js";
 
 export type RuntimeServiceState = {
   service: ServiceConfig;
@@ -35,11 +36,11 @@ const stoppedProcessState: ManagedProcessState = { status: "stopped" };
 export function createRuntimeState(
   workspace: WorkspaceConfig,
 ): RuntimeWorkspaceState {
-  const services = workspace.services.map((service) => ({
+  const services = servicesOf(workspace).map((service) => ({
     service,
     process: stoppedProcessState,
   }));
-  const commands = (workspace.commands ?? []).map((command) => ({
+  const commands = commandsOf(workspace).map((command) => ({
     command,
     process: stoppedProcessState,
   }));

@@ -24,17 +24,17 @@ function createPrompts(confirmed: boolean) {
 }
 
 const config: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [
     {
       id: "ws_ecommerce",
       name: "ecommerce",
-      services: [],
+      items: [],
     },
     {
       id: "ws_api",
       name: "api",
-      services: [],
+      items: [],
     },
   ],
 };
@@ -56,12 +56,12 @@ describe("runDeleteWorkspaceCommand", () => {
       default: false,
     });
     expect(store.savedConfig).toEqual({
-      version: 1,
+      version: 2,
       workspaces: [
         {
           id: "ws_api",
           name: "api",
-          services: [],
+          items: [],
         },
       ],
     });
@@ -95,7 +95,7 @@ describe("runDeleteWorkspaceCommand", () => {
       {
         id: "ws_ecommerce",
         name: "ecommerce",
-        services: [],
+        items: [],
       },
     ]);
   });

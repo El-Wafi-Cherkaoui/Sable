@@ -28,8 +28,7 @@ describe("runSuggestServicesFlow", () => {
     ]);
     expect(result).toEqual({ type: "added", message: "Added 1 service and 1 command from package.json." });
     expect(store.savedConfig?.workspaces[0]).toMatchObject({
-      services: [{ id: "svc_1", name: "dev", command: "npm run dev", cwd: projectDirectory, autoStart: true, env: {} }],
-      commands: [{ id: "cmd_2", name: "build", command: "npm run build", cwd: projectDirectory, env: {} }],
+      items: [{ kind: "service", id: "svc_1", name: "dev", command: "npm run dev", cwd: projectDirectory, autoStart: true, env: {} }, { kind: "command", id: "cmd_2", name: "build", command: "npm run build", cwd: projectDirectory, env: {} }],
     });
   });
 
@@ -38,7 +37,7 @@ describe("runSuggestServicesFlow", () => {
     const noFiles: ProjectFiles = { exists: () => false, read: () => "" };
     const withService = emptyWorkspaceConfig();
 
-    withService.workspaces[0]!.services.push({ id: "svc", name: "api", command: "x", cwd: projectDirectory, autoStart: true, env: {} });
+    withService.workspaces[0]!.items.push({ kind: "service", id: "svc", name: "api", command: "x", cwd: projectDirectory, autoStart: true, env: {} });
 
     await expect(runSuggestServicesFlow({ store: createStore(emptyWorkspaceConfig()), workspaceId: "ws_shop", keyInput: noKeys(), files: noFiles, checklist }))
       .resolves.toEqual({ type: "skipped" });
@@ -59,7 +58,7 @@ describe("runSuggestServicesFlow", () => {
 });
 
 function emptyWorkspaceConfig(): AppConfig {
-  return { version: 1, workspaces: [{ id: "ws_shop", name: "shop", projectDirectory, services: [], commands: [] }] };
+  return { version: 2, workspaces: [{ id: "ws_shop", name: "shop", projectDirectory, items: [] }] };
 }
 
 function createStore(config: AppConfig) {

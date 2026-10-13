@@ -29,7 +29,7 @@ export async function runSuggestServicesFlow(options: SuggestServicesFlowOptions
   const config = await options.store.load();
   const workspace = config.workspaces.find((candidate) => candidate.id === options.workspaceId);
 
-  if (workspace === undefined || workspace.services.length > 0 || workspace.commands.length > 0) {
+  if (workspace === undefined || workspace.items.length > 0) {
     return { type: "skipped" };
   }
 
@@ -64,6 +64,7 @@ export async function runSuggestServicesFlow(options: SuggestServicesFlowOptions
 
   const generateId = options.generateId ?? generateShortId;
   const services: ServiceConfig[] = chosen.filter((suggestion) => suggestion.kind === "service").map((suggestion) => ({
+    kind: "service" as const,
     id: generateId("svc"),
     name: suggestion.name,
     command: suggestion.command,
@@ -72,6 +73,7 @@ export async function runSuggestServicesFlow(options: SuggestServicesFlowOptions
     env: {},
   }));
   const commands: CommandConfig[] = chosen.filter((suggestion) => suggestion.kind === "command").map((suggestion) => ({
+    kind: "command" as const,
     id: generateId("cmd"),
     name: suggestion.name,
     command: suggestion.command,
@@ -82,7 +84,7 @@ export async function runSuggestServicesFlow(options: SuggestServicesFlowOptions
   await options.store.save({
     ...config,
     workspaces: config.workspaces.map((candidate) =>
-      candidate.id === workspace.id ? { ...candidate, services, commands } : candidate,
+      candidate.id === workspace.id ? { ...candidate, items: [...services, ...commands] } : candidate,
     ),
   });
 

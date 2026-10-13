@@ -30,15 +30,15 @@ describe("ConfigStore", () => {
   it("saves and loads a valid config", async () => {
     const store = new ConfigStore({ directory: tempDirectory });
     const config = {
-      version: 1 as const,
+      version: 2 as const,
       workspaces: [
         {
           id: "workspace-1",
           name: "ecommerce",
           projectDirectory: "/projects/ecommerce",
-          commands: [],
-          services: [
+          items: [
             {
+              kind: "service" as const,
               id: "service-1",
               name: "backend",
               command: "npm run dev",
@@ -86,15 +86,15 @@ describe("ConfigStore", () => {
     );
 
     await expect(store.load()).resolves.toEqual({
-      version: 1,
+      version: 2,
       workspaces: [
         {
           id: "workspace-1",
           name: "ecommerce",
           projectDirectory: path.resolve("/projects/ecommerce/backend"),
-          commands: [],
-          services: [
+          items: [
             {
+              kind: "service",
               id: "service-1",
               name: "backend",
               command: "npm run dev",
@@ -127,16 +127,96 @@ describe("ConfigStore", () => {
     );
 
     await expect(store.load()).resolves.toEqual({
-      version: 1,
+      version: 2,
       workspaces: [
         {
           id: "workspace-1",
           name: "empty",
           projectDirectory: process.cwd(),
-          services: [],
-          commands: [],
+          items: [],
         },
       ],
+    });
+  });
+
+  describe("upgrading a version 1 file", () => {
+    const service = { id: "svc-1", name: "api", command: "npm run dev", cwd: "/projects/shop", autoStart: true, env: {} };
+    const command = { id: "cmd-1", name: "build", command: "npm run build", cwd: "/projects/shop", env: {} };
+    const version1 = {
+      version: 1,
+      workspaces: [{ id: "ws-1", name: "shop", projectDirectory: "/projects/shop", services: [service], commands: [command] }],
+    };
+
+    it("joins services and commands into one list, services first, each with its kind", async () => {
+      const store = new ConfigStore({ directory: tempDirectory });
+
+      await fs.writeFile(store.paths.file, JSON.stringify(version1), "utf8");
+
+      await expect(store.load()).resolves.toEqual({
+        version: 2,
+        workspaces: [{
+          id: "ws-1",
+          name: "shop",
+          projectDirectory: "/projects/shop",
+          items: [{ kind: "service", ...service }, { kind: "command", ...command }],
+        }],
+      });
+    });
+
+    it("accepts a version 1 workspace that has no commands list", async () => {
+      const store = new ConfigStore({ directory: tempDirectory });
+      const { commands: _commands, ...withoutCommands } = version1.workspaces[0]!;
+
+      await fs.writeFile(store.paths.file, JSON.stringify({ version: 1, workspaces: [withoutCommands] }), "utf8");
+
+      const config = await store.load();
+
+      expect(config.workspaces[0]?.items).toEqual([{ kind: "service", ...service }]);
+    });
+
+    it("keeps a copy of the original file and leaves the file itself alone until a save", async () => {
+      const store = new ConfigStore({ directory: tempDirectory });
+      const original = JSON.stringify(version1);
+
+      await fs.writeFile(store.paths.file, original, "utf8");
+      await store.load();
+
+      await expect(fs.readFile(`${store.paths.file}.bak-0.3`, "utf8")).resolves.toBe(original);
+      await expect(fs.readFile(store.paths.file, "utf8")).resolves.toBe(original);
+    });
+
+    it("writes version 2 on the next save without touching the backup", async () => {
+      const store = new ConfigStore({ directory: tempDirectory });
+      const original = JSON.stringify(version1);
+
+      await fs.writeFile(store.paths.file, original, "utf8");
+      await store.save(await store.load());
+
+      const saved = JSON.parse(await fs.readFile(store.paths.file, "utf8")) as { version: number; workspaces: Array<{ items: unknown[]; services?: unknown }> };
+
+      expect(saved.version).toBe(2);
+      expect(saved.workspaces[0]?.items).toHaveLength(2);
+      expect(saved.workspaces[0]?.services).toBeUndefined();
+      await expect(fs.readFile(`${store.paths.file}.bak-0.3`, "utf8")).resolves.toBe(original);
+    });
+
+    it("does not replace an existing backup", async () => {
+      const store = new ConfigStore({ directory: tempDirectory });
+
+      await fs.writeFile(store.paths.file, JSON.stringify(version1), "utf8");
+      await fs.writeFile(`${store.paths.file}.bak-0.3`, "older backup", "utf8");
+      await store.load();
+
+      await expect(fs.readFile(`${store.paths.file}.bak-0.3`, "utf8")).resolves.toBe("older backup");
+    });
+
+    it("makes no backup for a file that is already version 2", async () => {
+      const store = new ConfigStore({ directory: tempDirectory });
+
+      await store.save({ version: 2, workspaces: [] });
+      await store.load();
+
+      await expect(fs.access(`${store.paths.file}.bak-0.3`)).rejects.toThrow();
     });
   });
 
@@ -153,7 +233,7 @@ describe("ConfigStore", () => {
 
     await fs.writeFile(
       store.paths.file,
-      JSON.stringify({ version: 2, workspaces: [] }),
+      JSON.stringify({ version: 3, workspaces: [] }),
       "utf8",
     );
 
@@ -249,8 +329,7 @@ describe("formatConfigError", () => {
         id,
         name: id,
         projectDirectory: `/projects/${id}`,
-        commands: [],
-        services: [{ id: `${id}-svc`, name: "app", command, cwd: `/projects/${id}`, autoStart: true, env: {} }],
+        items: [{ kind: "service" as const, id: `${id}-svc`, name: "app", command, cwd: `/projects/${id}`, autoStart: true, env: {} }],
       };
     }
 
@@ -258,7 +337,7 @@ describe("formatConfigError", () => {
       const first = new ConfigStore({ directory: tempDirectory });
       const second = new ConfigStore({ directory: tempDirectory });
 
-      await first.save({ version: 1, workspaces: ids.map((id) => workspace(id)) });
+      await first.save({ version: 2, workspaces: ids.map((id) => workspace(id)) });
 
       return { first, second };
     }
@@ -274,7 +353,7 @@ describe("formatConfigError", () => {
       const saved = await new ConfigStore({ directory: tempDirectory }).load();
 
       expect(saved.workspaces.map((item) => item.id)).toEqual(["a", "b"]);
-      expect(saved.workspaces[0]?.services[0]?.command).toBe("npm start");
+      expect(saved.workspaces[0]?.items[0]?.command).toBe("npm start");
     });
 
     it("keeps the other instance's edit to a workspace this one did not touch", async () => {
@@ -287,7 +366,7 @@ describe("formatConfigError", () => {
 
       const saved = await new ConfigStore({ directory: tempDirectory }).load();
 
-      expect(saved.workspaces.map((item) => item.services[0]?.command)).toEqual(["edited here", "edited elsewhere"]);
+      expect(saved.workspaces.map((item) => item.items[0]?.command)).toEqual(["edited here", "edited elsewhere"]);
     });
 
     it("still deletes a workspace this instance removed", async () => {

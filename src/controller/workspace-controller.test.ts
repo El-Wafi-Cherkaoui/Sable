@@ -115,11 +115,10 @@ describe("WorkspaceController", () => {
         id: "ws_shop",
         name: "shop",
         projectDirectory,
-        services: [
-          createService({ id: "svc_rel", name: "rel", cwd: "api" }),
-          createService({ id: "svc_abs", name: "abs", cwd: path.resolve(path.sep, "elsewhere") }),
+        items: [
+          { ...createService({ id: "svc_rel", name: "rel", cwd: "api" }), kind: "service" },
+          { ...createService({ id: "svc_abs", name: "abs", cwd: path.resolve(path.sep, "elsewhere") }), kind: "service" }, { kind: "command", id: "cmd_dot", name: "dot", command: "make", cwd: ".", env: {} },
         ],
-        commands: [{ id: "cmd_dot", name: "dot", command: "make", cwd: ".", env: {} }],
       },
       processManager,
     });
@@ -180,7 +179,7 @@ describe("WorkspaceController", () => {
   it("ignores selected service actions when a workspace has no services", async () => {
     const processManager = createFakeProcessManager();
     const controller = new WorkspaceController({
-      workspace: { id: "ws_empty", name: "empty", services: [] },
+      workspace: { id: "ws_empty", name: "empty", items: [] },
       processManager,
     });
 
@@ -234,7 +233,7 @@ describe("WorkspaceController", () => {
 
   it("adds a service to runtime state", () => {
     const controller = new WorkspaceController({
-      workspace: { id: "ws_empty", name: "empty", projectDirectory: process.cwd(), services: [] },
+      workspace: { id: "ws_empty", name: "empty", projectDirectory: process.cwd(), items: [] },
       processManager: createFakeProcessManager(),
     });
 
@@ -246,7 +245,7 @@ describe("WorkspaceController", () => {
 
   it("adds a command to runtime state", () => {
     const controller = new WorkspaceController({
-      workspace: { id: "ws_empty", name: "empty", projectDirectory: process.cwd(), services: [], commands: [] },
+      workspace: { id: "ws_empty", name: "empty", projectDirectory: process.cwd(), items: [] },
       processManager: createFakeProcessManager(),
     });
 
@@ -310,8 +309,7 @@ describe("WorkspaceController", () => {
         id: "ws_scripts",
         name: "scripts",
         projectDirectory: process.cwd(),
-        services: [],
-        commands: [createCommand()],
+        items: [{ ...createCommand(), kind: "command" }],
       },
       processManager,
     });
@@ -443,12 +441,11 @@ function createWorkspace(): WorkspaceConfig {
       id: "ws_ecommerce",
       name: "ecommerce",
       projectDirectory: process.cwd(),
-      services: [
-      createService({ id: "svc_backend", name: "backend", autoStart: true }),
-      createService({ id: "svc_frontend", name: "frontend", autoStart: true }),
-      createService({ id: "svc_worker", name: "worker", autoStart: false }),
+      items: [
+      { ...createService({ id: "svc_backend", name: "backend", autoStart: true }), kind: "service" },
+      { ...createService({ id: "svc_frontend", name: "frontend", autoStart: true }), kind: "service" },
+      { ...createService({ id: "svc_worker", name: "worker", autoStart: false }), kind: "service" },
     ],
-    commands: [],
   };
 }
 

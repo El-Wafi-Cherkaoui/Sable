@@ -73,7 +73,7 @@ function createIdGenerator(ids: string[]) {
 }
 
 const emptyConfig: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [],
 };
 
@@ -91,14 +91,13 @@ describe("runCreateWorkspaceCommand", () => {
     });
 
     expect(store.savedConfig).toEqual({
-      version: 1,
+      version: 2,
       workspaces: [
         {
           id: "ws_abc12345",
           name: "ecommerce",
           projectDirectory,
-          services: [],
-          commands: [],
+          items: [],
         },
       ],
     });
@@ -110,11 +109,10 @@ describe("runCreateWorkspaceCommand", () => {
       id: "ws_existing",
       name: "api",
       projectDirectory,
-      services: [],
-      commands: [],
+      items: [],
     };
     const store = createStore({
-      version: 1,
+      version: 2,
       workspaces: [existingWorkspace],
     });
 
@@ -132,8 +130,7 @@ describe("runCreateWorkspaceCommand", () => {
         id: "ws_new1234",
         name: "web",
         projectDirectory,
-        services: [],
-        commands: [],
+        items: [],
       },
     ]);
   });
@@ -161,9 +158,9 @@ describe("runCreateWorkspaceCommand", () => {
       id: "ws_efgh5678",
       name: "ecommerce",
       projectDirectory,
-      commands: [],
-      services: [
+      items: [
         {
+          kind: "service",
           id: "svc_abcd1234",
           name: "backend",
           command: "npm run dev",
@@ -191,8 +188,8 @@ describe("runCreateWorkspaceCommand", () => {
 
   it("rejects exact duplicate workspace names", async () => {
     const store = createStore({
-      version: 1,
-      workspaces: [{ id: "ws_existing", name: "ecommerce", projectDirectory, services: [] }],
+      version: 2,
+      workspaces: [{ id: "ws_existing", name: "ecommerce", projectDirectory, items: [] }],
     });
 
     await expect(
@@ -208,8 +205,8 @@ describe("runCreateWorkspaceCommand", () => {
 
   it("rejects case-insensitive duplicate workspace names", async () => {
     const store = createStore({
-      version: 1,
-      workspaces: [{ id: "ws_existing", name: "Ecommerce", projectDirectory, services: [] }],
+      version: 2,
+      workspaces: [{ id: "ws_existing", name: "Ecommerce", projectDirectory, items: [] }],
     });
 
     await expect(
@@ -242,7 +239,7 @@ describe("runCreateWorkspaceCommand", () => {
     });
 
     expect(store.savedConfig?.workspaces[0]?.id).toMatch(/^ws_/);
-    expect(store.savedConfig?.workspaces[0]?.services[0]?.id).toMatch(/^svc_/);
+    expect(store.savedConfig?.workspaces[0]?.items[0]?.id).toMatch(/^svc_/);
   });
 
   it("preserves absolute service working directories", async () => {
@@ -265,7 +262,7 @@ describe("runCreateWorkspaceCommand", () => {
       projectDirectoryExists: () => true,
     });
 
-    expect(store.savedConfig?.workspaces[0]?.services[0]?.cwd).toBe(serviceDirectory);
+    expect(store.savedConfig?.workspaces[0]?.items[0]?.cwd).toBe(serviceDirectory);
   });
 
   it("rejects project directories that do not exist or are not directories", async () => {

@@ -23,12 +23,12 @@ describe("workspace lookup", () => {
 });
 
 const config: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [
     {
       id: "ws_ecommerce",
       name: "ecommerce",
-      services: [],
+      items: [],
     },
   ],
 };

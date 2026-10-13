@@ -15,7 +15,7 @@ describe("runListWorkspacesCommand", () => {
     const log = vi.fn();
 
     await runListWorkspacesCommand({
-      store: createStore({ version: 1, workspaces: [] }),
+      store: createStore({ version: 2, workspaces: [] }),
       output: { log },
     });
 
@@ -27,13 +27,14 @@ describe("runListWorkspacesCommand", () => {
 
     await runListWorkspacesCommand({
       store: createStore({
-        version: 1,
+        version: 2,
         workspaces: [
           {
             id: "ws_ecommerce",
             name: "ecommerce",
-            services: [
+            items: [
               {
+                kind: "service",
                 id: "svc_backend",
                 name: "backend",
                 command: "npm run dev",
@@ -42,6 +43,7 @@ describe("runListWorkspacesCommand", () => {
                 env: {},
               },
               {
+                kind: "service",
                 id: "svc_frontend",
                 name: "frontend",
                 command: "npm run dev",
@@ -54,7 +56,7 @@ describe("runListWorkspacesCommand", () => {
           {
             id: "ws_api",
             name: "api",
-            services: [],
+            items: [],
           },
         ],
       }),
@@ -70,13 +72,14 @@ describe("runListWorkspacesCommand", () => {
 
     await runListWorkspacesCommand({
       store: createStore({
-        version: 1,
+        version: 2,
         workspaces: [
           {
             id: "ws_api",
             name: "api",
-            services: [
+            items: [
               {
+                kind: "service",
                 id: "svc_backend",
                 name: "backend",
                 command: "npm run dev",

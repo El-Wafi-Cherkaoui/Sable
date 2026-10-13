@@ -34,6 +34,7 @@ import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import { runUpdateDialog } from "../tui/update-dialog.js";
 import { runSuggestServicesFlow, type SuggestServicesFlowOptions, type SuggestServicesFlowResult } from "./suggest-services-flow.js";
+import { servicesOf } from "../config/workspace-items.js";
 
 export type WorkspaceHomeConfigStore = {
   load(): Promise<AppConfig>;
@@ -417,7 +418,7 @@ async function restartActiveSession(
       .map((serviceState) => serviceState.service.id),
   );
 
-  for (const service of options.workspace.services) {
+  for (const service of servicesOf(options.workspace)) {
     if (service.autoStart) {
       runningServiceIds.add(service.id);
     }

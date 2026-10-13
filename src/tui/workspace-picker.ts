@@ -13,6 +13,7 @@ import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { appendAnchoredFooter, clipLines } from "./layout.js";
 import { createTuiStyle, shouldUseColor, type TuiStyle } from "./style.js";
 import { padVisibleEnd, truncateVisible, visibleLength } from "./width.js";
+import { commandsOf, servicesOf } from "../config/workspace-items.js";
 
 export type WorkspacePickerState = {
   workspaces: WorkspaceConfig[];
@@ -544,7 +545,7 @@ function renderPickerLines(
   const nameWidth = Math.max(...state.workspaces.map((workspace) => visibleLength(workspace.name)));
   const statusWidth = "● running".length;
   const servicesText = (workspace: WorkspaceConfig) => {
-    const total = workspace.services.length;
+    const total = servicesOf(workspace).length;
 
     return workspace.id === state.activeWorkspaceId && state.activeRunningServiceCount !== undefined
       ? `${state.activeRunningServiceCount}/${total} services`
@@ -654,7 +655,7 @@ export function describeWorkspaces(workspaces: WorkspaceConfig[]): string {
     return "No workspaces yet · press a to create one";
   }
 
-  const services = workspaces.reduce((total, workspace) => total + workspace.services.length, 0);
+  const services = workspaces.reduce((total, workspace) => total + servicesOf(workspace).length, 0);
 
   return `${workspaces.length} ${workspaces.length === 1 ? "workspace" : "workspaces"} · ${services} ${services === 1 ? "service" : "services"}`;
 }
@@ -747,8 +748,8 @@ export function renderWorkspaceDetails(
   const style = options.style ?? createTuiStyle(options.color ?? false);
   const lines = [`${style.title(workspace.name)}${style.muted(` · ${displayPath(workspace.projectDirectory)}`)}`, ""];
   const items = [
-    ...workspace.services.map((service) => ({ kind: "service" as const, item: service })),
-    ...workspace.commands.map((command) => ({ kind: "command" as const, item: command })),
+    ...servicesOf(workspace).map((service) => ({ kind: "service" as const, item: service })),
+    ...commandsOf(workspace).map((command) => ({ kind: "command" as const, item: command })),
   ];
   const nameWidth = Math.max(8, ...items.map(({ item }) => visibleLength(item.name)));
 

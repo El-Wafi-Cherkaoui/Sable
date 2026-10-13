@@ -5,6 +5,7 @@ import type { KeyInput } from "../input/terminal-key-input.js";
 import type { RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import type { RunWorkspaceController } from "./run-workspace.js";
 import { runWorkspaceHome } from "./workspace-home.js";
+import { commandsOf, servicesOf } from "../config/workspace-items.js";
 
 describe("runWorkspaceHome", () => {
   it("opens the picker, runs the selected workspace, returns to picker, then exits", async () => {
@@ -1024,12 +1025,12 @@ function createFakeController(state?: RuntimeWorkspaceState): RunWorkspaceContro
 function createRuntimeStateForRestart(): RuntimeWorkspaceState {
   const runningState = { status: "running" as const };
   const stoppedState = { status: "stopped" as const };
-  const services = restartWorkspace.services.map((service) => ({
+  const services = servicesOf(restartWorkspace).map((service) => ({
     service,
     process:
       service.id === "svc_web" ? stoppedState : runningState,
   }));
-  const commands = restartWorkspace.commands.map((command) => ({
+  const commands = commandsOf(restartWorkspace).map((command) => ({
     command,
     process: command.id === "cmd_build" ? stoppedState : runningState,
   }));
@@ -1087,15 +1088,16 @@ const workspace: WorkspaceConfig = {
   id: "ws_ecommerce",
   name: "ecommerce",
   projectDirectory: process.cwd(),
-  services: [],
+  items: [],
 };
 
 const workspaceWithService: WorkspaceConfig = {
   id: "ws_ecommerce",
   name: "ecommerce",
   projectDirectory: process.cwd(),
-  services: [
+  items: [
     {
+      kind: "service",
       id: "svc_api",
       name: "api",
       command: "npm run dev",
@@ -1110,21 +1112,21 @@ const portfolioWorkspace: WorkspaceConfig = {
   id: "ws_portfolio",
   name: "portfolio",
   projectDirectory: process.cwd(),
-  services: [],
+  items: [],
 };
 
 const config: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [workspace],
 };
 
 const configWithTwoWorkspaces: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [workspace, portfolioWorkspace],
 };
 
 const configWithService: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [workspaceWithService],
 };
 
@@ -1132,8 +1134,9 @@ const restartWorkspace: WorkspaceConfig = {
   id: "ws_ecommerce",
   name: "ecommerce",
   projectDirectory: process.cwd(),
-  services: [
+  items: [
     {
+      kind: "service",
       id: "svc_api",
       name: "api",
       command: "npm run dev",
@@ -1142,6 +1145,7 @@ const restartWorkspace: WorkspaceConfig = {
       env: {},
     },
     {
+      kind: "service",
       id: "svc_worker",
       name: "worker",
       command: "npm run worker",
@@ -1150,6 +1154,7 @@ const restartWorkspace: WorkspaceConfig = {
       env: {},
     },
     {
+      kind: "service",
       id: "svc_web",
       name: "web",
       command: "npm run web",
@@ -1157,9 +1162,8 @@ const restartWorkspace: WorkspaceConfig = {
       autoStart: false,
       env: {},
     },
-  ],
-  commands: [
     {
+      kind: "command",
       id: "cmd_watch",
       name: "watch",
       command: "npm run watch",
@@ -1167,6 +1171,7 @@ const restartWorkspace: WorkspaceConfig = {
       env: {},
     },
     {
+      kind: "command",
       id: "cmd_build",
       name: "build",
       command: "npm run build",
@@ -1177,6 +1182,6 @@ const restartWorkspace: WorkspaceConfig = {
 };
 
 const configForRestart: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [restartWorkspace],
 };

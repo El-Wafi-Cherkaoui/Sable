@@ -225,7 +225,7 @@ describe("runWorkspaceSession", () => {
     });
 
     expect(controller.removeService).toHaveBeenCalledWith("svc_api");
-    expect(store.savedConfig?.workspaces[0]?.services).toEqual([]);
+    expect(store.savedConfig?.workspaces[0]?.items).toEqual([]);
   });
 
   it("moves a selected service down through the dashboard callback", async () => {
@@ -249,7 +249,7 @@ describe("runWorkspaceSession", () => {
     });
 
     expect(controller.moveService).toHaveBeenCalledWith("svc_api", "down");
-    expect(store.savedConfig?.workspaces[0]?.services.map((service) => service.id)).toEqual([
+    expect(store.savedConfig?.workspaces[0]?.items.map((item) => item.id)).toEqual([
       "svc_worker",
       "svc_api",
     ]);
@@ -421,7 +421,7 @@ describe("runWorkspaceSession", () => {
       },
     });
 
-    expect(store.savedConfig?.workspaces[0]?.services[0]?.command).toBe("npm run dev --watch");
+    expect(store.savedConfig?.workspaces[0]?.items[0]?.command).toBe("npm run dev --watch");
     expect(controller.updateService).toHaveBeenCalledWith(expect.objectContaining({ command: "npm run dev --watch" }));
   });
 });
@@ -531,14 +531,14 @@ const workspace: WorkspaceConfig = {
   id: "ws_ecommerce",
   name: "ecommerce",
   projectDirectory: process.cwd(),
-  services: [],
-  commands: [],
+  items: [],
 };
 
 const workspaceWithService: WorkspaceConfig = {
   ...workspace,
-  services: [
+  items: [
     {
+      kind: "service",
       id: "svc_api",
       name: "api",
       command: "npm run dev",
@@ -550,15 +550,16 @@ const workspaceWithService: WorkspaceConfig = {
 };
 
 const config: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [workspace],
 };
 
 const workspaceWithTwoServices: WorkspaceConfig = {
   ...workspaceWithService,
-  services: [
-    ...workspaceWithService.services,
+  items: [
+    ...workspaceWithService.items,
     {
+      kind: "service",
       id: "svc_worker",
       name: "worker",
       command: "npm run worker",
@@ -570,11 +571,11 @@ const workspaceWithTwoServices: WorkspaceConfig = {
 };
 
 const configWithService: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [workspaceWithService],
 };
 
 const configWithTwoServices: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [workspaceWithTwoServices],
 };

@@ -75,7 +75,7 @@ const workspaces: WorkspaceConfig[] = [
     id: "ws_long",
     name: "a-long-workspace-name",
     projectDirectory: "/srv/some/deeply/nested/project/folder",
-    services: [{ id: "svc_api", name: "api", command: "npm run dev", cwd: ".", autoStart: true, env: {} }],
+    items: [{ kind: "service", id: "svc_api", name: "api", command: "npm run dev", cwd: ".", autoStart: true, env: {} }],
   },
 ];
 
