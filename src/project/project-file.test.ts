@@ -24,7 +24,7 @@ describe("parseProjectFile", () => {
     expect(result.type === "ok" && result.file).toEqual({
       version: 1,
       placeholders: {},
-      items: [{ type: "service", name: "api", command: "npm run dev", cwd: ".", after: [], env: {} }],
+      items: [{ type: "service", name: "api", command: "npm run dev", cwd: ".", after: [], env: {}, secrets: [] }],
     });
   });
 
@@ -95,6 +95,23 @@ describe("parseProjectFile", () => {
     expect(problems({ ...minimal, placeholders: { port: {} } })).toContain('"port" is not a valid placeholder name');
     expect(problems({ version: 1, placeholders: { PORT: {} }, items: [{ type: "service", name: "a", command: "x", cwd: "{{PORT}}" }] }))
       .toContain("A folder can't contain a placeholder");
+  });
+
+  it("accepts secrets as names with no value, next to ordinary variables", () => {
+    const result = parse({ version: 1, items: [{ type: "service", name: "api", command: "x", env: { PORT: "3000" }, secrets: ["STRIPE_KEY", "DATABASE_URL"] }] });
+
+    expect(result.type).toBe("ok");
+    expect(result.type === "ok" && result.file.items[0]?.secrets).toEqual(["STRIPE_KEY", "DATABASE_URL"]);
+  });
+
+  it("refuses a secret that also has a value in the file, which would defeat the point", () => {
+    expect(problems({ version: 1, items: [{ type: "service", name: "a", command: "x", env: { TOKEN: "abc" }, secrets: ["TOKEN"] }] }))
+      .toContain('items.0.secrets.0: "TOKEN" is a secret, so it can\'t have a value in "env"');
+  });
+
+  it("checks the names of secrets", () => {
+    expect(problems({ version: 1, items: [{ type: "service", name: "a", command: "x", secrets: ["BAD-NAME"] }] })).toContain('"BAD-NAME" is not a valid environment variable name');
+    expect(problems({ version: 1, items: [{ type: "service", name: "a", command: "x", secrets: ["A", "A"] }] })).toContain('"A" is listed twice');
   });
 
   it("leaves shell variables alone", () => {

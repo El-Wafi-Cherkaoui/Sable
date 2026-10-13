@@ -54,6 +54,7 @@ export function resolveProjectItems(
     env: Object.fromEntries(Object.entries(item.env).map(([key, value]) => [key, fill(value)])),
     ...(item.type === "service" ? { autoStart: item.autoStart ?? true } : {}),
     after: item.after,
+    secrets: item.secrets,
   }));
 }
 
@@ -143,8 +144,10 @@ export function linkWorkspaceToFile(options: {
     ...options.workspace,
     items: options.workspace.items.map((item) => {
       const name = options.names.get(item.id);
+      const exported = resolved.find((candidate) => candidate.name === name);
 
-      return name === undefined ? item : { ...item, fromProject: name };
+      // The item now has the secrets the file names, so a later sync compares like with like.
+      return name === undefined ? item : { ...item, fromProject: name, secrets: exported?.secrets ?? item.secrets };
     }),
     project: {
       hash: options.hash,
@@ -212,6 +215,7 @@ function newItem(wanted: ResolvedProjectItem, id: string): ItemConfig {
     env: wanted.env,
     after: [],
     fromProject: wanted.name,
+    secrets: wanted.secrets,
   };
 
   return wanted.kind === "service" ? { kind: "service", ...common, autoStart: wanted.autoStart ?? true } : { kind: "command", ...common };
@@ -220,11 +224,18 @@ function newItem(wanted: ResolvedProjectItem, id: string): ItemConfig {
 function mergeItem(existing: ItemConfig, wanted: ResolvedProjectItem, base: ProjectBaseItem | undefined): ItemConfig {
   const take = <T>(local: T, old: T | undefined, next: T): T =>
     base === undefined || JSON.stringify(local) === JSON.stringify(old) ? next : local;
+  const secrets = take(existing.secrets ?? [], base?.secrets, wanted.secrets);
+  // The values of secret variables live only here: they are never in the file or the stored base, so they
+  // are set apart before comparing, and put back afterwards.
+  const secretKeys = new Set([...(base?.secrets ?? []), ...wanted.secrets, ...secrets]);
+  const localPublic = Object.fromEntries(Object.entries(existing.env).filter(([key]) => !secretKeys.has(key)));
+  const localSecretValues = Object.fromEntries(Object.entries(existing.env).filter(([key]) => secrets.includes(key)));
   const merged = {
     ...existing,
     command: take(existing.command, base?.command, wanted.command),
     cwd: take(existing.cwd, base?.cwd, wanted.cwd),
-    env: take(existing.env, base?.env, wanted.env),
+    env: { ...take(localPublic, base?.env, wanted.env), ...localSecretValues },
+    secrets,
   };
 
   return merged.kind === "service" && existing.kind === "service"
@@ -284,5 +295,6 @@ function sortedBase(base: ProjectBaseItem): unknown {
     autoStart: base.autoStart ?? null,
     env: Object.entries(base.env).sort(([a], [b]) => (a < b ? -1 : 1)),
     after: [...base.after].sort(),
+    secrets: [...(base.secrets ?? [])].sort(),
   };
 }

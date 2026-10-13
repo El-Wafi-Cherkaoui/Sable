@@ -11,6 +11,7 @@ function facts(base: ProjectBaseItem, projectDirectory: string, includeDefaults 
     ["run", base.command],
     ["in", folder],
     ["env", env],
+    ["secret", base.secrets.length === 0 ? "" : `${base.secrets.join(", ")}  (you are asked for ${base.secrets.length === 1 ? "it" : "them"} when it first runs)`],
     ["after", base.after.join(", ")],
     ["starts", base.kind === "service" ? (base.autoStart === false ? "only when you start it" : "when the workspace opens") : ""],
   ];

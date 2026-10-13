@@ -266,7 +266,7 @@ export async function runExportProjectFlow(
   await options.store.save({
     ...config,
     workspaces: config.workspaces.map((candidate) => candidate.id === workspace.id
-      ? linkWorkspaceToFile({ workspace: candidate, file: written.file, hash: written.hash, values: built.values, names: built.names })
+      ? linkWorkspaceToFile({ workspace: candidate, file: written.file, hash: written.hash, values: {}, names: built.names })
       : candidate),
   });
 

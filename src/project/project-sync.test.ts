@@ -72,6 +72,7 @@ describe("placeholders", () => {
       env: { PORT: "4000" },
       autoStart: true,
       after: ["db"],
+      secrets: [],
     });
     expect(defaulted?.env).toEqual({ PORT: "3000" });
   });
@@ -241,6 +242,73 @@ describe("syncProject, later changes to the file", () => {
 
     expect(next.workspace).toEqual(before);
     expect(next.summary).toEqual({ added: [], updated: [], removed: [] });
+  });
+});
+
+describe("syncProject, secret variables", () => {
+  const withSecrets = (secrets: string[], env: Record<string, string> = { PORT: "3000" }) => ({
+    version: 1,
+    items: [{ type: "service", name: "api", command: "npm run dev", env, secrets }],
+  });
+  const apiOf = (workspace: WorkspaceConfig) => itemNamed(workspace, "api");
+  const setEnv = (workspace: WorkspaceConfig, env: Record<string, string>): WorkspaceConfig => ({
+    ...workspace,
+    items: workspace.items.map((item) => item.name === "api" ? { ...item, env } : item),
+  });
+
+  it("creates the item with the secrets named but no value for them", () => {
+    const { workspace } = sync(empty(), withSecrets(["STRIPE_KEY"]), {});
+
+    expect(apiOf(workspace)).toMatchObject({ env: { PORT: "3000" }, secrets: ["STRIPE_KEY"] });
+    expect(workspace.project?.base.api).toMatchObject({ env: { PORT: "3000" }, secrets: ["STRIPE_KEY"] });
+  });
+
+  it("keeps the value the user typed for a secret through every later update of the file", () => {
+    const first = sync(empty(), withSecrets(["STRIPE_KEY"]), {}).workspace;
+    const typed = setEnv(first, { PORT: "3000", STRIPE_KEY: "sk_live_mine" });
+    const updated = sync(typed, { ...withSecrets(["STRIPE_KEY"]), items: [{ type: "service", name: "api", command: "npm run start", env: { PORT: "4000" }, secrets: ["STRIPE_KEY"] }] }, {}).workspace;
+
+    expect(apiOf(updated)).toMatchObject({ command: "npm run start", env: { PORT: "4000", STRIPE_KEY: "sk_live_mine" } });
+  });
+
+  it("does not mistake the secret value for a local change, so the file's other variables still update", () => {
+    const first = sync(empty(), withSecrets(["STRIPE_KEY"]), {}).workspace;
+    const typed = setEnv(first, { PORT: "3000", STRIPE_KEY: "sk_live_mine" });
+    const same = sync(typed, withSecrets(["STRIPE_KEY"], { PORT: "5000" }), {}).workspace;
+
+    expect(apiOf(same).env).toEqual({ PORT: "5000", STRIPE_KEY: "sk_live_mine" });
+  });
+
+  it("still keeps a plain variable the user changed here", () => {
+    const first = sync(empty(), withSecrets(["STRIPE_KEY"]), {}).workspace;
+    const edited = setEnv(first, { PORT: "9999", STRIPE_KEY: "sk_live_mine" });
+    const updated = sync(edited, withSecrets(["STRIPE_KEY"], { PORT: "5000" }), {}).workspace;
+
+    expect(apiOf(updated).env).toEqual({ PORT: "9999", STRIPE_KEY: "sk_live_mine" });
+  });
+
+  it("asks for a secret the file starts to need, without touching the others", () => {
+    const first = sync(empty(), withSecrets(["STRIPE_KEY"]), {}).workspace;
+    const typed = setEnv(first, { PORT: "3000", STRIPE_KEY: "sk_live_mine" });
+    const updated = sync(typed, withSecrets(["STRIPE_KEY", "DATABASE_URL"]), {}).workspace;
+
+    expect(apiOf(updated)).toMatchObject({ secrets: ["STRIPE_KEY", "DATABASE_URL"], env: { PORT: "3000", STRIPE_KEY: "sk_live_mine" } });
+    expect(apiOf(updated).env.DATABASE_URL).toBeUndefined();
+  });
+
+  it("keeps a variable the user marked secret here, as theirs", () => {
+    const first = sync(empty(), withSecrets([]), {}).workspace;
+    const marked = { ...setEnv(first, { PORT: "3000", MINE: "x" }), items: setEnv(first, { PORT: "3000", MINE: "x" }).items.map((item) => ({ ...item, secrets: ["MINE"] })) };
+    const updated = sync(marked, withSecrets([]), {}).workspace;
+
+    expect(apiOf(updated)).toMatchObject({ secrets: ["MINE"], env: { PORT: "3000", MINE: "x" } });
+  });
+
+  it("shows a new secret in the changes the user is asked to approve", () => {
+    const approved = sync(empty(), withSecrets([]), {}).workspace.project!.base;
+    const changes = describeProjectChanges(approved, resolveProjectItems(file(withSecrets(["STRIPE_KEY"])).file, {}, projectDirectory));
+
+    expect(changes.changed.map((entry) => entry.item.name)).toEqual(["api"]);
   });
 });
 

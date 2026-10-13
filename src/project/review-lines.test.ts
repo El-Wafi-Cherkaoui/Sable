@@ -13,8 +13,9 @@ const api: ResolvedProjectItem = {
   env: { PORT: "3000", MODE: "dev" },
   autoStart: true,
   after: ["db"],
+  secrets: [],
 };
-const build: ResolvedProjectItem = { name: "build", kind: "command", command: "npm run build", cwd: projectDirectory, env: {}, after: [] };
+const build: ResolvedProjectItem = { name: "build", kind: "command", command: "npm run build", cwd: projectDirectory, env: {}, after: [], secrets: [] };
 
 const text = (lines: Array<{ text: string }>) => lines.map((line) => line.text).join("\n");
 
@@ -38,6 +39,14 @@ describe("importReviewLines", () => {
     expect(rendered).not.toContain("env");
     expect(rendered).not.toContain("after");
     expect(rendered).not.toContain("starts");
+  });
+
+  it("lists the secrets an item needs, saying that each person is asked for them", () => {
+    const rendered = text(importReviewLines([{ ...api, secrets: ["STRIPE_KEY", "DATABASE_URL"] }, { ...build, secrets: ["TOKEN"] }], [], projectDirectory));
+
+    expect(rendered).toContain("    secret STRIPE_KEY, DATABASE_URL  (you are asked for them when it first runs)");
+    expect(rendered).toContain("    secret TOKEN  (you are asked for it when it first runs)");
+    expect(text(importReviewLines([api], [], projectDirectory))).not.toContain("secret");
   });
 
   it("says when a service only starts on request", () => {
@@ -70,6 +79,13 @@ describe("changesReviewLines", () => {
     expect(text(rendered)).toContain("- removed old");
     expect(rendered.find((line) => line.text.includes("+ run"))?.tone).toBe("added");
     expect(rendered.find((line) => line.text.includes("- run"))?.tone).toBe("removed");
+  });
+
+  it("shows a secret added to an item by the file", () => {
+    const { name: _name, ...before } = api;
+    const rendered = text(changesReviewLines({ added: [], changed: [{ item: { ...api, secrets: ["STRIPE_KEY"] }, before }], removed: [] }, projectDirectory));
+
+    expect(rendered).toContain("    + secret STRIPE_KEY");
   });
 
   it("only lists the facts that differ", () => {

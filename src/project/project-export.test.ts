@@ -46,33 +46,55 @@ describe("buildProjectFile", () => {
     expect(parseProjectFile(text).type).toBe("ok");
   });
 
-  it("keeps values that look like secrets out of the file, using a placeholder and remembering the real value", () => {
-    const api = item({ id: "svc_api", name: "api", env: { PORT: "3000", STRIPE_API_KEY: "sk_live_123", DB_PASSWORD: "hunter2" } });
-    const { text, values, notes } = buildProjectFile(workspaceOf(api), home);
-    const file = parsed(text);
+  describe("secret variables", () => {
+    it("leaves the value of every variable marked secret out of the file, and only names it", () => {
+      const api = item({ id: "svc_api", name: "api", secrets: ["STRIPE_KEY", "DATABASE_URL"], env: { PORT: "3000", STRIPE_KEY: "sk_live_123", DATABASE_URL: "postgres://u:hunter2@db/x" } });
+      const { text, notes } = buildProjectFile(workspaceOf(api), home);
 
-    expect(text).not.toContain("sk_live_123");
-    expect(text).not.toContain("hunter2");
-    expect(file.items[0]?.env).toEqual({ PORT: "3000", STRIPE_API_KEY: "{{API_STRIPE_API_KEY}}", DB_PASSWORD: "{{API_DB_PASSWORD}}" });
-    expect(Object.keys(file.placeholders ?? {})).toEqual(["API_STRIPE_API_KEY", "API_DB_PASSWORD"]);
-    expect(values).toEqual({ API_STRIPE_API_KEY: "sk_live_123", API_DB_PASSWORD: "hunter2" });
-    expect(notes.join(" ")).toContain("STRIPE_API_KEY looks like a secret");
-    expect(parseProjectFile(text).type).toBe("ok");
-  });
+      expect(text).not.toContain("sk_live_123");
+      expect(text).not.toContain("hunter2");
+      expect(parsed(text).items[0]).toMatchObject({ env: { PORT: "3000" }, secrets: ["STRIPE_KEY", "DATABASE_URL"] });
+      expect(parsed(text).placeholders).toBeUndefined();
+      expect(notes.join(" ")).toContain("api: STRIPE_KEY is marked secret, so its value is not written");
+      expect(parseProjectFile(text).type).toBe("ok");
+    });
 
-  it("gives each secret its own placeholder, even when two items use the same variable", () => {
-    const first = item({ id: "svc_a", name: "a", env: { TOKEN: "one" } });
-    const second = item({ id: "svc_b", name: "b", env: { TOKEN: "two" } });
-    const { values } = buildProjectFile(workspaceOf(first, second), home);
+    it("trusts the user's marks: a variable with a harmless name is protected, and a marked-not variable is written", () => {
+      const api = item({ id: "svc_api", name: "api", secrets: ["DATABASE_URL"], env: { DATABASE_URL: "postgres://x", API_KEY: "abc", PORT: "3000" } });
+      const { text, notes } = buildProjectFile(workspaceOf(api), home);
+      const entry = parsed(text).items[0]!;
 
-    expect(values).toEqual({ A_TOKEN: "one", B_TOKEN: "two" });
-  });
+      expect(entry.env).toEqual({ API_KEY: "abc", PORT: "3000" });
+      expect(entry.secrets).toEqual(["DATABASE_URL"]);
+      // It still says so, because API_KEY looks like a secret and is going into the file.
+      expect(notes.join(" ")).toContain("API_KEY looks like a secret but is not marked as one, so its value IS written");
+    });
 
-  it("makes valid placeholder names out of awkward item names", () => {
-    const { values, text } = buildProjectFile(workspaceOf(item({ id: "svc_a", name: "my api!", env: { TOKEN: "t" } }), item({ id: "svc_b", name: "2nd", env: { TOKEN: "u" } })), home);
+    it("names a secret that has no value yet, so teammates know the item needs it", () => {
+      const api = item({ id: "svc_api", name: "api", secrets: ["STRIPE_KEY"], env: {} });
+      const { text } = buildProjectFile(workspaceOf(api), home);
 
-    expect(Object.keys(values)).toEqual(["MY_API_TOKEN", "X_2ND_TOKEN"]);
-    expect(parseProjectFile(text).type).toBe("ok");
+      expect(parsed(text).items[0]).toEqual({ type: "service", name: "api", command: "npm run dev", secrets: ["STRIPE_KEY"] });
+    });
+
+    it("guesses from the names only for an item whose secrets were never reviewed, and says so", () => {
+      const api = item({ id: "svc_api", name: "api", env: { PORT: "3000", STRIPE_API_KEY: "sk_live_123", DB_PASSWORD: "hunter2" } });
+      const { text, notes } = buildProjectFile(workspaceOf(api), home);
+
+      expect(text).not.toContain("sk_live_123");
+      expect(text).not.toContain("hunter2");
+      expect(parsed(text).items[0]).toMatchObject({ env: { PORT: "3000" }, secrets: ["STRIPE_API_KEY", "DB_PASSWORD"] });
+      expect(notes.join(" ")).toContain("STRIPE_API_KEY looks like a secret, so its value is not written");
+      expect(notes.join(" ")).toContain("Open the item with e to decide yourself");
+    });
+
+    it("does not guess when the user decided that nothing is secret", () => {
+      const api = item({ id: "svc_api", name: "api", secrets: [], env: { API_KEY: "abc" } });
+      const { text } = buildProjectFile(workspaceOf(api), home);
+
+      expect(parsed(text).items[0]).toMatchObject({ env: { API_KEY: "abc" } });
+      expect(parsed(text).items[0]).not.toHaveProperty("secrets");
+    });
   });
 
   it("uses the project folder, and says so, for a folder outside the project", () => {
