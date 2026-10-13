@@ -173,7 +173,7 @@ Logs/output are kept in memory, up to 2,000 lines (and about 2 million character
 
 ## Start order
 
-An item can wait for others. In the add or edit form, the **After** rows take the names of the services or commands that must come first, for example `db` for an API that needs its database:
+An item can wait for others. In the add or edit form, the **After** field lists the other services and commands. Move onto one and press `Space` to tick the ones that must come first, for example `db` for an API that needs its database. Items that already wait for this one are not offered, so you can't make a loop:
 
 - A service counts as ready once it has stayed alive for 5 seconds.
 - A command counts as ready when it exits with code 0, so `npm run build` can finish before `npm start` begins.
