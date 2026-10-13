@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { ItemConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { ManagedProcessState, ServiceLogEntry, StopFailure } from "../process/process-manager.js";
+import { runStartPlan, type StartPlan } from "./start-plan.js";
 import {
   addItemToRuntimeState,
   createRuntimeState,
@@ -9,6 +10,7 @@ import {
   removeItemFromRuntimeState,
   selectNextItem,
   selectPreviousItem,
+  setQueueStateInRuntimeState,
   updateItemConfigInRuntimeState,
   updateProcessState,
   type RuntimeWorkspaceState,
@@ -40,15 +42,34 @@ export function formatShutdownFailure(failure: ShutdownFailure): string {
 export type WorkspaceControllerOptions = {
   workspace: WorkspaceConfig;
   processManager: WorkspaceProcessManager;
+  // How long a service must stay alive before the items that wait for it start.
+  upAfterMs?: number;
+  pollMs?: number;
+  now?: () => number;
+  sleep?: (milliseconds: number) => Promise<void>;
 };
+
+const defaultUpAfterMs = 5_000;
+const defaultPollMs = 200;
 
 export class WorkspaceController {
   private state: RuntimeWorkspaceState;
   private readonly processManager: WorkspaceProcessManager;
+  private readonly timing: Required<Pick<WorkspaceControllerOptions, "upAfterMs" | "pollMs" | "now" | "sleep">>;
+  private activePlan: Promise<void> | undefined;
+  // Items the user stopped while they were still waiting for a prerequisite.
+  private readonly droppedIds = new Set<string>();
+  private closing = false;
 
   constructor(options: WorkspaceControllerOptions) {
     this.state = createRuntimeState(options.workspace);
     this.processManager = options.processManager;
+    this.timing = {
+      upAfterMs: options.upAfterMs ?? defaultUpAfterMs,
+      pollMs: options.pollMs ?? defaultPollMs,
+      now: options.now ?? Date.now,
+      sleep: options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))),
+    };
   }
 
   getState(): RuntimeWorkspaceState {
@@ -57,12 +78,53 @@ export class WorkspaceController {
     return this.state;
   }
 
+  // Starts the auto-start services in dependency order. Returns once everything that could
+  // start right away has; items still waiting for a prerequisite keep going in the background.
   async startAutoStartServices(): Promise<void> {
-    const services = this.state.items
-      .map((itemState) => itemState.item)
-      .filter((item) => item.kind === "service" && item.autoStart);
+    await this.startPlan(
+      this.state.items
+        .map((itemState) => itemState.item)
+        .filter((item) => item.kind === "service" && item.autoStart)
+        .map((item) => item.id),
+    );
+  }
 
-    await Promise.all(services.map((service) => this.startItem(service.id)));
+  // Starts these items and whatever they wait for, in order. Returns after the first pass.
+  async startPlan(itemIds: string[]): Promise<void> {
+    if (this.activePlan !== undefined) {
+      await this.activePlan;
+    }
+
+    const plan = this.beginPlan(itemIds);
+
+    await plan.firstPass;
+  }
+
+  // Starts every service (and the commands they wait for) without waiting for it to finish.
+  // "busy" when a start is already under way.
+  startAll(): "started" | "busy" | "nothing" {
+    if (this.activePlan !== undefined) {
+      return "busy";
+    }
+
+    const services = this.state.items.filter((itemState) => itemState.item.kind === "service");
+
+    if (services.length === 0) {
+      return "nothing";
+    }
+
+    this.beginPlan(services.map((itemState) => itemState.item.id));
+
+    return "started";
+  }
+
+  isStarting(): boolean {
+    return this.activePlan !== undefined;
+  }
+
+  // Resolves when the current start-all plan, if any, has finished.
+  async whenStarted(): Promise<void> {
+    await this.activePlan;
   }
 
   async startItem(itemId: string): Promise<ManagedProcessState> {
@@ -72,6 +134,9 @@ export class WorkspaceController {
       return { status: "stopped" };
     }
 
+    this.droppedIds.delete(itemId);
+    this.setQueue(itemId, undefined);
+
     return this.runProcessAction(itemId, () =>
       this.processManager.start(this.withResolvedDirectory(item)),
     );
@@ -79,6 +144,14 @@ export class WorkspaceController {
 
   async stopItem(itemId: string): Promise<ManagedProcessState> {
     if (this.findItem(itemId) === undefined) {
+      return { status: "stopped" };
+    }
+
+    // Stopping an item the plan is still holding back cancels its start.
+    if (this.state.items[this.state.itemIndexById[itemId]!]?.queue?.status === "waiting") {
+      this.droppedIds.add(itemId);
+      this.setQueue(itemId, undefined);
+
       return { status: "stopped" };
     }
 
@@ -167,6 +240,8 @@ export class WorkspaceController {
   }
 
   async shutdown(): Promise<ShutdownFailure[]> {
+    this.closing = true;
+
     const failures = await this.processManager.stopAll();
 
     return failures.map((failure) => ({
@@ -184,6 +259,32 @@ export class WorkspaceController {
     return projectDirectory === undefined || path.isAbsolute(item.cwd)
       ? item
       : { ...item, cwd: path.resolve(projectDirectory, item.cwd) };
+  }
+
+  private beginPlan(targetIds: string[]): StartPlan {
+    const plan = runStartPlan({
+      items: this.state.items.map(({ item }) => ({ id: item.id, name: item.name, kind: item.kind, after: item.after })),
+      targets: targetIds,
+      getProcess: (itemId) => this.processManager.getState(itemId),
+      start: (itemId) => this.startItem(itemId),
+      mark: (itemId, mark) => this.setQueue(itemId, mark),
+      isDropped: (itemId) => this.closing || this.droppedIds.has(itemId),
+      ...this.timing,
+    });
+    const tracked = plan.done.finally(() => {
+      if (this.activePlan === tracked) {
+        this.activePlan = undefined;
+      }
+    });
+
+    this.activePlan = tracked;
+    tracked.catch(() => undefined);
+
+    return plan;
+  }
+
+  private setQueue(itemId: string, queue: Parameters<typeof setQueueStateInRuntimeState>[2]): void {
+    this.state = setQueueStateInRuntimeState(this.state, itemId, queue);
   }
 
   private findItem(itemId: string): ItemConfig | undefined {

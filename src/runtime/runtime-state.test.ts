@@ -12,6 +12,7 @@ import {
   runtimeServices,
   selectNextItem,
   selectPreviousItem,
+  setQueueStateInRuntimeState,
   updateItemConfigInRuntimeState,
   updateProcessState,
 } from "./runtime-state.js";
@@ -196,6 +197,30 @@ describe("runtime state", () => {
     expect(moveServiceInRuntimeState(initialState, "svc_backend", "up")).toBe(initialState);
     expect(moveServiceInRuntimeState(initialState, "svc_frontend", "down")).toBe(initialState);
     expect(moveServiceInRuntimeState(initialState, "cmd_build", "up")).toBe(initialState);
+  });
+
+  it("marks an item as waiting or skipped and clears the mark without touching the others", () => {
+    const initialState = createRuntimeState(createWorkspace());
+    const waiting = setQueueStateInRuntimeState(initialState, "svc_frontend", { status: "waiting", for: ["backend"] });
+
+    expect(waiting.items[1]?.queue).toEqual({ status: "waiting", for: ["backend"] });
+    expect(waiting.items[0]?.queue).toBeUndefined();
+    expect(initialState.items[1]?.queue).toBeUndefined();
+
+    const cleared = setQueueStateInRuntimeState(waiting, "svc_frontend", undefined);
+
+    expect("queue" in cleared.items[1]!).toBe(false);
+    expect(setQueueStateInRuntimeState(initialState, "missing", { status: "skipped", reason: "x" })).toBe(initialState);
+  });
+
+  it("stops items waiting for a removed item", () => {
+    const state = createRuntimeState({
+      ...createWorkspace(),
+      items: [createService("svc_a"), { ...createService("svc_b"), after: ["svc_a"] }, { ...createCommand("cmd_c"), after: ["svc_a", "svc_b"] }],
+    });
+    const nextState = removeItemFromRuntimeState(state, "svc_a");
+
+    expect(nextState.items.map((itemState) => itemState.item.after)).toEqual([[], ["svc_b"]]);
   });
 });
 

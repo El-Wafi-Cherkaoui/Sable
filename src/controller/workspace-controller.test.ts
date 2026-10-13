@@ -421,6 +421,166 @@ type FakeProcessManager = WorkspaceProcessManager & {
   stopAll: ReturnType<typeof vi.fn>;
 };
 
+describe("WorkspaceController start order", () => {
+  function workspaceWith(...items: WorkspaceConfig["items"]): WorkspaceConfig {
+    return { id: "ws_deps", name: "deps", projectDirectory: process.cwd(), items };
+  }
+
+  const db = createService({ id: "svc_db", name: "db" });
+  const api = createService({ id: "svc_api", name: "api", after: ["svc_db"] });
+  const build: CommandConfig = { ...createCommand(), id: "cmd_build", name: "build" };
+
+  // Sleeping only ends when the test advances the clock, so a plan can be inspected midway.
+  function manualClock() {
+    let time = 0;
+    const gates: Array<() => void> = [];
+    const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+    return {
+      now: () => time,
+      sleep: (milliseconds: number) => new Promise<void>((resolve) => {
+        gates.push(() => {
+          time += milliseconds;
+          resolve();
+        });
+      }),
+      async advance(milliseconds: number) {
+        const target = time + milliseconds;
+
+        await flush();
+
+        while (time < target && gates.length > 0) {
+          gates.shift()!();
+          await flush();
+        }
+      },
+    };
+  }
+
+  function createController(workspace: WorkspaceConfig, processManager = createFakeProcessManager()) {
+    const clock = manualClock();
+    const controller = new WorkspaceController({
+      workspace,
+      processManager,
+      upAfterMs: 1000,
+      pollMs: 500,
+      now: clock.now,
+      sleep: clock.sleep,
+    });
+
+    return { controller, clock, processManager };
+  }
+
+  const queueOf = (controller: WorkspaceController, id: string) =>
+    controller.getState().items[controller.getState().itemIndexById[id]!]?.queue;
+
+  it("starts an auto-start service only after the one it waits for has been up for a while", async () => {
+    const { controller, clock, processManager } = createController(workspaceWith(db, api));
+
+    await controller.startAutoStartServices();
+
+    expect(processManager.startedServiceIds).toEqual(["svc_db"]);
+    expect(queueOf(controller, "svc_api")).toEqual({ status: "waiting", for: ["db"] });
+    expect(controller.isStarting()).toBe(true);
+
+    await clock.advance(1000);
+
+    expect(processManager.startedServiceIds).toEqual(["svc_db", "svc_api"]);
+    expect(queueOf(controller, "svc_api")).toBeUndefined();
+
+    await clock.advance(1000);
+    await controller.whenStarted();
+
+    expect(controller.isStarting()).toBe(false);
+  });
+
+  it("starts every service with start all, including ones that are not auto-start, and runs the commands they wait for", async () => {
+    const manual = createService({ id: "svc_manual", name: "manual", autoStart: false, after: ["cmd_build"] });
+    const { controller, clock, processManager } = createController(workspaceWith(db, manual, build));
+
+    expect(controller.startAll()).toBe("started");
+    expect(controller.startAll()).toBe("busy");
+
+    await clock.advance(500);
+    processManager.states.set("cmd_build", { status: "exited", exitCode: 0, signal: null });
+    await clock.advance(2000);
+    await controller.whenStarted();
+
+    expect(processManager.startedServiceIds.sort()).toEqual(["cmd_build", "svc_db", "svc_manual"]);
+    expect(controller.startAll()).toBe("started");
+  });
+
+  it("has nothing to start when the workspace has no services", () => {
+    const { controller } = createController(workspaceWith(build));
+
+    expect(controller.startAll()).toBe("nothing");
+  });
+
+  it("cancels the start of an item that is still waiting when it is stopped", async () => {
+    const { controller, clock, processManager } = createController(workspaceWith(db, api));
+
+    await controller.startAutoStartServices();
+    await controller.stopItem("svc_api");
+
+    expect(queueOf(controller, "svc_api")).toBeUndefined();
+    expect(processManager.stoppedServiceIds).toEqual([]);
+
+    await clock.advance(1000);
+    await controller.whenStarted();
+
+    expect(processManager.startedServiceIds).toEqual(["svc_db"]);
+  });
+
+  it("lets an item that was cancelled be started by hand afterwards", async () => {
+    const { controller, clock, processManager } = createController(workspaceWith(db, api));
+
+    await controller.startAutoStartServices();
+    await controller.stopItem("svc_api");
+    await controller.startItem("svc_api");
+
+    expect(processManager.startedServiceIds).toEqual(["svc_db", "svc_api"]);
+
+    await clock.advance(2000);
+    await controller.whenStarted();
+  });
+
+  it("stops waiting for anything when the workspace shuts down", async () => {
+    const { controller, clock, processManager } = createController(workspaceWith(db, api));
+
+    await controller.startAutoStartServices();
+    await controller.shutdown();
+    await clock.advance(500);
+    await controller.whenStarted();
+
+    expect(processManager.startedServiceIds).toEqual(["svc_db"]);
+    expect(queueOf(controller, "svc_api")).toBeUndefined();
+  });
+
+  it("keeps a skipped mark visible until the item is started again", async () => {
+    const { controller, clock, processManager } = createController(workspaceWith(build, createService({ id: "svc_web", name: "web", after: ["cmd_build"] })));
+
+    controller.startAll();
+    await clock.advance(500);
+    processManager.states.set("cmd_build", { status: "exited", exitCode: 1, signal: null });
+    await clock.advance(500);
+    await controller.whenStarted();
+
+    expect(queueOf(controller, "svc_web")).toEqual({ status: "skipped", reason: "build failed" });
+
+    await controller.startItem("svc_web");
+
+    expect(queueOf(controller, "svc_web")).toBeUndefined();
+  });
+
+  it("stops items waiting for one that is removed", () => {
+    const { controller } = createController(workspaceWith(db, api));
+
+    controller.removeItem("svc_db");
+
+    expect(controller.getState().items.map((itemState) => itemState.item.after)).toEqual([[]]);
+  });
+});
+
 function createFakeProcessManager(
   overrides: Partial<WorkspaceProcessManager> = {},
 ): FakeProcessManager {

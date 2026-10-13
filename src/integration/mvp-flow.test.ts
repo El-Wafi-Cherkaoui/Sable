@@ -85,7 +85,7 @@ describe("MVP integration flows", () => {
           { ...createService({
             id: "svc_api",
             command: nodeCommand('console.log("ready"); setInterval(() => {}, 1000);'),
-          }), kind: "service" },
+          }), kind: "service", after: [] },
         ],
       },
       processManager,
@@ -129,7 +129,7 @@ describe("MVP integration flows", () => {
                 )}, "ready"); setInterval(() => {}, 1000);`,
               ),
               autoStart: true,
-            }), kind: "service" },
+            }), kind: "service", after: [] },
           ],
         },
       ],
