@@ -32,6 +32,7 @@ describe("runAddWorkspaceItemFlow", () => {
       cwd: path.join(projectDirectory, "jobs"),
       autoStart: false,
       env: { QUEUE: "default" },
+      secrets: [],
     });
   });
 
@@ -45,7 +46,7 @@ describe("runAddWorkspaceItemFlow", () => {
 
     expect(result).toEqual({ type: "completed", message: 'Added command "migrate".', itemId: "cmd_migrate" });
     expect(store.savedConfig?.workspaces[0]?.items.filter((item) => item.kind === "command")).toEqual([
-      { kind: "command", after: [], id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: projectDirectory, env: {} },
+      { kind: "command", after: [], id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: projectDirectory, env: {}, secrets: [] },
     ]);
   });
 
@@ -56,9 +57,9 @@ describe("runAddWorkspaceItemFlow", () => {
 
     const options = form.mock.calls[0]![0];
 
-    expect(options.values).toEqual({ type: "service", name: "", command: "", cwd: ".", autoStart: true, after: [], env: [] });
-    expect(options.fields({ type: "service" }).map((field) => field.key)).toEqual(["type", "name", "command", "cwd", "autoStart", "after", "env"]);
-    expect(options.fields({ type: "command" }).map((field) => field.key)).toEqual(["type", "name", "command", "cwd", "after", "env"]);
+    expect(options.values).toEqual({ type: "service", name: "", command: "", cwd: ".", autoStart: true, after: [], env: [], secrets: [] });
+    expect(options.fields({ type: "service" }).map((field) => field.key)).toEqual(["type", "name", "command", "cwd", "autoStart", "after", "env", "secrets"]);
+    expect(options.fields({ type: "command" }).map((field) => field.key)).toEqual(["type", "name", "command", "cwd", "after", "env", "secrets"]);
   });
 
   it("does not save when the form is cancelled or Sable exits", async () => {
@@ -103,10 +104,10 @@ describe("runEditItemFlow, for a service", () => {
       store, workspace, keyInput: createKeyInput([]), itemId: "svc_api", form, directoryExists: () => true,
     });
 
-    expect(form.mock.calls[0]![0].values).toEqual({ name: "api", command: "npm run dev", cwd: ".", autoStart: true, after: [], env: [] });
+    expect(form.mock.calls[0]![0].values).toEqual({ name: "api", command: "npm run dev", cwd: ".", autoStart: true, after: [], env: [], secrets: [] });
     expect(result).toEqual({ type: "completed", message: 'Saved service "api-server".', itemId: "svc_api" });
     expect(store.savedConfig?.workspaces[0]?.items[0]).toEqual({
-      kind: "service", after: [], id: "svc_api", name: "api-server", command: "npm start", cwd: projectDirectory, autoStart: false, env: { PORT: "4000" },
+      kind: "service", after: [], id: "svc_api", name: "api-server", command: "npm start", cwd: projectDirectory, autoStart: false, env: { PORT: "4000" }, secrets: [],
     });
   });
 
@@ -127,7 +128,7 @@ describe("runEditItemFlow, for a command", () => {
 
     await runEditItemFlow({ store, workspace: withCommand, keyInput: createKeyInput([]), itemId: "cmd_build", form, directoryExists: () => true });
 
-    expect(form.mock.calls[0]![0].values).toEqual({ name: "build", command: "npm run build", cwd: ".", after: [], env: ["CI=1"] });
+    expect(form.mock.calls[0]![0].values).toEqual({ name: "build", command: "npm run build", cwd: ".", after: [], env: ["CI=1"], secrets: [] });
     expect(store.savedConfig?.workspaces[0]?.items[0]).toMatchObject({ command: "npm run build -- --prod", env: { CI: "1" } });
   });
 });
@@ -239,6 +240,84 @@ describe("dependencies in the form", () => {
 
     expect(store.savedConfig?.workspaces[0]?.items.map((item) => item.id)).toEqual(["svc_api", "cmd_build"]);
     expect(store.savedConfig?.workspaces[0]?.items[0]?.after).toEqual([]);
+  });
+});
+
+describe("secret variables in the form", () => {
+  const exists = () => true;
+  const withEnv = (secrets: string[] | undefined, env: Record<string, string>) => {
+    const api = { kind: "service" as const, after: [], id: "svc_api", name: "api", command: "npm run dev", cwd: projectDirectory, autoStart: true, env, ...(secrets === undefined ? {} : { secrets }) };
+    const projectWorkspace = { ...workspace, items: [api] };
+
+    return { projectWorkspace, projectConfig: { version: 2, workspaces: [projectWorkspace] } as AppConfig };
+  };
+  const secretField = (values: Record<string, string | boolean | string[]>) => itemFields("service", workspace, false, [], undefined, values).find((field) => field.key === "secrets");
+  const optionLabels = (values: Record<string, string | boolean | string[]>) => {
+    const field = secretField(values);
+
+    return field !== undefined && "options" in field ? field.options.map((option) => option.label) : [];
+  };
+
+  it("offers the variables typed in Env to mark, nudging the ones whose names look private", () => {
+    expect(optionLabels({ env: ["PORT=3000", "STRIPE_KEY=sk_live", "BAD ROW"], secrets: [] })).toEqual(["PORT", "STRIPE_KEY (looks secret)"]);
+    expect(optionLabels({ env: ["PORT=3000", "STRIPE_KEY=sk_live"], secrets: ["STRIPE_KEY"] })).toEqual(["PORT", "STRIPE_KEY"]);
+  });
+
+  it("keeps offering a secret that has no Env row, because the item still needs it", () => {
+    expect(optionLabels({ env: ["PORT=3000"], secrets: ["DATABASE_URL"] })).toEqual(["PORT", "DATABASE_URL (no value yet)"]);
+  });
+
+  it("has nothing to offer until a variable is typed, and says so", () => {
+    expect(secretField({ env: [], secrets: [] })).toMatchObject({ type: "multi", options: [], emptyText: "Add a variable above to mark it secret" });
+  });
+
+  it("starts an item nobody reviewed yet with the variables that look private ticked", async () => {
+    const { projectWorkspace, projectConfig } = withEnv(undefined, { PORT: "3000", API_TOKEN: "abc", DATABASE_URL: "postgres://x" });
+    const form = fakeForm({ name: "api", command: "x", cwd: ".", autoStart: true, after: [], env: ["PORT=3000"], secrets: ["API_TOKEN"] });
+
+    await runEditItemFlow({ store: createStore(projectConfig), workspace: projectWorkspace, keyInput: createKeyInput([]), itemId: "svc_api", form, directoryExists: exists });
+
+    expect(form.mock.calls[0]![0].values).toMatchObject({ secrets: ["API_TOKEN"] });
+  });
+
+  it("starts an item the user already decided about with exactly their choice, even none", async () => {
+    for (const decided of [["DATABASE_URL"], []]) {
+      const { projectWorkspace, projectConfig } = withEnv(decided, { API_TOKEN: "abc", DATABASE_URL: "postgres://x" });
+      const form = fakeForm({ name: "api", command: "x", cwd: ".", autoStart: true, after: [], env: [], secrets: decided });
+
+      await runEditItemFlow({ store: createStore(projectConfig), workspace: projectWorkspace, keyInput: createKeyInput([]), itemId: "svc_api", form, directoryExists: exists });
+
+      expect(form.mock.calls[0]![0].values).toMatchObject({ secrets: decided });
+    }
+  });
+
+  it("saves the ticked variables as the item's secrets, which counts as the user's decision", async () => {
+    const { projectWorkspace, projectConfig } = withEnv(undefined, { PORT: "3000", STRIPE_KEY: "sk_live" });
+    const store = createStore(projectConfig);
+    const form = fakeForm({ name: "api", command: "x", cwd: ".", autoStart: true, after: [], env: ["PORT=3000", "STRIPE_KEY=sk_live"], secrets: ["STRIPE_KEY"] });
+
+    await runEditItemFlow({ store, workspace: projectWorkspace, keyInput: createKeyInput([]), itemId: "svc_api", form, directoryExists: exists });
+
+    expect(store.savedConfig?.workspaces[0]?.items[0]).toMatchObject({ env: { PORT: "3000", STRIPE_KEY: "sk_live" }, secrets: ["STRIPE_KEY"] });
+  });
+
+  it("saves an empty list when the user ticks nothing, so the name guess stops applying", async () => {
+    const { projectWorkspace, projectConfig } = withEnv(undefined, { API_KEY: "abc" });
+    const store = createStore(projectConfig);
+    const form = fakeForm({ name: "api", command: "x", cwd: ".", autoStart: true, after: [], env: ["API_KEY=abc"], secrets: [] });
+
+    await runEditItemFlow({ store, workspace: projectWorkspace, keyInput: createKeyInput([]), itemId: "svc_api", form, directoryExists: exists });
+
+    expect(store.savedConfig?.workspaces[0]?.items[0]?.secrets).toEqual([]);
+  });
+
+  it("keeps a ticked secret even though it has no value, and a new item can start with some", async () => {
+    const store = createStore({ version: 2, workspaces: [workspace] });
+    const form = fakeForm({ type: "service", name: "worker", command: "x", cwd: ".", autoStart: true, after: [], env: [], secrets: ["QUEUE_PASSWORD"] });
+
+    await runAddWorkspaceItemFlow({ store, workspace, keyInput: createKeyInput([]), form, generateId: () => "svc_worker", directoryExists: exists });
+
+    expect(store.savedConfig?.workspaces[0]?.items.at(-1)).toMatchObject({ env: {}, secrets: ["QUEUE_PASSWORD"] });
   });
 });
 

@@ -350,3 +350,35 @@ describe("pick list", () => {
   });
 });
 
+describe("secret text field", () => {
+  const secretFields = (): FormField[] => [
+    { type: "text", key: "name", label: "Name" },
+    { type: "text", key: "token", label: "Token", secret: true, hint: "Kept on this machine" },
+  ];
+  const at = (focus: number, token: string, cursor = token.length): FormState => ({ values: { name: "api", token }, focus, cursor, errors: {} });
+
+  it("shows one dot per character instead of the text, focused or not", () => {
+    const focused = renderForm({ title: "Set", fields: secretFields }, at(1, "hunter2"));
+    const idle = renderForm({ title: "Set", fields: secretFields }, at(0, "hunter2"));
+
+    expect(focused).toContain("•••••••");
+    expect(idle).toContain("•••••••");
+    expect(focused + idle).not.toContain("hunter2");
+  });
+
+  it("edits like any text field, and keeps the real text in the values", () => {
+    let state = at(1, "abc");
+
+    state = applyFormKey({ fields: secretFields }, state, { sequence: "d" });
+    state = applyFormKey({ fields: secretFields }, state, { name: "left" });
+    state = applyFormKey({ fields: secretFields }, state, { name: "backspace" });
+
+    expect(state.values.token).toBe("abd");
+    expect(renderForm({ title: "Set", fields: secretFields }, state)).not.toContain("abd");
+  });
+
+  it("does not mask an ordinary field", () => {
+    expect(renderForm({ title: "Set", fields: secretFields }, at(1, "x"))).toContain("api");
+  });
+});
+
