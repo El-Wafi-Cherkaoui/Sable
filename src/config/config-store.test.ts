@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ConfigParseError,
   ConfigStore,
@@ -210,6 +210,56 @@ describe("ConfigStore", () => {
       await store.load();
 
       await expect(fs.readFile(`${store.paths.file}.bak-0.3`, "utf8")).resolves.toBe("older backup");
+    });
+
+    it("hands out the upgrade news once, when it made the copy", async () => {
+      const store = new ConfigStore({ directory: tempDirectory });
+
+      await fs.writeFile(store.paths.file, JSON.stringify(version1), "utf8");
+      expect(store.takeUpgradeNotice()).toBeUndefined();
+
+      await store.load();
+      await store.load();
+
+      expect(store.takeUpgradeNotice()).toEqual({ backupFile: `${store.paths.file}.bak-0.3`, backedUp: true });
+      expect(store.takeUpgradeNotice()).toBeUndefined();
+    });
+
+    it("does not announce it again on a later run, when the copy is already there", async () => {
+      const first = new ConfigStore({ directory: tempDirectory });
+
+      await fs.writeFile(first.paths.file, JSON.stringify(version1), "utf8");
+      await first.load();
+      first.takeUpgradeNotice();
+
+      const second = new ConfigStore({ directory: tempDirectory });
+
+      await second.load();
+
+      expect(second.takeUpgradeNotice()).toBeUndefined();
+    });
+
+    it("says so when the copy could not be made", async () => {
+      const store = new ConfigStore({ directory: tempDirectory });
+      const copy = vi.spyOn(fs, "copyFile").mockRejectedValue(Object.assign(new Error("read-only"), { code: "EACCES" }));
+
+      try {
+        await fs.writeFile(store.paths.file, JSON.stringify(version1), "utf8");
+        await store.load();
+
+        expect(store.takeUpgradeNotice()).toEqual({ backupFile: `${store.paths.file}.bak-0.3`, backedUp: false });
+      } finally {
+        copy.mockRestore();
+      }
+    });
+
+    it("has no news for a file that is already version 2", async () => {
+      const store = new ConfigStore({ directory: tempDirectory });
+
+      await store.save({ version: 2, workspaces: [] });
+      await store.load();
+
+      expect(store.takeUpgradeNotice()).toBeUndefined();
     });
 
     it("makes no backup for a file that is already version 2", async () => {

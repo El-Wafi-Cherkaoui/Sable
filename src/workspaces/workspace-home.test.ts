@@ -35,6 +35,7 @@ describe("runWorkspaceHome", () => {
       selectedWorkspaceId: undefined,
       activeWorkspaceId: undefined,
       startupMomentMs: 1_800,
+      afterStartup: expect.any(Function),
       screen: undefined,
     });
     expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
@@ -863,6 +864,79 @@ describe("runWorkspaceHome", () => {
     expect(pickerOptions[0]!.afterStartup).toBeDefined();
     expect(pickerOptions[1]!.afterStartup).toBeUndefined();
     expect(dialog).toHaveBeenCalledOnce();
+  });
+
+  describe("the upgrade notice", () => {
+    const notice = { backupFile: "/home/me/.config/sable-nodejs/workspaces.json.bak-0.3", backedUp: true };
+    const storeWith = (taken: Array<typeof notice | undefined>) => ({
+      ...createStore(config),
+      takeUpgradeNotice: vi.fn(() => taken.shift()),
+    });
+    const startupPicker = () => vi.fn(async (options: { afterStartup?: () => Promise<string> }) => {
+      await options.afterStartup?.();
+
+      return { type: "exit" as const };
+    });
+
+    it("tells the user once at launch, before any update popup, with where the old file went", async () => {
+      const order: string[] = [];
+      const showNotice = vi.fn(async (_options: { title: string; paragraphs: string[] }) => {
+        order.push("notice");
+
+        return "ok" as const;
+      });
+      const dialog = vi.fn(async () => {
+        order.push("update");
+
+        return "ok" as const;
+      });
+
+      await runWorkspaceHome({
+        store: storeWith([notice]),
+        keyInput: createKeyInput(),
+        runPicker: startupPicker(),
+        runSession: vi.fn(),
+        showNotice,
+        update: { latestVersion: () => "0.5.0", currentVersion: "0.4.0", installCommand: "npm i", dismiss: vi.fn(), dialog },
+      });
+
+      expect(order).toEqual(["notice", "update"]);
+      expect(showNotice.mock.calls[0]![0].title).toBe("Your workspaces were upgraded");
+      expect(showNotice.mock.calls[0]![0].paragraphs.join(" ")).toContain("workspaces.json.bak-0.3");
+    });
+
+    it("says nothing when the file was not just upgraded", async () => {
+      const showNotice = vi.fn(async () => "ok" as const);
+
+      await runWorkspaceHome({ store: storeWith([undefined]), keyInput: createKeyInput(), runPicker: startupPicker(), runSession: vi.fn(), showNotice });
+      await runWorkspaceHome({ store: createStore(config), keyInput: createKeyInput(), runPicker: startupPicker(), runSession: vi.fn(), showNotice });
+
+      expect(showNotice).not.toHaveBeenCalled();
+    });
+
+    it("shows it even when the welcome screen is off", async () => {
+      const showNotice = vi.fn(async () => "ok" as const);
+
+      await runWorkspaceHome({ store: storeWith([notice]), keyInput: createKeyInput(), runPicker: startupPicker(), runSession: vi.fn(), showNotice, welcomeScreen: false });
+
+      expect(showNotice).toHaveBeenCalledOnce();
+    });
+
+    it("quits when the user presses Ctrl+C on it", async () => {
+      const runPicker = vi.fn(async (options: { afterStartup?: () => Promise<string> }) => ({ type: (await options.afterStartup?.()) === "exit" ? "exit" as const : "run" as const, workspace: config.workspaces[0]! }));
+      const dialog = vi.fn(async () => "ok" as const);
+
+      await runWorkspaceHome({
+        store: storeWith([notice]),
+        keyInput: createKeyInput(),
+        runPicker,
+        runSession: vi.fn(),
+        showNotice: vi.fn(async () => "exit" as const),
+        update: { latestVersion: () => "0.5.0", currentVersion: "0.4.0", installCommand: "npm i", dismiss: vi.fn(), dialog },
+      });
+
+      expect(dialog).not.toHaveBeenCalled();
+    });
   });
 
   it("returns an update request when the user picks Update now", async () => {
