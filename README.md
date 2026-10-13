@@ -259,6 +259,8 @@ Sable stores workspace configuration as JSON in an OS-aware user config director
 
 Workspace commands are treated as trusted local configuration.
 
+**Upgrading from 0.3.** Sable 0.4 stores each workspace's services and commands in one `items` list (`"version": 2`). The first time it finds a 0.3 file it keeps a copy next to it as `workspaces.json.bak-0.3`, tells you once, and converts the file the next time it saves. Nothing is lost. Versions before 0.4 can't read the new format; to go back to one, put `workspaces.json.bak-0.3` back as `workspaces.json`.
+
 ## Updates
 
 At most once an hour, Sable asks the npm registry in the background whether a newer version exists. If one does, a popup appears after the logo:
