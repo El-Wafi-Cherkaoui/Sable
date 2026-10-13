@@ -227,6 +227,35 @@ describe("dependencies in the form", () => {
   });
 });
 
+describe("items that come from sable.json", () => {
+  const fromFile = { kind: "service" as const, after: [], id: "svc_db", name: "db", command: "docker compose up db", cwd: projectDirectory, autoStart: true, env: {}, fromProject: "db" };
+  const projectWorkspace = {
+    ...workspace,
+    items: [fromFile],
+    project: { hash: "abc", values: {}, base: {}, removed: [] },
+  };
+  const projectConfig: AppConfig = { version: 2, workspaces: [projectWorkspace] };
+
+  it("says in the edit form that changes stay on this machine", async () => {
+    const form = fakeForm({ name: "db", command: "docker compose up db", cwd: ".", autoStart: true, after: [], env: [] });
+
+    await runEditItemFlow({ store: createStore(projectConfig), workspace: projectWorkspace, keyInput: createKeyInput([]), itemId: "svc_db", form, directoryExists: () => true });
+
+    expect(form.mock.calls[0]![0].subtitle).toContain("from sable.json");
+  });
+
+  it("removes it here only and remembers that, with a delete dialog that says so", async () => {
+    const store = createStore(projectConfig);
+    const deleteDialog = vi.fn(async (_options: { explanation: string[] }) => "confirmed" as const);
+
+    await runDeleteItemFlow({ store, workspace: projectWorkspace, keyInput: createKeyInput([]), itemId: "svc_db", deleteDialog });
+
+    expect(deleteDialog.mock.calls[0]![0].explanation.join(" ")).toContain("removed on this machine only");
+    expect(store.savedConfig?.workspaces[0]?.items).toEqual([]);
+    expect(store.savedConfig?.workspaces[0]?.project?.removed).toEqual(["db"]);
+  });
+});
+
 describe("toDirectoryValue", () => {
   it("shows folders inside the project as relative paths", () => {
     expect(toDirectoryValue(projectDirectory, projectDirectory)).toBe(".");
