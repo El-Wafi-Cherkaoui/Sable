@@ -54,6 +54,7 @@ export type WorkspacePickerAction =
   | "run"
   | "createWorkspace"
   | "importProject"
+  | "exportProject"
   | "deleteWorkspace"
   | "renameWorkspace"
   | "stopActiveWorkspace"
@@ -83,6 +84,8 @@ export function mapWorkspacePickerKey(keypress: Keypress): WorkspacePickerAction
       return "createWorkspace";
     case "i":
       return "importProject";
+    case "x":
+      return "exportProject";
     case "e":
       return "renameWorkspace";
     case "d":

@@ -6,7 +6,8 @@ import type { AppConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import type { FormResult, RunFormOptions } from "../tui/form-view.js";
 import type { ReviewOptions, ReviewResult } from "../tui/review-view.js";
-import { runImportProjectFlow, runUpdateProjectFlow, type ProjectFlowStore } from "./project-flows.js";
+import type { WorkspaceConfig } from "../config/config-types.js";
+import { runExportProjectFlow, runImportProjectFlow, runUpdateProjectFlow, type ProjectFlowStore } from "./project-flows.js";
 
 let directory: string;
 
@@ -300,5 +301,117 @@ describe("runUpdateProjectFlow", () => {
 
     expect(result.type === "back" && result.message).toContain("not valid JSON");
     expect(store.saves).toBe(saves);
+  });
+});
+
+describe("runExportProjectFlow", () => {
+  function localWorkspace(): WorkspaceConfig {
+    return {
+      id: "ws_mine",
+      name: "mine",
+      projectDirectory: directory,
+      items: [
+        { kind: "service", after: [], id: "svc_db", name: "db", command: "docker compose up db", cwd: directory, autoStart: true, env: {} },
+        { kind: "service", after: ["svc_db"], id: "svc_api", name: "api", command: "npm run dev", cwd: path.join(directory, "api"), autoStart: true, env: { PORT: "3000", API_TOKEN: "s3cret" } },
+        { kind: "command", after: [], id: "cmd_build", name: "build", command: "npm run build", cwd: directory, env: {} },
+      ],
+    };
+  }
+
+  const storeWith = (workspace: WorkspaceConfig) => createStore({ version: 2, workspaces: [workspace] });
+  const readBack = async () => JSON.parse(await fs.readFile(path.join(directory, "sable.json"), "utf8")) as { items: Array<Record<string, unknown>> };
+
+  it("shows what will be written, then writes it and links the workspace to the file", async () => {
+    const workspace = localWorkspace();
+    const store = storeWith(workspace);
+    const review = reviewing("confirm");
+
+    const result = await runExportProjectFlow({ store, workspace, keyInput: noKeys(), review });
+
+    expect(review.mock.calls[0]![0].confirmLabel).toBe("write file");
+    expect(reviewText(review)).toContain("API_TOKEN looks like a secret");
+    expect(reviewText(review)).toContain('"command": "docker compose up db"');
+    expect(reviewText(review)).not.toContain("s3cret");
+    expect(result.type === "completed" && result.message).toContain("Commit it so your team gets the same workspace.");
+
+    const written = await readBack();
+
+    expect(written.items.map((item) => item.name)).toEqual(["db", "api", "build"]);
+    expect(JSON.stringify(written)).not.toContain("s3cret");
+
+    const linked = store.saved!.workspaces[0]!;
+
+    expect(linked.items.map((item) => item.fromProject)).toEqual(["db", "api", "build"]);
+    expect(linked.project?.values).toEqual({ API_API_TOKEN: "s3cret" });
+    expect(linked.project?.base.api?.env).toEqual({ PORT: "3000", API_TOKEN: "s3cret" });
+    expect(linked.items[1]?.env).toEqual({ PORT: "3000", API_TOKEN: "s3cret" });
+  });
+
+  it("is already up to date right after writing, and picks up a teammate's change later", async () => {
+    const workspace = localWorkspace();
+    const store = storeWith(workspace);
+
+    await runExportProjectFlow({ store, workspace, keyInput: noKeys(), review: reviewing("confirm") });
+
+    const linked = store.saved!.workspaces[0]!;
+
+    await expect(runUpdateProjectFlow({ store, workspace: linked, keyInput: noKeys(), review: reviewing("confirm") })).resolves.toEqual({ type: "unchanged" });
+
+    const written = await readBack();
+
+    await fs.writeFile(path.join(directory, "sable.json"), JSON.stringify({ version: 1, ...{ placeholders: JSON.parse(await fs.readFile(path.join(directory, "sable.json"), "utf8")).placeholders }, items: written.items.map((item) => item.name === "build" ? { ...item, command: "npm run build:ci" } : item) }));
+
+    const result = await runUpdateProjectFlow({ store, workspace: linked, keyInput: noKeys(), review: reviewing("confirm"), generateId });
+
+    expect(result.type === "completed" && result.message).toBe('Updated "mine" from sable.json: 1 changed.');
+    expect(store.saved!.workspaces[0]!.items.find((item) => item.name === "build")?.command).toBe("npm run build:ci");
+  });
+
+  it("says when it is replacing a file that is already there", async () => {
+    await writeFile({ version: 1, items: [] });
+
+    const workspace = localWorkspace();
+    const review = reviewing("cancel");
+
+    await runExportProjectFlow({ store: storeWith(workspace), workspace, keyInput: noKeys(), review });
+
+    expect(review.mock.calls[0]![0].intro?.join(" ")).toContain("It will be replaced.");
+    expect(await readBack()).toEqual({ version: 1, items: [] });
+  });
+
+  it("writes nothing when the user cancels or quits", async () => {
+    const workspace = localWorkspace();
+    const store = storeWith(workspace);
+
+    await expect(runExportProjectFlow({ store, workspace, keyInput: noKeys(), review: reviewing("cancel") })).resolves.toEqual({ type: "back", message: "Did not write sable.json." });
+    await expect(runExportProjectFlow({ store, workspace, keyInput: noKeys(), review: reviewing("exit") })).resolves.toEqual({ type: "exit" });
+    await expect(fs.access(path.join(directory, "sable.json"))).rejects.toThrow();
+    expect(store.saves).toBe(0);
+  });
+
+  it("has nothing to write for an empty workspace or a missing folder", async () => {
+    const empty = { ...localWorkspace(), items: [] };
+    const missing = { ...localWorkspace(), projectDirectory: path.join(directory, "gone") };
+
+    await expect(runExportProjectFlow({ store: storeWith(empty), workspace: empty, keyInput: noKeys(), review: reviewing("confirm") }))
+      .resolves.toEqual({ type: "back", message: '"mine" has nothing to share yet. Add a service or command first.' });
+    await expect(runExportProjectFlow({ store: storeWith(missing), workspace: missing, keyInput: noKeys(), review: reviewing("confirm") }))
+      .resolves.toEqual({ type: "back", message: expect.stringContaining("does not exist") });
+  });
+
+  it("gives a teammate the same workspace when they import the file", async () => {
+    const workspace = localWorkspace();
+
+    await runExportProjectFlow({ store: storeWith(workspace), workspace, keyInput: noKeys(), review: reviewing("confirm") });
+
+    const teammate = createStore();
+    const form = answering({ name: "mine", "value.API_API_TOKEN": "their-token" });
+
+    await runImportProjectFlow({ store: teammate, keyInput: noKeys(), directory, review: reviewing("confirm"), form, generateId });
+
+    const items = teammate.saved!.workspaces[0]!.items;
+
+    expect(items.map((item) => [item.kind, item.name, item.command])).toEqual(workspace.items.map((item) => [item.kind, item.name, item.command]));
+    expect(items[1]).toMatchObject({ env: { PORT: "3000", API_TOKEN: "their-token" }, after: [items[0]!.id] });
   });
 });
