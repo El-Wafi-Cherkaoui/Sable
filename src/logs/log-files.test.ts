@@ -159,7 +159,7 @@ describe("readEarlier", () => {
     const lines = await files.readEarlier(api, 2);
 
     expect(lines.map((item) => item.line)).toEqual(["old two", "old three"]);
-    expect(lines[0]).toEqual(entry("old two"));
+    expect(lines[0]).toEqual({ ...entry("old two"), saved: true });
   });
 
   it("leaves out what this run wrote, even when it asks late", async () => {

@@ -291,6 +291,15 @@ describe("dates on old lines", () => {
     expect(rows.every((row) => visibleLength(row) <= 40)).toBe(true);
   });
 
+  it("shows dates when the log starts with output saved from an earlier run, even from the same day", () => {
+    const saved = { ...at("2026-01-02T08:47:26", "from the last run"), saved: true };
+    const lines = render([saved, at("2026-01-02T08:59:00", "from this run")]).split("\n");
+
+    expect(lines).toContain("  01-02 08:47:26   from the last run");
+    expect(lines).toContain("  01-02 08:59:00   from this run");
+    expect(needsDates([saved], new Date("2026-01-02T09:00:00"))).toBe(true);
+  });
+
   it("decides from the oldest line, using the local calendar day", () => {
     const now = new Date("2026-01-02T09:00:00");
 

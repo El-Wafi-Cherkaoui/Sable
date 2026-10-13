@@ -251,7 +251,7 @@ export class WorkspaceController {
 
     return earlier === undefined || last === undefined
       ? current
-      : [...earlier, { stream: "system", line: "earlier run above, this run below", timestamp: last.timestamp }, ...current];
+      : [...earlier, { stream: "system", line: "saved output above, new output below", timestamp: last.timestamp, saved: true }, ...current];
   }
 
   // What a log file needs to know about an item: which workspace, name and kind it belongs to.

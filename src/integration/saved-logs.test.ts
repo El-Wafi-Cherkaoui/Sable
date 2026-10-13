@@ -77,7 +77,7 @@ describe("saved logs, end to end", () => {
       "serving on 3000",
       "fatal: out of memory",
       expect.stringContaining("process exited"),
-      "earlier run above, this run below",
+      "saved output above, new output below",
     ]);
 
     await restarted.shutdown();

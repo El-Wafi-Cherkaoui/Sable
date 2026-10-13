@@ -196,7 +196,7 @@ function parseLines(lines: string[]): ServiceLogEntry[] {
     const match = lineFormat.exec(raw);
 
     if (match !== null) {
-      entries.push({ stream: match[2] as ServiceLogEntry["stream"], line: match[3]!, timestamp: new Date(match[1]!) });
+      entries.push({ stream: match[2] as ServiceLogEntry["stream"], line: match[3]!, timestamp: new Date(match[1]!), saved: true });
     }
   }
 
