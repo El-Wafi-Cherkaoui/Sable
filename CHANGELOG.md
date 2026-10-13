@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.3 - Tweaks
+
 ### Added
 
 - Command suggestions: while you type a command for a service or command, Sable shows the rest of a command you saved before, from this workspace first and then your other workspaces. Press `→` to accept it, or `↑` / `↓` to step through other matches.
