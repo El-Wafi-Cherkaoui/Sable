@@ -1,6 +1,6 @@
 {
   "name": "sable-workspaces",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "A keyboard-first terminal workspace manager for developers.",
   "type": "module",
   "license": "MIT",
