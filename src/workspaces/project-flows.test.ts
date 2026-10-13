@@ -380,6 +380,67 @@ describe("runExportProjectFlow", () => {
     expect(await readBack()).toEqual({ version: 1, items: [] });
   });
 
+  describe("when a sable.json is already there", () => {
+    it("shows what writing would add, change and remove, so an overwrite of a teammate's work is visible", async () => {
+      await writeFile({
+        version: 1,
+        items: [
+          { type: "service", name: "db", command: "docker compose up db -d" },
+          { type: "service", name: "teammates-cache", command: "redis-server" },
+          { type: "command", name: "build", command: "npm run build" },
+        ],
+      });
+
+      const workspace = localWorkspace();
+      const review = reviewing("cancel");
+
+      await runExportProjectFlow({ store: storeWith(workspace), workspace, keyInput: noKeys(), review });
+
+      const text = reviewText(review);
+
+      expect(text).toContain("Compared with the sable.json that is there now (a teammate may have changed it):");
+      expect(text).toContain("- removed teammates-cache");
+      expect(text).toContain("+ new service api");
+      expect(text).toContain("~ changed service db");
+      expect(text).toContain("- run    docker compose up db -d");
+      expect(text).toContain("+ run    docker compose up db");
+      expect(text).not.toContain("changed command build");
+    });
+
+    it("says so when the file would hold the same items", async () => {
+      const first = localWorkspace();
+      const store = storeWith(first);
+
+      await runExportProjectFlow({ store, workspace: first, keyInput: noKeys(), review: reviewing("confirm") });
+
+      const review = reviewing("cancel");
+
+      await runExportProjectFlow({ store, workspace: store.saved!.workspaces[0]!, keyInput: noKeys(), review });
+
+      expect(reviewText(review)).toContain("Same items as the sable.json that is there: nothing would change except how it is written.");
+    });
+
+    it("says the old file can't be compared when it has problems", async () => {
+      await fs.writeFile(path.join(directory, "sable.json"), "{ nope");
+
+      const workspace = localWorkspace();
+      const review = reviewing("cancel");
+
+      await runExportProjectFlow({ store: storeWith(workspace), workspace, keyInput: noKeys(), review });
+
+      expect(reviewText(review)).toContain("The sable.json that is there has problems, so it can't be compared. It will be replaced.");
+    });
+
+    it("shows no comparison when there is no file yet", async () => {
+      const workspace = localWorkspace();
+      const review = reviewing("cancel");
+
+      await runExportProjectFlow({ store: storeWith(workspace), workspace, keyInput: noKeys(), review });
+
+      expect(reviewText(review)).not.toContain("Compared with");
+    });
+  });
+
   it("writes nothing when the user cancels or quits", async () => {
     const workspace = localWorkspace();
     const store = storeWith(workspace);

@@ -12,6 +12,8 @@
 
 - Secret variables: in the add and edit form, tick the environment variables that are secret. Their values never go into a shared `sable.json` (it only names them under `secrets`), and whoever runs the item is asked for them, with hidden input, the first time it starts: they are saved only on that machine, or the whole item can be edited instead. Start all and auto-start skip an item that is missing a secret and say what it needs.
 
+- Safer sharing: a workspace whose `sable.json` changed since you agreed to it is marked `⟳ changed` in the workspace list, and writing a `sable.json` over an existing one first shows what would be added, changed and removed in it.
+
 ### Changed
 
 - Suggestions for a new workspace are no longer only for JavaScript: Sable also reads `Makefile` and `justfile` targets, Docker Compose files, `Cargo.toml`, `go.mod`, Django (`manage.py`), pytest, Rails and Laravel, and merges what it finds into one checklist (names like `make build`, `cargo run`). Only the first service of each file is ticked to begin with. The checklist scrolls when the list is longer than the terminal.

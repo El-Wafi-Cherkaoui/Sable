@@ -228,7 +228,9 @@ export async function runExportProjectFlow(
 
   const target = projectFilePath(workspace.projectDirectory);
   const replacing = await fileExists(target);
+  const comparison = replacing ? await compareWithExisting(options, workspace.projectDirectory, built.text) : [];
   const lines: ReviewLine[] = [
+    ...comparison,
     ...(built.notes.length === 0 ? [] : [
       { text: "Check before you commit it:", tone: "heading" as const },
       ...built.notes.map((note): ReviewLine => ({ text: `  ! ${note}`, tone: "removed" })),
@@ -275,6 +277,38 @@ export async function runExportProjectFlow(
     message: `Wrote ${projectFileName} (${countItems(workspace)}). Commit it so your team gets the same workspace.`,
     workspaceId: workspace.id,
   };
+}
+
+// What writing the new file would change in the one that is already there: items it would add, change or
+// remove. A teammate's addition shows up here as a removal, which is what makes an overwrite visible.
+async function compareWithExisting(
+  options: Pick<ProjectFlowOptions, "readFile">,
+  directory: string,
+  newText: string,
+): Promise<ReviewLine[]> {
+  const existing = await (options.readFile ?? readProjectFile)(directory);
+  const next = parseProjectFile(newText);
+
+  if (existing.type !== "ok" || next.type !== "ok") {
+    return [
+      { text: `The ${projectFileName} that is there has problems, so it can't be compared. It will be replaced.`, tone: "removed" },
+      { text: "" },
+    ];
+  }
+
+  const resolve = (file: typeof existing.file) => resolveProjectItems(file, {}, directory, { keepUnanswered: true });
+  const before = Object.fromEntries(resolve(existing.file).map(({ name, ...base }) => [name, base]));
+  const changes = describeProjectChanges(before, resolve(next.file));
+
+  if (changes.added.length === 0 && changes.changed.length === 0 && changes.removed.length === 0) {
+    return [{ text: `Same items as the ${projectFileName} that is there: nothing would change except how it is written.`, tone: "muted" }, { text: "" }];
+  }
+
+  return [
+    { text: `Compared with the ${projectFileName} that is there now (a teammate may have changed it):`, tone: "heading" },
+    { text: "If you write it, items marked + are added to the file, ~ are changed, and - are removed from it.", tone: "muted" },
+    ...changesReviewLines(changes, directory),
+  ];
 }
 
 async function writeFileAtomically(target: string, text: string): Promise<void> {
