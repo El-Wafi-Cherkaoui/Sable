@@ -47,6 +47,7 @@ export async function runSettingsDialog(options: SettingsDialogOptions): Promise
       enabled: settings.persistLogs.isEnabled(),
       description: `Also write each item's output to a file${settings.logsDirectory === undefined ? "" : ` under ${displayPath(settings.logsDirectory)}`}, up to 2 MB each, so you can read it after Sable closes. Press L on the list or dashboard to delete them.`,
     },
+    { label: "Tips", enabled: settings.tips.isEnabled(), description: "Short hints on screen, like how to share a workspace with a sable.json. Off hides them." },
   ];
   const render = () => {
     screen.clear();
@@ -96,8 +97,10 @@ export async function runSettingsDialog(options: SettingsDialogOptions): Promise
         }
       } else if (selected === 1) {
         await settings.welcomeScreen.setEnabled(!settings.welcomeScreen.isEnabled());
-      } else {
+      } else if (selected === 2) {
         await settings.persistLogs.setEnabled(!settings.persistLogs.isEnabled());
+      } else {
+        await settings.tips.setEnabled(!settings.tips.isEnabled());
       }
 
       render();

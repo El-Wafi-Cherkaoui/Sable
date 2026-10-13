@@ -1,3 +1,4 @@
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import { TerminalKeyInput, type KeyInput } from "../input/terminal-key-input.js";
@@ -69,6 +70,8 @@ export type RunWorkspaceHomeOptions = {
   // The folder Sable was started in. A sable.json there is offered for import at launch, and the `i` key imports it.
   launchDirectory?: string;
   readProjectFile?: typeof readProjectFile;
+  // Whether a workspace is worth a "you could share this" tip: it has items, and its folder has no sable.json.
+  canSuggestSharing?: (workspace: WorkspaceConfig) => Promise<boolean>;
   runImportProject?: (options: ProjectFlowOptions & { directory: string }) => Promise<ProjectFlowResult>;
   runUpdateProject?: (options: ProjectFlowOptions & { workspace: WorkspaceConfig }) => Promise<ProjectFlowResult>;
   runExportProject?: (options: ProjectFlowOptions & { workspace: WorkspaceConfig }) => Promise<ProjectFlowResult>;
@@ -134,6 +137,24 @@ export async function runWorkspaceHome(
   }
 
   const projectFlowOptions = { store: options.store, keyInput, screen: options.screen };
+
+  // Ids of the workspaces the list should hint at sharing; none while tips are switched off.
+  async function workspacesToSuggestSharing(workspaces: WorkspaceConfig[]): Promise<string[] | undefined> {
+    if (options.settings?.tips.isEnabled() !== true) {
+      return undefined;
+    }
+
+    const check = options.canSuggestSharing ?? canSuggestSharing;
+    const ids: string[] = [];
+
+    for (const workspace of workspaces) {
+      if (await check(workspace)) {
+        ids.push(workspace.id);
+      }
+    }
+
+    return ids;
+  }
 
   async function hasProjectFile(directory: string | undefined): Promise<boolean> {
     return directory !== undefined && (await probeProjectFile(directory)).type !== "missing";
@@ -209,6 +230,7 @@ export async function runWorkspaceHome(
         sound: options.sound,
         settings: options.settings,
         projectFileHere: (await hasProjectFile(options.launchDirectory)) || undefined,
+        shareTipIds: await workspacesToSuggestSharing(config.workspaces),
         abortSignal: shutdownAbortController.signal,
         statusMessage,
         selectedWorkspaceId,
@@ -541,6 +563,22 @@ export async function runWorkspaceHome(
     keyInput.close();
     reportShutdownFailures(shutdownFailures, options.warn);
   }
+}
+
+async function canSuggestSharing(workspace: WorkspaceConfig): Promise<boolean> {
+  if (workspace.items.length === 0) {
+    return false;
+  }
+
+  try {
+    if (!(await fs.stat(workspace.projectDirectory)).isDirectory()) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+
+  return (await readProjectFile(workspace.projectDirectory)).type === "missing";
 }
 
 function sameFolder(left: string, right: string): boolean {

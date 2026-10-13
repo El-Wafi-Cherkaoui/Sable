@@ -176,7 +176,7 @@ describe("ConfigStore", () => {
       expect(config.workspaces[0]?.items).toEqual([{ kind: "service", after: [], ...service }]);
     });
 
-    it("keeps a copy of the original file and leaves the file itself alone until a save", async () => {
+    it("keeps a copy of the original file and converts the file itself right away", async () => {
       const store = new ConfigStore({ directory: tempDirectory });
       const original = JSON.stringify(version1);
 
@@ -184,7 +184,60 @@ describe("ConfigStore", () => {
       await store.load();
 
       await expect(fs.readFile(`${store.paths.file}.bak-0.3`, "utf8")).resolves.toBe(original);
-      await expect(fs.readFile(store.paths.file, "utf8")).resolves.toBe(original);
+
+      const onDisk = JSON.parse(await fs.readFile(store.paths.file, "utf8")) as { version: number; workspaces: Array<{ items: unknown[]; services?: unknown }> };
+
+      expect(onDisk.version).toBe(2);
+      expect(onDisk.workspaces[0]?.items).toHaveLength(2);
+      expect(onDisk.workspaces[0]?.services).toBeUndefined();
+    });
+
+    it("loads the same workspaces from the converted file as from the old one", async () => {
+      const store = new ConfigStore({ directory: tempDirectory });
+
+      await fs.writeFile(store.paths.file, JSON.stringify(version1), "utf8");
+
+      const upgraded = await store.load();
+      const again = await new ConfigStore({ directory: tempDirectory }).load();
+
+      expect(again).toEqual(upgraded);
+    });
+
+    it("does not rewrite or announce anything on later runs", async () => {
+      const first = new ConfigStore({ directory: tempDirectory });
+
+      await fs.writeFile(first.paths.file, JSON.stringify(version1), "utf8");
+      await first.load();
+
+      const written = await fs.stat(first.paths.file);
+      const second = new ConfigStore({ directory: tempDirectory });
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await second.load();
+
+      expect((await fs.stat(second.paths.file)).mtimeMs).toBe(written.mtimeMs);
+      expect(second.takeUpgradeNotice()).toBeUndefined();
+    });
+
+    it("leaves the old file alone when it cannot be written, and converts it at the next save", async () => {
+      const store = new ConfigStore({ directory: tempDirectory });
+      const original = JSON.stringify(version1);
+      const rename = vi.spyOn(fs, "rename").mockRejectedValueOnce(Object.assign(new Error("read-only"), { code: "EROFS" }));
+
+      try {
+        await fs.writeFile(store.paths.file, original, "utf8");
+
+        const config = await store.load();
+
+        await expect(fs.readFile(store.paths.file, "utf8")).resolves.toBe(original);
+        expect(store.takeUpgradeNotice()).toEqual({ backupFile: `${store.paths.file}.bak-0.3`, backedUp: true, converted: false });
+
+        await store.save(config);
+
+        expect(JSON.parse(await fs.readFile(store.paths.file, "utf8")).version).toBe(2);
+      } finally {
+        rename.mockRestore();
+      }
     });
 
     it("writes version 2 on the next save without touching the backup", async () => {
@@ -221,7 +274,7 @@ describe("ConfigStore", () => {
       await store.load();
       await store.load();
 
-      expect(store.takeUpgradeNotice()).toEqual({ backupFile: `${store.paths.file}.bak-0.3`, backedUp: true });
+      expect(store.takeUpgradeNotice()).toEqual({ backupFile: `${store.paths.file}.bak-0.3`, backedUp: true, converted: true });
       expect(store.takeUpgradeNotice()).toBeUndefined();
     });
 
@@ -239,15 +292,17 @@ describe("ConfigStore", () => {
       expect(second.takeUpgradeNotice()).toBeUndefined();
     });
 
-    it("says so when the copy could not be made", async () => {
+    it("says so when the copy could not be made, and then does not convert the file", async () => {
       const store = new ConfigStore({ directory: tempDirectory });
+      const original = JSON.stringify(version1);
       const copy = vi.spyOn(fs, "copyFile").mockRejectedValue(Object.assign(new Error("read-only"), { code: "EACCES" }));
 
       try {
-        await fs.writeFile(store.paths.file, JSON.stringify(version1), "utf8");
+        await fs.writeFile(store.paths.file, original, "utf8");
         await store.load();
 
-        expect(store.takeUpgradeNotice()).toEqual({ backupFile: `${store.paths.file}.bak-0.3`, backedUp: false });
+        expect(store.takeUpgradeNotice()).toEqual({ backupFile: `${store.paths.file}.bak-0.3`, backedUp: false, converted: false });
+        await expect(fs.readFile(store.paths.file, "utf8")).resolves.toBe(original);
       } finally {
         copy.mockRestore();
       }

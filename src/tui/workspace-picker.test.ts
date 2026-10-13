@@ -73,6 +73,30 @@ describe("renderWorkspacePicker", () => {
       ].join("\n"),
     );
   });
+  describe("the share tip", () => {
+    const tipState = (extra: Partial<ReturnType<typeof createWorkspacePickerState>> = {}) => ({
+      ...createWorkspacePickerState(workspaces),
+      shareTipIds: [workspaces[0]!.id],
+      ...extra,
+    });
+    const statusLine = (state: ReturnType<typeof createWorkspacePickerState>) => renderWorkspacePicker(state).split("\n").at(-2);
+
+    it("suggests writing a sable.json, with the benefit, for a selected workspace that has none", () => {
+      expect(statusLine(tipState())).toBe("Tip: press x to write a sable.json. Teammates then get this workspace just by running sable in the folder.");
+    });
+
+    it("says nothing for a workspace that is not in the list, or when tips are off", () => {
+      expect(statusLine(tipState({ shareTipIds: [] }))).toBe("");
+      expect(statusLine(tipState({ shareTipIds: undefined }))).toBe("");
+      expect(statusLine(tipState({ selectedWorkspaceIndex: workspaces.length > 1 ? 1 : 0, shareTipIds: ["someone-else"] }))).toBe("");
+    });
+
+    it("never replaces a message, and stays out of the way while moving", () => {
+      expect(statusLine(tipState({ statusMessage: "Renamed." }))).toBe("› Renamed.");
+      expect(statusLine(tipState({ moving: true }))).toBe("");
+    });
+  });
+
   it("shows the import key only when the launch folder has a sable.json", () => {
     const without = renderWorkspacePicker(createWorkspacePickerState(workspaces)).split("\n").at(-1);
     const withFile = renderWorkspacePicker({ ...createWorkspacePickerState(workspaces), projectFileHere: true }).split("\n").at(-1);
@@ -658,7 +682,7 @@ const toggle = (enabled = true) => {
 
   return { isEnabled: () => on, setEnabled: vi.fn(async (next: boolean) => { on = next; }) };
 };
-const fakeSettings = () => ({ sound: { play: vi.fn(), close: vi.fn(), ...toggle() }, welcomeScreen: toggle(), persistLogs: toggle() });
+const fakeSettings = () => ({ sound: { play: vi.fn(), close: vi.fn(), ...toggle() }, welcomeScreen: toggle(), persistLogs: toggle(), tips: toggle() });
 
 const workspaces: WorkspaceConfig[] = [
   {

@@ -1,4 +1,7 @@
 import { EventEmitter } from "node:events";
+import { promises as fsPromises } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { AppConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
@@ -867,7 +870,7 @@ describe("runWorkspaceHome", () => {
   });
 
   describe("the upgrade notice", () => {
-    const notice = { backupFile: "/home/me/.config/sable-nodejs/workspaces.json.bak-0.3", backedUp: true };
+    const notice = { backupFile: "/home/me/.config/sable-nodejs/workspaces.json.bak-0.3", backedUp: true, converted: true };
     const storeWith = (taken: Array<typeof notice | undefined>) => ({
       ...createStore(config),
       takeUpgradeNotice: vi.fn(() => taken.shift()),
@@ -1128,6 +1131,67 @@ describe("runWorkspaceHome with a sable.json", () => {
       statusMessage: "Wrote sable.json (1 service). Commit it so your team gets the same workspace.",
       selectedWorkspaceId: workspace.id,
     }));
+  });
+
+  describe("the share tip", () => {
+    const tipsOn = { sound: { play: vi.fn(), close: vi.fn(), isEnabled: () => false, setEnabled: vi.fn() }, welcomeScreen: { isEnabled: () => false, setEnabled: vi.fn() }, persistLogs: { isEnabled: () => false, setEnabled: vi.fn() }, tips: { isEnabled: () => true, setEnabled: vi.fn() } };
+    const tipsOff = { ...tipsOn, tips: { isEnabled: () => false, setEnabled: vi.fn() } };
+    const second: WorkspaceConfig = { ...workspace, id: "ws_second", name: "second" };
+    const twoWorkspaces: AppConfig = { version: 2, workspaces: [workspace, second] };
+
+    it("tells the list which workspaces could be shared, according to the check", async () => {
+      const runPicker = vi.fn().mockResolvedValue({ type: "exit" });
+      const canSuggestSharing = vi.fn(async (candidate: WorkspaceConfig) => candidate.id === "ws_second");
+
+      await runWorkspaceHome({ store: createStore(twoWorkspaces), keyInput: createKeyInput(), runPicker, runSession: vi.fn(), settings: tipsOn, canSuggestSharing });
+
+      expect(runPicker).toHaveBeenCalledWith(expect.objectContaining({ shareTipIds: ["ws_second"] }));
+    });
+
+    it("gives no tips while they are switched off, or when there are no settings", async () => {
+      const canSuggestSharing = vi.fn(async () => true);
+
+      for (const settings of [tipsOff, undefined]) {
+        const runPicker = vi.fn().mockResolvedValue({ type: "exit" });
+
+        await runWorkspaceHome({ store: createStore(twoWorkspaces), keyInput: createKeyInput(), runPicker, runSession: vi.fn(), settings, canSuggestSharing });
+
+        expect(runPicker.mock.calls[0]![0].shareTipIds).toBeUndefined();
+      }
+
+      expect(canSuggestSharing).not.toHaveBeenCalled();
+    });
+
+    it("by default suggests it for a workspace with items whose folder has no sable.json, and for no other", async () => {
+      const root = await fsPromises.mkdtemp(path.join(os.tmpdir(), "sable-share-tip-"));
+      const folder = async (name: string, withFile: boolean) => {
+        const directory = path.join(root, name);
+
+        await fsPromises.mkdir(directory);
+
+        if (withFile) {
+          await fsPromises.writeFile(path.join(directory, "sable.json"), "{}");
+        }
+
+        return directory;
+      };
+      const item = { kind: "service" as const, after: [], id: "svc", name: "api", command: "x", cwd: root, autoStart: true, env: {} };
+      const candidates: WorkspaceConfig[] = [
+        { id: "plain", name: "plain", projectDirectory: await folder("plain", false), items: [item] },
+        { id: "shared", name: "shared", projectDirectory: await folder("shared", true), items: [item] },
+        { id: "empty", name: "empty", projectDirectory: await folder("empty", false), items: [] },
+        { id: "gone", name: "gone", projectDirectory: path.join(root, "not-there"), items: [item] },
+      ];
+      const runPicker = vi.fn().mockResolvedValue({ type: "exit" });
+
+      try {
+        await runWorkspaceHome({ store: createStore({ version: 2, workspaces: candidates }), keyInput: createKeyInput(), runPicker, runSession: vi.fn(), settings: tipsOn });
+
+        expect(runPicker.mock.calls[0]![0].shareTipIds).toEqual(["plain"]);
+      } finally {
+        await fsPromises.rm(root, { recursive: true, force: true });
+      }
+    });
   });
 
   it("opens the saved logs from the list with L and passes the workspaces and the running one", async () => {

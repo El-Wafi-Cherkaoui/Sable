@@ -13,7 +13,7 @@
 ### Changed
 
 - Suggestions for a new workspace are no longer only for JavaScript: Sable also reads `Makefile` and `justfile` targets, Docker Compose files, `Cargo.toml`, `go.mod`, Django (`manage.py`), pytest, Rails and Laravel, and merges what it finds into one checklist (names like `make build`, `cargo run`). Only the first service of each file is ticked to begin with. The checklist scrolls when the list is longer than the terminal.
-- The workspace file (`workspaces.json`) now keeps services and commands in one `items` list and has `"version": 2`. Sable converts an older file the first time it reads it and keeps a copy of the original next to it as `workspaces.json.bak-0.3`. Older Sable versions can't read the new file; to go back, restore that copy. The first time Sable finds an old file it says so: a popup after the welcome screen (or a few lines from the other commands) tells you the format changed and where the copy is. It does not repeat.
+- The workspace file (`workspaces.json`) now keeps services and commands in one `items` list and has `"version": 2`. Sable converts an older file the first time it reads it, right away, and keeps a copy of the original next to it as `workspaces.json.bak-0.3`. Older Sable versions can't read the new file; to go back, restore that copy. The first time Sable finds an old file it says so: a popup after the welcome screen (or a few lines from the other commands) tells you the format changed and where the copy is. It does not repeat. A workspace without a `sable.json` in its folder gets a one-line tip in the workspace list ("press x to write a sable.json") saying that teammates can then get the same workspace by running Sable in the folder; the new **Tips** switch in Settings hides it.
 
 ## 0.3.3 - Tweaks
 
