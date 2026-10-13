@@ -1,6 +1,6 @@
 import type { ServiceLogEntry } from "../process/process-manager.js";
 import { getSelectedItem, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
-import { formatStatus } from "./format.js";
+import { formatItemStatus } from "./format.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { formatClockTime } from "./log-lines.js";
 import { clipLines } from "./layout.js";
@@ -124,7 +124,7 @@ function formatHeader(options: RenderLogsViewOptions, offset: number, style: Tui
   }
 
   const name = selected.item.name;
-  const status = formatStatus(selected.process, selected.item.kind, style);
+  const status = formatItemStatus(selected, style, { detail: true });
   const count = options.logs.length;
   const position = options.following !== false || count === 0 ? "following" : `from line ${(offset + 1).toLocaleString("en-US")}`;
 

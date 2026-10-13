@@ -430,7 +430,7 @@ async function restartActiveSession(
   const failures = await options.controller.shutdown();
   const controller = options.createController(options.workspace);
 
-  await Promise.all([...runningServiceIds].map((serviceId) => controller.startItem(serviceId)));
+  await controller.startPlan([...runningServiceIds]);
 
   return { session: { workspaceId: options.workspace.id, controller }, failures };
 }

@@ -19,7 +19,7 @@ describe("renderStaticDashboard", () => {
         "  migrate         ✓ done",
         "",
         "",
-        "[s] stop  [r] restart  [Enter] logs  [e] edit  [?] help  [q] quit",
+        "[s] stop  [r] restart  [Enter] logs  [e] edit  [?] help  [S] start all  [q] quit",
       ].join("\n"),
     );
   });
@@ -60,7 +60,7 @@ describe("renderStaticDashboard", () => {
     const state = { ...createState(), selectedItemIndex: 1 };
 
     expect(renderStaticDashboard(state, { quitLabel: "back" }).split("\n").at(-1)).toBe(
-      "[s] start  [Enter] logs  [e] edit  [a] add  [?] help  [q] back",
+      "[s] start  [Enter] logs  [e] edit  [a] add  [?] help  [S] start all  [q] back",
     );
 
     const moving = renderStaticDashboard(state, { moving: true }).split("\n");
@@ -74,7 +74,50 @@ describe("renderStaticDashboard", () => {
     const rendered = renderStaticDashboard(state);
 
     expect(rendered).toContain("> migrate         ✓ done");
-    expect(rendered.split("\n").at(-1)).toBe("[r] run  [Enter] output  [e] edit  [a] add  [?] help  [q] quit");
+    expect(rendered.split("\n").at(-1)).toBe("[r] run  [Enter] output  [e] edit  [a] add  [?] help  [S] start all  [q] quit");
+  });
+
+  it("shows waiting and skipped items with what they are waiting for or why they were skipped", () => {
+    const state = createState();
+    const queued = {
+      ...state,
+      items: state.items.map((itemState, index) => index === 1
+        ? { ...itemState, queue: { status: "waiting" as const, for: ["backend", "cache"] } }
+        : index === 2
+          ? { ...itemState, queue: { status: "skipped" as const, reason: "migrate failed" } }
+          : itemState),
+    };
+    const rendered = renderStaticDashboard(queued, { columns: 80 });
+
+    expect(rendered).toContain("  frontend        ◌ after backend, cache");
+    expect(rendered).toContain("  worker          ✕ skipped");
+    expect(renderStaticDashboard({ ...queued, selectedItemIndex: 2 }, { columns: 120, rows: 14 })).toContain("worker · skipped: migrate failed · no output yet");
+  });
+
+  it("offers cancel for an item that is waiting, and start all only when there are services", () => {
+    const state = createState();
+    const waiting = {
+      ...state,
+      selectedItemIndex: 1,
+      items: state.items.map((itemState, index) => index === 1 ? { ...itemState, queue: { status: "waiting" as const, for: ["backend"] } } : itemState),
+    };
+
+    expect(renderStaticDashboard(waiting).split("\n").at(-1)).toBe("[s] cancel  [Enter] logs  [e] edit  [?] help  [S] start all  [q] quit");
+
+    const commandsOnly = { ...state, selectedItemIndex: 0, items: state.items.slice(3), itemIndexById: { cmd_migrate: 0 } };
+
+    expect(renderStaticDashboard(commandsOnly).split("\n").at(-1)).not.toContain("start all");
+  });
+
+  it("names what the selected item runs after in the preview", () => {
+    const state = createState();
+    const withAfter = {
+      ...state,
+      items: state.items.map((itemState, index) => index === 0 ? { ...itemState, item: { ...itemState.item, after: ["svc_frontend", "cmd_migrate"] } } : itemState),
+    };
+    const rendered = renderStaticDashboard(withAfter, { columns: 120, rows: 14, selectedServiceLogs: [createLog("stdout", "hi")] });
+
+    expect(rendered).toContain("backend (after frontend, migrate) · last 1 lines");
   });
 
   it("highlights the selected row across the width and pulses it when asked", () => {

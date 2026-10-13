@@ -60,6 +60,9 @@ export function runStartPlan(deps: StartPlanDeps): StartPlan {
 async function execute(deps: StartPlanDeps, firstPassDone: () => void): Promise<void> {
   const byId = new Map(deps.items.map((item) => [item.id, item]));
   const needed = withPrerequisites(byId, deps.targets);
+  // Only items that something else waits for need to prove they are up (or done); the rest are
+  // finished as soon as they are started, so the plan does not outlast the last real wait.
+  const waitedFor = new Set(needed.flatMap((id) => byId.get(id)!.after));
   const phase = new Map<string, Phase>();
   const failure = new Map<string, string>();
   const startedAt = new Map<string, number>();
@@ -122,7 +125,7 @@ async function execute(deps: StartPlanDeps, firstPassDone: () => void): Promise<
           mark(id, { status: "skipped", reason: `${byId.get(blocker)!.name} ${failure.get(blocker) ?? "did not start"}` });
           progressed = true;
         } else if (waitsFor.every((afterId) => phase.get(afterId) === "ready")) {
-          phase.set(id, "starting");
+          phase.set(id, waitedFor.has(id) ? "starting" : "ready");
           startedAt.set(id, deps.now());
           mark(id, undefined);
           starts.push(deps.start(id));

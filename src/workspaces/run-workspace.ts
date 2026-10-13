@@ -42,6 +42,9 @@ export type RunWorkspaceController = {
   stopSelectedService(): Promise<ManagedProcessState>;
   restartSelectedService(): Promise<ManagedProcessState>;
   startItem(itemId: string): Promise<ManagedProcessState>;
+  startPlan(itemIds: string[]): Promise<void>;
+  startAll: WorkspaceController["startAll"];
+  isStarting: WorkspaceController["isStarting"];
   addItem(item: ItemConfig): ReturnType<WorkspaceController["addItem"]>;
   updateItem(item: ItemConfig): ReturnType<WorkspaceController["updateItem"]>;
   removeItem(itemId: string): ReturnType<WorkspaceController["removeItem"]>;

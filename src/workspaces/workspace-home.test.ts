@@ -341,12 +341,10 @@ describe("runWorkspaceHome", () => {
 
     expect(oldController.shutdown).toHaveBeenCalledOnce();
     expect(createController).toHaveBeenNthCalledWith(2, restartWorkspace);
-    expect(newController.startItem).toHaveBeenCalledWith("svc_api");
-    expect(newController.startItem).toHaveBeenCalledWith("svc_worker");
-    expect(newController.startItem).not.toHaveBeenCalledWith("svc_web");
+    // The running and auto-start services come back together, so their order of dependencies is kept.
+    expect(newController.startPlan).toHaveBeenCalledTimes(1);
+    expect(newController.startPlan.mock.calls[0]![0].sort()).toEqual(["svc_api", "svc_worker"]);
     // One-shot commands are not re-run on restart, even if they were running.
-    expect(newController.startItem).not.toHaveBeenCalledWith("cmd_watch");
-    expect(newController.startItem).not.toHaveBeenCalledWith("cmd_build");
     expect(newController.shutdown).toHaveBeenCalledOnce();
     expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
       activeWorkspaceId: restartWorkspace.id,
@@ -373,7 +371,7 @@ describe("runWorkspaceHome", () => {
     });
 
     expect(controller.shutdown).toHaveBeenCalledOnce();
-    expect(controller.startItem).not.toHaveBeenCalled();
+    expect(controller.startPlan).not.toHaveBeenCalled();
     expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
       activeWorkspaceId: workspace.id,
       selectedWorkspaceId: portfolioWorkspace.id,
@@ -1005,6 +1003,9 @@ function createFakeController(state?: RuntimeWorkspaceState): RunWorkspaceContro
     stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
     restartSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
     startItem: vi.fn(async () => ({ status: "stopped" as const })),
+    startPlan: vi.fn(async () => undefined),
+    startAll: vi.fn(() => "started" as const),
+    isStarting: vi.fn(() => false),
     addItem: vi.fn(),
     updateItem: vi.fn(),
     removeItem: vi.fn(),
