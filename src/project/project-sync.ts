@@ -24,15 +24,22 @@ export function missingPlaceholders(file: ProjectFile, values: Record<string, st
     .map((placeholder) => placeholder.name);
 }
 
+// With `keepUnanswered`, a placeholder that has no value and no default stays as {{NAME}}, which is
+// how the review shows a file before the user has answered anything.
 export function resolveProjectItems(
   file: ProjectFile,
   values: Record<string, string>,
   projectDirectory: string,
+  options: { keepUnanswered?: boolean } = {},
 ): ResolvedProjectItem[] {
   const fill = (text: string) => text.replace(/\{\{([^{}]*)\}\}/g, (whole, name: string) => {
     const value = values[name] ?? file.placeholders[name]?.default;
 
     if (value === undefined) {
+      if (options.keepUnanswered === true) {
+        return whole;
+      }
+
       throw new Error(`No value for {{${name}}}.`);
     }
 
