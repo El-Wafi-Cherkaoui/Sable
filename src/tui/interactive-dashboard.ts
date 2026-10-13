@@ -1,4 +1,4 @@
-import { isResize, mapDashboardKey, mapHelpKey, mapLogsKey, mapMoveKey } from "../input/keymap.js";
+import { isResize, mapDashboardKey, mapHelpKey, mapMoveKey } from "../input/keymap.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import type { ManagedProcessState, ServiceLogEntry } from "../process/process-manager.js";
 import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
@@ -6,16 +6,9 @@ import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import { runSettingsDialog } from "./settings-dialog.js";
 import { renderHelpView, type HelpContext } from "./help-view.js";
-import {
-  bottomScrollOffset,
-  clampScrollOffset,
-  errorIndexes,
-  findMatches,
-  nextIndex,
-  renderLogsView,
-  type LogsLayout,
-  type LogsSearch,
-} from "./logs-view.js";
+import { createDashboardEventReader } from "./dashboard-events.js";
+import { createLogsSession } from "./logs-session.js";
+import { renderLogsView } from "./logs-view.js";
 import { renderStaticDashboard } from "./static-dashboard.js";
 import { shouldUseColor } from "./style.js";
 
@@ -67,14 +60,6 @@ export type InteractiveDashboardResult = { type: "back" } | { type: "exit" };
 
 type ViewMode = "dashboard" | "logs" | "help" | "move";
 type HelpReturnMode = "dashboard" | "logs";
-type LoopEvent =
-  | { type: "key"; keypress: Awaited<ReturnType<KeyInput["readKey"]>> }
-  | { type: "refresh" }
-  | { type: "abort" };
-type AbortWait = {
-  promise: Promise<void>;
-  cleanup(): void;
-};
 
 export async function runInteractiveDashboard(
   options: RunInteractiveDashboardOptions,
@@ -85,7 +70,11 @@ export async function runInteractiveDashboard(
   const render = options.render ?? renderStaticDashboard;
   const renderLogs = options.renderLogs ?? renderLogsView;
   const renderHelp = options.renderHelp ?? renderHelpView;
-  const configuredLogVisibleLineCount = options.logVisibleLineCount;
+  const logsSession = createLogsSession({
+    getLogs: () => options.controller.getSelectedServiceLogs(),
+    visibleLineCount: options.logVisibleLineCount,
+  });
+  const events = createDashboardEventReader(options.keyInput, options.abortSignal);
   const logsRefreshIntervalMs = options.logsRefreshIntervalMs ?? 250;
   const logsRevealIntervalMs = options.logsRevealIntervalMs ?? 55;
   let shouldQuit = false;
@@ -95,15 +84,6 @@ export async function runInteractiveDashboard(
   let helpReturnMode: HelpReturnMode = "dashboard";
   // Net number of positions the service moved in move mode, so Esc can undo it.
   let moveOffset = 0;
-  let logScrollOffset = 0;
-  let logHorizontalScrollOffset = 0;
-  let followLogTail = true;
-  let logRevealLineCount: number | undefined;
-  let logWrap = false;
-  let logSearch: LogsSearch | undefined;
-  let logHighlightIndex: number | undefined;
-  let logMessage: string | undefined;
-  let pendingKeyRead: Promise<Awaited<ReturnType<KeyInput["readKey"]>>> | undefined;
   let lastDashboardContents: string | undefined;
   // The last dashboard or logs frame, shown dimmed behind the help popup.
   let lastScreenContents: string | undefined;
@@ -113,13 +93,13 @@ export async function runInteractiveDashboard(
   try {
     while (!shouldQuit) {
     const currentMode: ViewMode = mode;
-    const refreshIntervalMs = currentMode === "logs" && isLogRevealActive()
+    const refreshIntervalMs = currentMode === "logs" && logsSession.isRevealActive()
       ? logsRevealIntervalMs
       : logsRefreshIntervalMs;
     const event =
       currentMode === "logs" || shouldRefreshDashboardPreview()
-        ? await readKeyOrRefresh(refreshIntervalMs)
-        : await readKeyOrAbort();
+        ? await events.readKeyOrRefresh(refreshIntervalMs)
+        : await events.readKeyOrAbort();
 
     if (event.type === "abort") {
       return { type: "exit" };
@@ -131,11 +111,7 @@ export async function runInteractiveDashboard(
 
     if (event.type === "key" && isResize(event.keypress)) {
       if (currentMode === "logs") {
-        const logs = options.controller.getSelectedServiceLogs();
-
-        logScrollOffset = followLogTail
-          ? bottomScrollOffset(logs, getLogsLayout())
-          : clampScrollOffset(logScrollOffset, logs, getLogsLayout());
+        logsSession.resize();
       }
 
       screen.clearAll?.();
@@ -173,118 +149,31 @@ export async function runInteractiveDashboard(
     }
 
     if (currentMode === "logs") {
-      const logs = options.controller.getSelectedServiceLogs();
-
       if (event.type === "refresh") {
-        logScrollOffset = followLogTail
-          ? bottomScrollOffset(logs, getLogsLayout())
-          : clampScrollOffset(logScrollOffset, logs, getLogsLayout());
-        advanceLogReveal(logs.length);
+        logsSession.refresh();
         renderLogsFrame();
         continue;
       }
 
-      const keypress = event.keypress;
-
-      clearLogReveal();
-      logMessage = undefined;
-
-      if (logSearch?.editing === true) {
-        if (keypress.name === "escape") {
-          logSearch = undefined;
-        } else if (keypress.name === "return" || keypress.sequence === "\r") {
-          logSearch = logSearch.query === "" ? undefined : { query: logSearch.query, editing: false };
-
-          if (logSearch !== undefined) {
-            jumpToLogLine(findMatches(logs, logSearch.query).at(-1), logs);
-          }
-        } else if (keypress.name === "backspace") {
-          logSearch = { ...logSearch, query: logSearch.query.slice(0, -1) };
-        } else if (keypress.sequence !== undefined && keypress.ctrl !== true && keypress.sequence >= " " && keypress.sequence !== "\x7f") {
-          logSearch = { ...logSearch, query: logSearch.query + keypress.sequence };
-        }
-
-        renderLogsFrame();
-        continue;
-      }
-
-      const action = mapLogsKey(keypress);
-
-      switch (action) {
-        case "scrollDown":
-          logScrollOffset = clampScrollOffset(logScrollOffset + 1, logs, getLogsLayout());
-          followLogTail = logScrollOffset === bottomScrollOffset(logs, getLogsLayout());
-          break;
-        case "scrollUp":
-          logScrollOffset = clampScrollOffset(logScrollOffset - 1, logs, getLogsLayout());
-          followLogTail = false;
-          break;
-        case "scrollTop":
-          logScrollOffset = 0;
-          followLogTail = false;
-          break;
-        case "scrollBottom":
-          logScrollOffset = bottomScrollOffset(logs, getLogsLayout());
-          followLogTail = true;
-          logHighlightIndex = undefined;
-          break;
-        case "scrollLeft":
-          logHorizontalScrollOffset = Math.max(0, logHorizontalScrollOffset - 8);
-          break;
-        case "scrollRight":
-          logHorizontalScrollOffset += 8;
-          break;
-        case "resetHorizontalScroll":
-          logHorizontalScrollOffset = 0;
-          break;
-        case "search":
-          logSearch = { query: "", editing: true };
-          break;
-        case "nextMatch":
-        case "previousMatch":
-          if (logSearch !== undefined) {
-            jumpToLogLine(nextIndex(findMatches(logs, logSearch.query), logHighlightIndex, action === "nextMatch" ? 1 : -1), logs);
-          }
-          break;
-        case "nextError": {
-          const errorLine = nextIndex(errorIndexes(logs), logHighlightIndex ?? logScrollOffset - 1, 1);
-
-          if (errorLine === undefined) {
-            logMessage = "No errors in this output.";
-          } else {
-            jumpToLogLine(errorLine, logs);
-          }
-          break;
-        }
-        case "toggleWrap":
-          logWrap = !logWrap;
-          logHorizontalScrollOffset = 0;
-          if (followLogTail) {
-            logScrollOffset = bottomScrollOffset(logs, getLogsLayout());
-          }
+      switch (logsSession.handleKey(event.keypress)) {
+        case "render":
+          renderLogsFrame();
           break;
         case "openHelp":
           helpReturnMode = "logs";
           mode = "help";
           renderHelpFrame("logs");
-          continue;
+          break;
         case "back":
-          if (logSearch !== undefined) {
-            logSearch = undefined;
-            logHighlightIndex = undefined;
-            break;
-          }
-
           clearPulse();
           options.sound?.play("back");
           mode = "dashboard";
           renderDashboardFrame();
-          continue;
+          break;
         case "none":
-          continue;
+          break;
       }
 
-      renderLogsFrame();
       continue;
     }
 
@@ -398,16 +287,7 @@ export async function runInteractiveDashboard(
         clearDashboardMessage();
         clearPulse();
         mode = "logs";
-        followLogTail = true;
-        logHorizontalScrollOffset = 0;
-        logSearch = undefined;
-        logHighlightIndex = undefined;
-        logMessage = undefined;
-        logRevealLineCount = resolveInitialLogRevealLineCount(
-          options.controller.getSelectedServiceLogs().length,
-          getLogVisibleLineCount(),
-        );
-        logScrollOffset = bottomScrollOffset(options.controller.getSelectedServiceLogs(), getLogsLayout());
+        logsSession.open();
         renderLogsFrame();
         break;
       case "openHelp":
@@ -470,82 +350,13 @@ export async function runInteractiveDashboard(
   }
 
   function renderLogsFrame(): void {
-    const logs = options.controller.getSelectedServiceLogs();
-
-    logScrollOffset = clampScrollOffset(logScrollOffset, logs, getLogsLayout());
     lastDashboardContents = undefined;
     lastScreenContents = renderLogs({
-        state: options.controller.getState(),
-        logs,
-        scrollOffset: logScrollOffset,
-        following: followLogTail,
-        visibleLineCount: getLogVisibleLineCount(),
-        revealLineCount: logRevealLineCount,
-        horizontalScrollOffset: logHorizontalScrollOffset,
-        viewportColumns: process.stdout.columns,
-        wrap: logWrap,
-        search: logSearch,
-        highlightIndex: logHighlightIndex,
-        message: logMessage,
-        color,
-      });
+      ...logsSession.viewProps(),
+      state: options.controller.getState(),
+      color,
+    });
     renderFrame(screen, lastScreenContents);
-  }
-
-  function getLogVisibleLineCount(): number {
-    if (configuredLogVisibleLineCount !== undefined) {
-      return configuredLogVisibleLineCount;
-    }
-
-    const rows = process.stdout.rows;
-
-    if (rows === undefined || rows <= 0) {
-      return 12;
-    }
-
-    // Header, blank, blank, search line, footer, and one row of scroll margin.
-    return Math.max(3, rows - 6);
-  }
-
-  function getLogsLayout(): LogsLayout {
-    return {
-      height: getLogVisibleLineCount(),
-      width: Math.max(23, (process.stdout.columns ?? 80) - 1),
-      wrap: logWrap,
-    };
-  }
-
-  // Shows a found line a third of the way down, so there is context above and below it.
-  function jumpToLogLine(index: number | undefined, logs: ReturnType<typeof options.controller.getSelectedServiceLogs>): void {
-    logHighlightIndex = index;
-
-    if (index === undefined) {
-      return;
-    }
-
-    followLogTail = false;
-    logScrollOffset = clampScrollOffset(index - Math.floor(getLogVisibleLineCount() / 3), logs, getLogsLayout());
-  }
-
-  function isLogRevealActive(): boolean {
-    return logRevealLineCount !== undefined;
-  }
-
-  function clearLogReveal(): void {
-    logRevealLineCount = undefined;
-  }
-
-  function advanceLogReveal(logLineCount: number): void {
-    if (logRevealLineCount === undefined) {
-      return;
-    }
-
-    const visibleLogCount = resolveVisibleLogCount(logLineCount, getLogVisibleLineCount());
-    const nextRevealLineCount = logRevealLineCount + resolveLogRevealStep(visibleLogCount);
-
-    logRevealLineCount = nextRevealLineCount >= visibleLogCount
-      ? undefined
-      : nextRevealLineCount;
   }
 
   function renderHelpFrame(context: HelpContext): void {
@@ -702,77 +513,10 @@ export async function runInteractiveDashboard(
     moveOffset += indexAfter - indexBefore;
     return "moved";
   }
-
-  async function readKeyEvent(): Promise<Awaited<ReturnType<KeyInput["readKey"]>>> {
-    pendingKeyRead ??= options.keyInput.readKey();
-    const keypress = await pendingKeyRead;
-
-    pendingKeyRead = undefined;
-
-    return keypress;
-  }
-
-  async function readKeyOrRefresh(refreshIntervalMs: number): Promise<LoopEvent> {
-    pendingKeyRead ??= options.keyInput.readKey();
-    const abortWait = createAbortWait(options.abortSignal);
-
-    const event = await Promise.race([
-      pendingKeyRead.then((keypress) => ({ type: "key" as const, keypress })),
-      wait(refreshIntervalMs).then(() => ({ type: "refresh" as const })),
-      abortWait.promise.then(() => ({ type: "abort" as const })),
-    ]).finally(() => abortWait.cleanup());
-
-    if (event.type === "key") {
-      pendingKeyRead = undefined;
-    }
-
-    return event;
-  }
-
-  async function readKeyOrAbort(): Promise<LoopEvent> {
-    const abortWait = createAbortWait(options.abortSignal);
-
-    return Promise.race([
-      readKeyEvent().then((keypress) => ({ type: "key" as const, keypress })),
-      abortWait.promise.then(() => ({ type: "abort" as const })),
-    ]).finally(() => abortWait.cleanup());
-  }
 }
 
 function isCtrlC(keypress: Awaited<ReturnType<KeyInput["readKey"]>>): boolean {
   return keypress.ctrl === true && keypress.name === "c";
-}
-
-function createAbortWait(signal: AbortSignal | undefined): AbortWait {
-  if (signal === undefined) {
-    return {
-      promise: new Promise(() => undefined),
-      cleanup() {},
-    };
-  }
-
-  if (signal.aborted) {
-    return {
-      promise: Promise.resolve(),
-      cleanup() {},
-    };
-  }
-
-  let abortListener: (() => void) | undefined;
-
-  const promise = new Promise<void>((resolve) => {
-    abortListener = () => resolve();
-    signal.addEventListener("abort", abortListener, { once: true });
-  });
-
-  return {
-    promise,
-    cleanup() {
-      if (abortListener !== undefined) {
-        signal.removeEventListener("abort", abortListener);
-      }
-    },
-  };
 }
 
 function isSelectedItemRunning(state: RuntimeWorkspaceState): boolean {
@@ -793,31 +537,6 @@ function getPulseItem(
   }
 
   return undefined;
-}
-
-function resolveInitialLogRevealLineCount(
-  logLineCount: number,
-  visibleLineCount: number,
-): number | undefined {
-  const visibleLogCount = resolveVisibleLogCount(logLineCount, visibleLineCount);
-
-  if (visibleLogCount <= 3) {
-    return undefined;
-  }
-
-  return Math.max(1, Math.ceil(visibleLogCount / 3));
-}
-
-function resolveVisibleLogCount(logLineCount: number, visibleLineCount: number): number {
-  return Math.min(logLineCount, visibleLineCount);
-}
-
-function resolveLogRevealStep(visibleLogCount: number): number {
-  return Math.max(1, Math.ceil(visibleLogCount / 3));
-}
-
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function renderFrame(screen: InteractiveDashboardScreen, contents: string): void {
