@@ -63,7 +63,7 @@ describe("runDeleteWorkspaceFlow", () => {
 
   it("has no selected workspace after deleting the only workspace", async () => {
     const onlyWorkspaceConfig: AppConfig = {
-      version: 1,
+      version: 2,
       workspaces: [config.workspaces[0]!],
     };
     const store = createStore(onlyWorkspaceConfig);
@@ -157,19 +157,19 @@ function backspaces(count: number): Array<{ name: "backspace" }> {
 }
 
 const config: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [
     {
       id: "ws_ecommerce",
       name: "ecommerce",
       projectDirectory: process.cwd(),
-      services: [],
+      items: [],
     },
     {
       id: "ws_api",
       name: "api",
       projectDirectory: process.cwd(),
-      services: [],
+      items: [],
     },
   ],
 };

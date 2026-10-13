@@ -24,7 +24,8 @@ describe("runAddWorkspaceItemFlow", () => {
     });
 
     expect(result).toEqual({ type: "completed", message: 'Added service "worker".', serviceId: "svc_worker" });
-    expect(store.savedConfig?.workspaces[0]?.services.at(-1)).toEqual({
+    expect(store.savedConfig?.workspaces[0]?.items.at(-1)).toEqual({
+      kind: "service",
       id: "svc_worker",
       name: "worker",
       command: "npm run worker",
@@ -43,8 +44,8 @@ describe("runAddWorkspaceItemFlow", () => {
     });
 
     expect(result).toEqual({ type: "completed", message: 'Added command "migrate".', commandId: "cmd_migrate" });
-    expect(store.savedConfig?.workspaces[0]?.commands).toEqual([
-      { id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: projectDirectory, env: {} },
+    expect(store.savedConfig?.workspaces[0]?.items.filter((item) => item.kind === "command")).toEqual([
+      { kind: "command", id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: projectDirectory, env: {} },
     ]);
   });
 
@@ -89,7 +90,7 @@ describe("runAddWorkspaceItemFlow", () => {
     });
 
     expect(result).toMatchObject({ type: "completed", serviceId: "svc_web" });
-    expect(store.savedConfig?.workspaces[0]?.services.at(-1)).toMatchObject({ name: "web", command: "npm run web", autoStart: true });
+    expect(store.savedConfig?.workspaces[0]?.items.at(-1)).toMatchObject({ name: "web", command: "npm run web", autoStart: true });
   });
 });
 
@@ -104,8 +105,8 @@ describe("runEditServiceFlow", () => {
 
     expect(form.mock.calls[0]![0].values).toEqual({ name: "api", command: "npm run dev", cwd: ".", autoStart: true, env: [] });
     expect(result).toEqual({ type: "completed", message: 'Saved service "api-server".', serviceId: "svc_api" });
-    expect(store.savedConfig?.workspaces[0]?.services[0]).toEqual({
-      id: "svc_api", name: "api-server", command: "npm start", cwd: projectDirectory, autoStart: false, env: { PORT: "4000" },
+    expect(store.savedConfig?.workspaces[0]?.items[0]).toEqual({
+      kind: "service", id: "svc_api", name: "api-server", command: "npm start", cwd: projectDirectory, autoStart: false, env: { PORT: "4000" },
     });
   });
 
@@ -120,14 +121,14 @@ describe("runEditServiceFlow", () => {
 
 describe("runEditCommandFlow", () => {
   it("prefills and saves a command", async () => {
-    const withCommand = { ...workspace, commands: [{ id: "cmd_build", name: "build", command: "npm run build", cwd: projectDirectory, env: { CI: "1" } }] };
-    const store = createStore({ version: 1, workspaces: [withCommand] });
+    const withCommand = { ...workspace, items: [{ kind: "command", id: "cmd_build", name: "build", command: "npm run build", cwd: projectDirectory, env: { CI: "1" } }] };
+    const store = createStore({ version: 2, workspaces: [withCommand] });
     const form = fakeForm({ name: "build", command: "npm run build -- --prod", cwd: ".", env: ["CI=1"] });
 
     await runEditCommandFlow({ store, workspace: withCommand, keyInput: createKeyInput([]), commandId: "cmd_build", form, directoryExists: () => true });
 
     expect(form.mock.calls[0]![0].values).toEqual({ name: "build", command: "npm run build", cwd: ".", env: ["CI=1"] });
-    expect(store.savedConfig?.workspaces[0]?.commands[0]).toMatchObject({ command: "npm run build -- --prod", env: { CI: "1" } });
+    expect(store.savedConfig?.workspaces[0]?.items[0]).toMatchObject({ command: "npm run build -- --prod", env: { CI: "1" } });
   });
 });
 
@@ -191,7 +192,7 @@ describe("runDeleteServiceFlow", () => {
       message: 'Deleted service "api" from workspace "ecommerce".',
       removedServiceId: "svc_api",
     });
-    expect(store.savedConfig?.workspaces[0]?.services).toEqual([]);
+    expect(store.savedConfig?.workspaces[0]?.items).toEqual([]);
   });
 
   it("keeps prompting when the typed service name does not match", async () => {
@@ -213,7 +214,7 @@ describe("runDeleteServiceFlow", () => {
       screen: createScreen(),
     });
 
-    expect(store.savedConfig?.workspaces[0]?.services).toEqual([]);
+    expect(store.savedConfig?.workspaces[0]?.items).toEqual([]);
   });
 
   it("goes back without saving on Esc", async () => {
@@ -302,8 +303,9 @@ const workspace = {
   id: "ws_ecommerce",
   name: "ecommerce",
   projectDirectory,
-  services: [
+  items: [
     {
+      kind: "service",
       id: "svc_api",
       name: "api",
       command: "npm run dev",
@@ -312,18 +314,18 @@ const workspace = {
       env: {},
     },
   ],
-  commands: [],
 };
 const config: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [workspace],
 };
 
 const workspaceWithTwoServices = {
   ...workspace,
-  services: [
-    ...workspace.services,
+  items: [
+    ...workspace.items,
     {
+      kind: "service",
       id: "svc_worker",
       name: "worker",
       command: "npm run worker",
@@ -335,15 +337,15 @@ const workspaceWithTwoServices = {
 };
 
 const configWithTwoServices: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [workspaceWithTwoServices],
 };
 
 describe("knownCommands", () => {
   it("lists this workspace's commands first, then the others', each once", () => {
     const item = (command: string) => ({ id: command, name: command, command, cwd: projectDirectory, env: {} });
-    const mine = { ...workspace, services: [{ ...item("npm run dev"), autoStart: true }], commands: [item("npm run lint")] };
-    const other = { ...workspace, id: "other", services: [{ ...item("npm run dev"), autoStart: true }, { ...item("docker compose up"), autoStart: true }], commands: [item("  ")] };
+    const mine = { ...workspace, items: [{ kind: "service", ...item("npm run dev"), autoStart: true }, { ...item("npm run lint"), kind: "command" }] };
+    const other = { ...workspace, id: "other", items: [{ kind: "service", ...item("npm run dev"), autoStart: true }, { kind: "service", ...item("docker compose up"), autoStart: true }, { ...item("  "), kind: "command" }] };
 
     expect(knownCommands({ ...config, workspaces: [other, mine] }, mine)).toEqual(["npm run dev", "npm run lint", "docker compose up"]);
   });

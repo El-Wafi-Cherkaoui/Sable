@@ -1,6 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import type { AppConfig, CommandConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
+import type { AppConfig, ItemConfig, ItemKind, WorkspaceConfig } from "../config/config-types.js";
+import { addItem, findItem, itemsOfKind, removeItem, replaceItem } from "../config/workspace-items.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { generateShortId } from "../shared/id.js";
 import { runForm, type FormErrors, type FormField, type FormValues } from "../tui/form-view.js";
@@ -41,9 +42,6 @@ export type DeleteCommandFlowOptions = ServiceFlowOptions & {
   commandId: string;
 };
 
-type ItemKind = "service" | "command";
-type WorkspaceItem = ServiceConfig | CommandConfig;
-
 const idPrefixes = { service: "svc", command: "cmd" } as const;
 
 export async function runAddWorkspaceItemFlow(
@@ -73,7 +71,7 @@ export async function runAddWorkspaceItemFlow(
   const generateId = options.generateId ?? generateShortId;
   const item = itemFromValues(kind, generateId(idPrefixes[kind]), result.values, workspace);
 
-  await options.store.save(updateWorkspace(config, workspace.id, withItems(workspace, kind, [...itemsOf(workspace, kind), item])));
+  await options.store.save(updateWorkspace(config, workspace.id, addItem(workspace, item)));
 
   return completed(kind, item.id, `Added ${kind} "${item.name}".`);
 }
@@ -109,7 +107,8 @@ async function runEditItemFlow(
 ): Promise<ServiceFlowResult> {
   const config = await options.store.load();
   const workspace = findWorkspace(config, options.workspace.id);
-  const item = workspace === undefined ? undefined : itemsOf(workspace, kind).find((candidate) => candidate.id === itemId);
+  const found = workspace === undefined ? undefined : findItem(workspace, itemId);
+  const item = found?.kind === kind ? found : undefined;
 
   if (workspace === undefined || item === undefined) {
     return { type: "back", message: `That ${kind} no longer exists.` };
@@ -136,11 +135,7 @@ async function runEditItemFlow(
 
   const nextItem = itemFromValues(kind, item.id, result.values, workspace);
 
-  await options.store.save(updateWorkspace(config, workspace.id, withItems(
-    workspace,
-    kind,
-    itemsOf(workspace, kind).map((candidate) => candidate.id === item.id ? nextItem : candidate),
-  )));
+  await options.store.save(updateWorkspace(config, workspace.id, replaceItem(workspace, nextItem)));
 
   return completed(kind, nextItem.id, `Saved ${kind} "${nextItem.name}".`);
 }
@@ -157,7 +152,8 @@ async function runDeleteItemFlow(
     return { type: "back", message: `Workspace "${options.workspace.name}" was not found.` };
   }
 
-  const item = itemsOf(workspace, kind).find((candidate) => candidate.id === itemId);
+  const found = findItem(workspace, itemId);
+  const item = found?.kind === kind ? found : undefined;
 
   if (item === undefined) {
     return { type: "back", message: "Delete cancelled." };
@@ -182,11 +178,7 @@ async function runDeleteItemFlow(
     return { type: "exit" };
   }
 
-  await options.store.save(updateWorkspace(config, workspace.id, withItems(
-    workspace,
-    kind,
-    itemsOf(workspace, kind).filter((candidate) => candidate.id !== item.id),
-  )));
+  await options.store.save(updateWorkspace(config, workspace.id, removeItem(workspace, item.id)));
 
   return {
     type: "completed",
@@ -199,22 +191,11 @@ function completed(kind: ItemKind, id: string, message: string): ServiceFlowResu
   return { type: "completed", message, ...(kind === "service" ? { serviceId: id } : { commandId: id }) };
 }
 
-function itemsOf(workspace: WorkspaceConfig, kind: ItemKind): WorkspaceItem[] {
-  return kind === "service" ? workspace.services : workspace.commands;
-}
-
-function withItems(workspace: WorkspaceConfig, kind: ItemKind, items: WorkspaceItem[]): WorkspaceConfig {
-  // The items always come from itemsOf(workspace, kind), so they have the right shape for that list.
-  return kind === "service"
-    ? { ...workspace, services: items as ServiceConfig[] }
-    : { ...workspace, commands: items as CommandConfig[] };
-}
-
 // Commands already saved, for suggestions while typing: this workspace's first, then the
 // others', each only once.
 export function knownCommands(config: AppConfig, workspace: WorkspaceConfig): string[] {
   const others = config.workspaces.filter((candidate) => candidate.id !== workspace.id);
-  const all = [workspace, ...others].flatMap((candidate) => [...candidate.services, ...candidate.commands].map((item) => item.command.trim()));
+  const all = [workspace, ...others].flatMap((candidate) => candidate.items.map((item) => item.command.trim()));
 
   return [...new Set(all)].filter((command) => command !== "");
 }
@@ -252,7 +233,7 @@ export function validateItem(
 ): FormErrors {
   const errors: FormErrors = {};
   const name = text(values.name);
-  const siblings = itemsOf(workspace, kind);
+  const siblings = itemsOfKind(workspace, kind);
 
   if (name === "") {
     errors.name = "Name is required.";
@@ -287,8 +268,8 @@ export function validateItem(
   return errors;
 }
 
-function itemFromValues(kind: ItemKind, id: string, values: FormValues, workspace: WorkspaceConfig): WorkspaceItem {
-  const command: CommandConfig = {
+function itemFromValues(kind: ItemKind, id: string, values: FormValues, workspace: WorkspaceConfig): ItemConfig {
+  const item = {
     id,
     name: text(values.name),
     command: text(values.command),
@@ -296,7 +277,7 @@ function itemFromValues(kind: ItemKind, id: string, values: FormValues, workspac
     env: listToEnv(list(values.env)),
   };
 
-  return kind === "service" ? { ...command, autoStart: values.autoStart === true } : command;
+  return kind === "service" ? { kind, ...item, autoStart: values.autoStart === true } : { kind, ...item };
 }
 
 // Shows folders inside the project as relative paths, and anything else as-is.

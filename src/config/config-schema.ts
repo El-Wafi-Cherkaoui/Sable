@@ -2,22 +2,26 @@ import { z } from "zod";
 
 const workspaceNamePattern = /^[A-Za-z0-9_-]+$/;
 
-export const serviceConfigSchema = z.object({
-  id: z.string().trim().min(1, "Service id is required."),
-  name: z.string().trim().min(1, "Service name is required."),
-  command: z.string().trim().min(1, "Service command is required."),
-  cwd: z.string().trim().min(1, "Service working directory is required."),
-  autoStart: z.boolean(),
+const itemFields = {
+  id: z.string().trim().min(1, "Item id is required."),
+  name: z.string().trim().min(1, "Name is required."),
+  command: z.string().trim().min(1, "Command is required."),
+  cwd: z.string().trim().min(1, "Working directory is required."),
   env: z.record(z.string(), z.string()),
+};
+
+export const serviceConfigSchema = z.object({
+  kind: z.literal("service"),
+  ...itemFields,
+  autoStart: z.boolean(),
 });
 
 export const commandConfigSchema = z.object({
-  id: z.string().trim().min(1, "Command id is required."),
-  name: z.string().trim().min(1, "Command name is required."),
-  command: z.string().trim().min(1, "Command is required."),
-  cwd: z.string().trim().min(1, "Command working directory is required."),
-  env: z.record(z.string(), z.string()),
+  kind: z.literal("command"),
+  ...itemFields,
 });
+
+export const itemConfigSchema = z.discriminatedUnion("kind", [serviceConfigSchema, commandConfigSchema]);
 
 export const workspaceConfigSchema = z
   .object({
@@ -31,41 +35,41 @@ export const workspaceConfigSchema = z
         "Workspace names may only contain letters, numbers, dashes, and underscores.",
       ),
     projectDirectory: z.string().trim().min(1, "Workspace project directory is required."),
-    services: z.array(serviceConfigSchema),
-    commands: z.array(commandConfigSchema).default([]),
+    items: z.array(itemConfigSchema),
   })
   .superRefine((workspace, context) => {
-    const seenServiceNames = new Set<string>();
-    const seenCommandNames = new Set<string>();
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
 
-    for (const [index, service] of workspace.services.entries()) {
-      if (seenServiceNames.has(service.name)) {
+    for (const [index, item] of workspace.items.entries()) {
+      if (seenIds.has(item.id)) {
         context.addIssue({
           code: "custom",
-          message: `Duplicate service name "${service.name}" in workspace "${workspace.name}".`,
-          path: ["services", index, "name"],
+          message: `Duplicate id "${item.id}" in workspace "${workspace.name}".`,
+          path: ["items", index, "id"],
         });
       }
 
-      seenServiceNames.add(service.name);
-    }
+      seenIds.add(item.id);
 
-    for (const [index, command] of workspace.commands.entries()) {
-      if (seenCommandNames.has(command.name)) {
+      // A service and a command may share a name, so names are unique per kind.
+      const nameKey = `${item.kind}:${item.name}`;
+
+      if (seenNames.has(nameKey)) {
         context.addIssue({
           code: "custom",
-          message: `Duplicate command name "${command.name}" in workspace "${workspace.name}".`,
-          path: ["commands", index, "name"],
+          message: `Duplicate ${item.kind} name "${item.name}" in workspace "${workspace.name}".`,
+          path: ["items", index, "name"],
         });
       }
 
-      seenCommandNames.add(command.name);
+      seenNames.add(nameKey);
     }
   });
 
 export const appConfigSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     workspaces: z.array(workspaceConfigSchema),
   })
   .superRefine((config, context) => {

@@ -146,22 +146,22 @@ const workspace = {
   id: "ws_ecommerce",
   name: "ecommerce",
   projectDirectory: process.cwd(),
-  services: [],
+  items: [],
 };
 
 const portfolioWorkspace = {
   id: "ws_portfolio",
   name: "portfolio",
   projectDirectory: process.cwd(),
-  services: [],
+  items: [],
 };
 
 const config: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [workspace],
 };
 
 const configWithTwoWorkspaces: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [workspace, portfolioWorkspace],
 };

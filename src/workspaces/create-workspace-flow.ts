@@ -75,8 +75,7 @@ export async function runCreateWorkspaceFlow(
     id: generateId("ws"),
     name: String(result.values.name).trim(),
     projectDirectory: path.resolve(expandHome(String(result.values.folder).trim())),
-    services: [],
-    commands: [],
+    items: [],
   };
 
   await options.store.save({

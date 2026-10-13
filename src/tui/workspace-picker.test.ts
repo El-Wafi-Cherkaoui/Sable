@@ -219,7 +219,7 @@ describe("renderWorkspacePicker", () => {
   it("renders selected workspace details with services and commands", () => {
     const workspace = {
       ...workspaces[0]!,
-      commands: [{ id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: ".", env: {} }],
+      items: [...workspaces[0]!.items, { kind: "command", id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: ".", env: {} }],
     };
 
     expect(renderWorkspaceDetails(workspace)).toBe(
@@ -242,7 +242,7 @@ describe("renderWorkspacePicker", () => {
   });
 
   it("renders empty workspace details", () => {
-    expect(renderWorkspaceDetails({ id: "ws_empty", name: "empty", projectDirectory: "/srv/empty", services: [], commands: [] })).toBe(
+    expect(renderWorkspaceDetails({ id: "ws_empty", name: "empty", projectDirectory: "/srv/empty", items: [] })).toBe(
       ["empty · /srv/empty", "", "No services or commands yet.", "", "[Esc] back"].join("\n"),
     );
   });
@@ -639,8 +639,9 @@ const workspaces: WorkspaceConfig[] = [
     id: "ws_ecommerce",
     name: "ecommerce",
     projectDirectory: "/srv/ecommerce",
-    services: [
+    items: [
       {
+        kind: "service",
         id: "svc_api",
         name: "api",
         command: "npm run dev",
@@ -649,6 +650,7 @@ const workspaces: WorkspaceConfig[] = [
         env: {},
       },
       {
+        kind: "service",
         id: "svc_web",
         name: "web",
         command: "npm run web",
@@ -662,8 +664,9 @@ const workspaces: WorkspaceConfig[] = [
     id: "ws_portfolio",
     name: "portfolio",
     projectDirectory: "/srv/portfolio",
-    services: [
+    items: [
       {
+        kind: "service",
         id: "svc_site",
         name: "site",
         command: "npm run dev",

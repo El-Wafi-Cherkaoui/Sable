@@ -1009,8 +1009,9 @@ function createState(): RuntimeWorkspaceState {
     id: "ws_ecommerce",
     name: "ecommerce",
     projectDirectory: process.cwd(),
-    services: [
+    items: [
       {
+        kind: "service",
         id: "svc_backend",
         name: "backend",
         command: "npm run dev",
@@ -1019,6 +1020,7 @@ function createState(): RuntimeWorkspaceState {
         env: {},
       },
       {
+        kind: "service",
         id: "svc_frontend",
         name: "frontend",
         command: "npm run dev",

@@ -69,8 +69,7 @@ export async function runCreateWorkspaceCommand(
         id: idGenerator("ws"),
         name: workspaceName,
         projectDirectory,
-        services,
-        commands: [],
+        items: services,
       },
     ],
   };
@@ -139,6 +138,7 @@ async function promptForService(
   });
 
   return {
+    kind: "service",
     id: generateId("svc"),
     name: name.trim(),
     command: command.trim(),

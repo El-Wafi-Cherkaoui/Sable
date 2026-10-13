@@ -51,8 +51,9 @@ describe("MVP integration flows", () => {
     expect(createdConfig.workspaces[0]).toMatchObject({
       id: "ws_shop",
       name: "shop",
-      services: [
+      items: [
         {
+          kind: "service",
           id: "svc_api",
           name: "api",
           cwd: path.join(projectDirectory, "api"),
@@ -71,7 +72,7 @@ describe("MVP integration flows", () => {
       output,
     });
 
-    await expect(store.load()).resolves.toEqual({ version: 1, workspaces: [] });
+    await expect(store.load()).resolves.toEqual({ version: 2, workspaces: [] });
   });
 
   it("runs a real service through controller/process manager and captures logs", async () => {
@@ -80,11 +81,11 @@ describe("MVP integration flows", () => {
       workspace: {
         id: "ws_runtime",
         name: "runtime",
-        services: [
-          createService({
+        items: [
+          { ...createService({
             id: "svc_api",
             command: nodeCommand('console.log("ready"); setInterval(() => {}, 1000);'),
-          }),
+          }), kind: "service" },
         ],
       },
       processManager,
@@ -114,13 +115,13 @@ describe("MVP integration flows", () => {
   it("runs workspace command cleanup against a real auto-start service", async () => {
     const readyFile = path.join(await createTempDirectory(), "ready.txt");
     const store = createStore({
-      version: 1,
+      version: 2,
       workspaces: [
         {
           id: "ws_cleanup",
           name: "cleanup",
-          services: [
-            createService({
+          items: [
+            { ...createService({
               id: "svc_cleanup",
               command: nodeCommand(
                 `require("node:fs").writeFileSync(${JSON.stringify(
@@ -128,7 +129,7 @@ describe("MVP integration flows", () => {
                 )}, "ready"); setInterval(() => {}, 1000);`,
               ),
               autoStart: true,
-            }),
+            }), kind: "service" },
           ],
         },
       ],

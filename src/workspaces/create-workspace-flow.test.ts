@@ -34,8 +34,7 @@ describe("runCreateWorkspaceFlow", () => {
         id: "ws_shop",
         name: "shop",
         projectDirectory,
-        services: [],
-        commands: [],
+        items: [],
       },
     ]);
   });
@@ -81,13 +80,13 @@ describe("runCreateWorkspaceFlow", () => {
 
   it("rejects duplicate workspace names case-insensitively", async () => {
     const store = createStore({
-      version: 1,
+      version: 2,
       workspaces: [
         {
           id: "ws_shop",
           name: "shop",
           projectDirectory: process.cwd(),
-          services: [],
+          items: [],
         },
       ],
     });
@@ -243,7 +242,7 @@ function backspaces(count: number): Array<{ name: "backspace" }> {
 }
 
 const emptyConfig: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [],
 };
 

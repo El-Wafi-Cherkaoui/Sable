@@ -1,4 +1,5 @@
 import type { AppConfig } from "../config/config-types.js";
+import { servicesOf } from "../config/workspace-items.js";
 
 export type WorkspaceConfigReader = {
   load(): Promise<AppConfig>;
@@ -31,7 +32,7 @@ export async function runListWorkspacesCommand(
   for (const workspace of config.workspaces) {
     output.log(
       `${workspace.name.padEnd(nameColumnWidth)}  ${formatServiceCount(
-        workspace.services.length,
+        servicesOf(workspace).length,
       )}`,
     );
   }

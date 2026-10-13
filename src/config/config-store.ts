@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { constants, promises as fs } from "node:fs";
 import path from "node:path";
 import { ZodError } from "zod";
 import { validateAppConfig } from "./config-schema.js";
@@ -6,7 +6,7 @@ import { resolveConfigPaths, type ConfigPaths } from "./config-path.js";
 import type { AppConfig, WorkspaceConfig } from "./config-types.js";
 
 export const defaultConfig: AppConfig = {
-  version: 1,
+  version: 2,
   workspaces: [],
 };
 
@@ -82,6 +82,10 @@ export class ConfigStore {
       parsedConfig = JSON.parse(rawConfig);
     } catch (error) {
       throw new ConfigParseError(this.paths.file, error);
+    }
+
+    if (isRecord(parsedConfig) && parsedConfig.version === 1) {
+      await backUpOldConfig(this.paths.file);
     }
 
     try {
@@ -180,6 +184,8 @@ function stableStringify(value: unknown): string {
   );
 }
 
+// Legacy format (remove in 0.6): version 1 kept services and commands in two lists per workspace.
+// Version 2 keeps one list of items, each with a kind.
 function migrateConfig(input: unknown): unknown {
   if (!isRecord(input) || input.version !== 1 || !Array.isArray(input.workspaces)) {
     return input;
@@ -187,17 +193,37 @@ function migrateConfig(input: unknown): unknown {
 
   return {
     ...input,
+    version: 2,
     workspaces: input.workspaces.map((workspace) => {
-      if (!isRecord(workspace) || typeof workspace.projectDirectory === "string") {
+      if (!isRecord(workspace)) {
         return workspace;
       }
 
+      const { services, commands, ...rest } = workspace;
+
       return {
-        ...workspace,
-        projectDirectory: inferProjectDirectory(workspace),
+        ...rest,
+        projectDirectory: typeof workspace.projectDirectory === "string" ? workspace.projectDirectory : inferProjectDirectory(workspace),
+        items: [
+          ...withKind(services, "service"),
+          ...withKind(commands, "command"),
+        ],
       };
     }),
   };
+}
+
+function withKind(list: unknown, kind: "service" | "command"): unknown[] {
+  return Array.isArray(list) ? list.map((item) => isRecord(item) ? { kind, ...item } : item) : [];
+}
+
+// Keeps a copy of the version 1 file the first time it is read, so a downgrade stays possible.
+async function backUpOldConfig(filePath: string): Promise<void> {
+  try {
+    await fs.copyFile(filePath, `${filePath}.bak-0.3`, constants.COPYFILE_EXCL);
+  } catch {
+    // Already backed up, or the folder is read-only; the file is still readable either way.
+  }
 }
 
 function inferProjectDirectory(workspace: Record<string, unknown>): string {

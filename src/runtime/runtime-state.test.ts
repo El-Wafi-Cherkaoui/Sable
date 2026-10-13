@@ -52,8 +52,7 @@ describe("runtime state", () => {
       id: "ws_empty",
       name: "empty",
       projectDirectory: process.cwd(),
-      services: [],
-      commands: [],
+      items: [],
     });
 
     expect(state.selectedServiceIndex).toBeUndefined();
@@ -84,8 +83,7 @@ describe("runtime state", () => {
       id: "ws_scripts",
       name: "scripts",
       projectDirectory: process.cwd(),
-      services: [],
-      commands: [createCommand()],
+      items: [{ ...createCommand(), kind: "command" }],
     });
 
     expect(state.selectedServiceIndex).toBeUndefined();
@@ -113,8 +111,7 @@ describe("runtime state", () => {
       id: "ws_empty",
       name: "empty",
       projectDirectory: process.cwd(),
-      services: [],
-      commands: [],
+      items: [],
     });
     const nextState = addServiceToRuntimeState(initialState, {
       id: "svc_api",
@@ -135,8 +132,7 @@ describe("runtime state", () => {
       id: "ws_empty",
       name: "empty",
       projectDirectory: process.cwd(),
-      services: [],
-      commands: [],
+      items: [],
     });
     const nextState = addCommandToRuntimeState(initialState, createCommand());
 
@@ -206,8 +202,9 @@ function createWorkspace(): WorkspaceConfig {
     id: "ws_ecommerce",
     name: "ecommerce",
     projectDirectory: process.cwd(),
-    services: [
+    items: [
       {
+        kind: "service",
         id: "svc_backend",
         name: "backend",
         command: "npm run dev",
@@ -216,15 +213,15 @@ function createWorkspace(): WorkspaceConfig {
         env: {},
       },
       {
+        kind: "service",
         id: "svc_frontend",
         name: "frontend",
         command: "npm run dev",
         cwd: "./frontend",
         autoStart: true,
         env: {},
-      },
+      }, { ...createCommand(), kind: "command" },
     ],
-    commands: [createCommand()],
   };
 }
 
