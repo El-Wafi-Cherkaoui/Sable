@@ -219,7 +219,7 @@ describe("renderWorkspacePicker", () => {
   it("renders selected workspace details with services and commands", () => {
     const workspace = {
       ...workspaces[0]!,
-      items: [...workspaces[0]!.items, { kind: "command", id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: ".", env: {} }],
+      items: [...workspaces[0]!.items, { kind: "command", after: [], id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: ".", env: {} }],
     };
 
     expect(renderWorkspaceDetails(workspace)).toBe(
@@ -641,7 +641,7 @@ const workspaces: WorkspaceConfig[] = [
     projectDirectory: "/srv/ecommerce",
     items: [
       {
-        kind: "service",
+        kind: "service", after: [],
         id: "svc_api",
         name: "api",
         command: "npm run dev",
@@ -650,7 +650,7 @@ const workspaces: WorkspaceConfig[] = [
         env: {},
       },
       {
-        kind: "service",
+        kind: "service", after: [],
         id: "svc_web",
         name: "web",
         command: "npm run web",
@@ -666,7 +666,7 @@ const workspaces: WorkspaceConfig[] = [
     projectDirectory: "/srv/portfolio",
     items: [
       {
-        kind: "service",
+        kind: "service", after: [],
         id: "svc_site",
         name: "site",
         command: "npm run dev",

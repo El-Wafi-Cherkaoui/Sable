@@ -65,6 +65,7 @@ export async function runSuggestServicesFlow(options: SuggestServicesFlowOptions
   const generateId = options.generateId ?? generateShortId;
   const services: ServiceConfig[] = chosen.filter((suggestion) => suggestion.kind === "service").map((suggestion) => ({
     kind: "service" as const,
+    after: [],
     id: generateId("svc"),
     name: suggestion.name,
     command: suggestion.command,
@@ -74,6 +75,7 @@ export async function runSuggestServicesFlow(options: SuggestServicesFlowOptions
   }));
   const commands: CommandConfig[] = chosen.filter((suggestion) => suggestion.kind === "command").map((suggestion) => ({
     kind: "command" as const,
+    after: [],
     id: generateId("cmd"),
     name: suggestion.name,
     command: suggestion.command,

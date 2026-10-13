@@ -213,9 +213,9 @@ function createWorkspace(): WorkspaceConfig {
 }
 
 function createService(id: string): ServiceConfig {
-  return { kind: "service", id, name: id, command: "npm run dev", cwd: ".", autoStart: true, env: {} };
+  return { kind: "service", after: [], id, name: id, command: "npm run dev", cwd: ".", autoStart: true, env: {} };
 }
 
 function createCommand(id: string): CommandConfig {
-  return { kind: "command", id, name: id, command: "npm run build", cwd: process.cwd(), env: {} };
+  return { kind: "command", after: [], id, name: id, command: "npm run build", cwd: process.cwd(), env: {} };
 }

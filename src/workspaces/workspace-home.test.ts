@@ -1076,7 +1076,7 @@ const workspaceWithService: WorkspaceConfig = {
   projectDirectory: process.cwd(),
   items: [
     {
-      kind: "service",
+      kind: "service", after: [],
       id: "svc_api",
       name: "api",
       command: "npm run dev",
@@ -1115,7 +1115,7 @@ const restartWorkspace: WorkspaceConfig = {
   projectDirectory: process.cwd(),
   items: [
     {
-      kind: "service",
+      kind: "service", after: [],
       id: "svc_api",
       name: "api",
       command: "npm run dev",
@@ -1124,7 +1124,7 @@ const restartWorkspace: WorkspaceConfig = {
       env: {},
     },
     {
-      kind: "service",
+      kind: "service", after: [],
       id: "svc_worker",
       name: "worker",
       command: "npm run worker",
@@ -1133,7 +1133,7 @@ const restartWorkspace: WorkspaceConfig = {
       env: {},
     },
     {
-      kind: "service",
+      kind: "service", after: [],
       id: "svc_web",
       name: "web",
       command: "npm run web",
@@ -1142,7 +1142,7 @@ const restartWorkspace: WorkspaceConfig = {
       env: {},
     },
     {
-      kind: "command",
+      kind: "command", after: [],
       id: "cmd_watch",
       name: "watch",
       command: "npm run watch",
@@ -1150,7 +1150,7 @@ const restartWorkspace: WorkspaceConfig = {
       env: {},
     },
     {
-      kind: "command",
+      kind: "command", after: [],
       id: "cmd_build",
       name: "build",
       command: "npm run build",

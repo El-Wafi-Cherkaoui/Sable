@@ -231,7 +231,7 @@ function createState() {
     id: "ws_ecommerce",
     name: "ecommerce",
     projectDirectory: "/srv/shop",
-    items: [{ kind: "service", id: "svc_api", name: "api", command: "npm run dev", cwd: ".", autoStart: true, env: {} }],
+    items: [{ kind: "service", after: [], id: "svc_api", name: "api", command: "npm run dev", cwd: ".", autoStart: true, env: {} }],
   });
 
   return updateProcessState(state, "svc_api", { status: "running", pid: 1 });

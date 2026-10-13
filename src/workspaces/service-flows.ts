@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import type { AppConfig, ItemConfig, ItemKind, WorkspaceConfig } from "../config/config-types.js";
-import { addItem, findItem, itemsOfKind, removeItem, replaceItem } from "../config/workspace-items.js";
+import { addItem, afterNames, findDependencyCycle, findItem, itemsOfKind, removeItem, replaceItem } from "../config/workspace-items.js";
 import type { KeyInput } from "../input/terminal-key-input.js";
 import { generateShortId } from "../shared/id.js";
 import { runForm, type FormErrors, type FormField, type FormValues } from "../tui/form-view.js";
@@ -52,7 +52,7 @@ export async function runAddWorkspaceItemFlow(
     title: "New service or command",
     subtitle: workspace.name,
     fields: (values) => itemFields(kindOf(values), workspace, true, knownCommands(config, workspace)),
-    values: { type: "service", name: "", command: "", cwd: ".", autoStart: true, env: [] },
+    values: { type: "service", name: "", command: "", cwd: ".", autoStart: true, after: [], env: [] },
     validate: (values) => validateItem(kindOf(values), values, workspace, undefined, options.directoryExists ?? defaultDirectoryExists),
     keyInput: options.keyInput,
     screen: options.screen,
@@ -92,6 +92,7 @@ export async function runEditItemFlow(
       command: item.command,
       cwd: toDirectoryValue(item.cwd, workspace.projectDirectory),
       ...("autoStart" in item && typeof item.autoStart === "boolean" ? { autoStart: item.autoStart } : {}),
+      after: afterNames(workspace, item),
       env: envToList(item.env),
     },
     validate: (values) => validateItem(kind, values, workspace, item.id, options.directoryExists ?? defaultDirectoryExists),
@@ -184,6 +185,13 @@ export function itemFields(kind: ItemKind, workspace: WorkspaceConfig, includeTy
     },
     { type: "text", key: "cwd", label: "Directory", pathBase: workspace.projectDirectory, hint: `Relative to ${displayPath(workspace.projectDirectory)}` },
     ...(kind === "service" ? [{ type: "toggle" as const, key: "autoStart", label: "Auto-start" }] : []),
+    {
+      type: "list",
+      key: "after",
+      label: "After",
+      hint: kind === "service" ? "Names of items to wait for, e.g. db" : "Names of items to finish first, e.g. build",
+      addLabel: "add item",
+    },
     { type: "list", key: "env", label: "Env", hint: "KEY=value, e.g. PORT=3000", addLabel: "add variable" },
   ];
 }
@@ -215,6 +223,10 @@ export function validateItem(
     errors.cwd = "This folder doesn't exist.";
   }
 
+  const dependencies = resolveAfter(workspace, list(values.after), selfId);
+
+  Object.assign(errors, dependencies.errors);
+
   const seenKeys = new Set<string>();
 
   for (const [index, item] of list(values.env).entries()) {
@@ -232,9 +244,51 @@ export function validateItem(
   return errors;
 }
 
+// Turns the names typed in the After rows into item ids, or says which row is wrong.
+function resolveAfter(
+  workspace: WorkspaceConfig,
+  names: string[],
+  selfId: string | undefined,
+): { ids: string[]; errors: FormErrors } {
+  const ids: string[] = [];
+  const errors: FormErrors = {};
+
+  for (const [index, raw] of names.entries()) {
+    const name = raw.trim();
+    const matches = workspace.items.filter((item) => normalizeName(item.name) === normalizeName(name));
+    const match = matches[0];
+
+    if (name === "") {
+      errors[`after.${index}`] = "Type the name of an item.";
+    } else if (match === undefined) {
+      errors[`after.${index}`] = `There is no service or command named "${name}".`;
+    } else if (matches.length > 1) {
+      errors[`after.${index}`] = `Two items are named "${name}". Rename one of them first.`;
+    } else if (match.id === selfId) {
+      errors[`after.${index}`] = "An item can't wait for itself.";
+    } else if (ids.includes(match.id)) {
+      errors[`after.${index}`] = `"${name}" is listed twice.`;
+    } else {
+      ids.push(match.id);
+    }
+  }
+
+  if (Object.keys(errors).length === 0 && selfId !== undefined) {
+    const cycle = findDependencyCycle(workspace.items.map((item) => item.id === selfId ? { ...item, after: ids } : item));
+    const row = cycle === undefined ? -1 : names.findIndex((name) => cycle.some((member) => normalizeName(member) === normalizeName(name)));
+
+    if (cycle !== undefined) {
+      errors[`after.${Math.max(0, row)}`] = `That would make items wait for each other: ${cycle.join(" → ")}.`;
+    }
+  }
+
+  return { ids, errors };
+}
+
 function itemFromValues(kind: ItemKind, id: string, values: FormValues, workspace: WorkspaceConfig): ItemConfig {
   const item = {
     id,
+    after: resolveAfter(workspace, list(values.after), id).ids,
     name: text(values.name),
     command: text(values.command),
     cwd: path.resolve(workspace.projectDirectory, text(values.cwd) === "" ? "." : text(values.cwd)),

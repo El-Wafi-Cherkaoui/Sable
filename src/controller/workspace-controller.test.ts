@@ -117,7 +117,7 @@ describe("WorkspaceController", () => {
         projectDirectory,
         items: [
           { ...createService({ id: "svc_rel", name: "rel", cwd: "api" }), kind: "service" },
-          { ...createService({ id: "svc_abs", name: "abs", cwd: path.resolve(path.sep, "elsewhere") }), kind: "service" }, { kind: "command", id: "cmd_dot", name: "dot", command: "make", cwd: ".", env: {} },
+          { ...createService({ id: "svc_abs", name: "abs", cwd: path.resolve(path.sep, "elsewhere") }), kind: "service" }, { kind: "command", after: [], id: "cmd_dot", name: "dot", command: "make", cwd: ".", env: {} },
         ],
       },
       processManager,
@@ -486,7 +486,7 @@ function createWorkspace(): WorkspaceConfig {
 
 function createCommand(): CommandConfig {
   return {
-    kind: "command",
+    kind: "command", after: [],
     id: "cmd_build",
     name: "build",
     command: "npm run build",
@@ -497,7 +497,7 @@ function createCommand(): CommandConfig {
 
 function createService(overrides: Partial<ServiceConfig>): ServiceConfig {
   return {
-    kind: "service",
+    kind: "service", after: [],
     id: "svc_service",
     name: "service",
     command: "npm run dev",

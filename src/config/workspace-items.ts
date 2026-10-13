@@ -32,8 +32,75 @@ export function replaceItem(workspace: WorkspaceConfig, item: ItemConfig): Works
   return { ...workspace, items: workspace.items.map((candidate) => candidate.id === item.id ? item : candidate) };
 }
 
+// Items that waited for the removed one stop waiting for it.
 export function removeItem(workspace: WorkspaceConfig, itemId: string): WorkspaceConfig {
-  return { ...workspace, items: workspace.items.filter((item) => item.id !== itemId) };
+  return {
+    ...workspace,
+    items: workspace.items
+      .filter((item) => item.id !== itemId)
+      .map((item) => item.after.includes(itemId) ? { ...item, after: item.after.filter((id) => id !== itemId) } : item),
+  };
+}
+
+export function dependentsOf(workspace: WorkspaceConfig, itemId: string): ItemConfig[] {
+  return workspace.items.filter((item) => item.after.includes(itemId));
+}
+
+// The names of the items this one waits for, in the order they are listed.
+export function afterNames(workspace: WorkspaceConfig, item: ItemConfig): string[] {
+  return item.after.flatMap((id) => {
+    const found = findItem(workspace, id);
+
+    return found === undefined ? [] : [found.name];
+  });
+}
+
+// A loop of items waiting for each other, as names ending where they began ("a → b → a"), or undefined.
+export function findDependencyCycle(items: ReadonlyArray<Pick<ItemConfig, "id" | "name" | "after">>): string[] | undefined {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const finished = new Set<string>();
+  const path: string[] = [];
+
+  const visit = (id: string): string[] | undefined => {
+    const loopStart = path.indexOf(id);
+
+    if (loopStart >= 0) {
+      return [...path.slice(loopStart), id].map((member) => byId.get(member)?.name ?? member);
+    }
+
+    if (finished.has(id)) {
+      return undefined;
+    }
+
+    path.push(id);
+
+    for (const afterId of byId.get(id)?.after ?? []) {
+      if (!byId.has(afterId)) {
+        continue;
+      }
+
+      const cycle = visit(afterId);
+
+      if (cycle !== undefined) {
+        return cycle;
+      }
+    }
+
+    path.pop();
+    finished.add(id);
+
+    return undefined;
+  };
+
+  for (const item of items) {
+    const cycle = visit(item.id);
+
+    if (cycle !== undefined) {
+      return cycle;
+    }
+  }
+
+  return undefined;
 }
 
 // Swaps a service with the neighbouring service, leaving commands where they are.

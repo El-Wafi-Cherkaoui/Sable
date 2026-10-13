@@ -161,11 +161,11 @@ function stateOf(
 }
 
 function createCommand(id: string, name: string) {
-  return { kind: "command" as const, id, name, command: "npm run migrate", cwd: ".", env: {} };
+  return { kind: "command" as const, after: [], id, name, command: "npm run migrate", cwd: ".", env: {} };
 }
 
 function createService(id: string, name: string) {
-  return { kind: "service" as const, id, name, command: "npm run dev", cwd: ".", autoStart: true, env: {} };
+  return { kind: "service" as const, after: [], id, name, command: "npm run dev", cwd: ".", autoStart: true, env: {} };
 }
 
 function createLog(stream: ServiceLogEntry["stream"], line: string): ServiceLogEntry {

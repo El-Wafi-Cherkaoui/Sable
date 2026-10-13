@@ -24,7 +24,7 @@ describe("runAddWorkspaceItemFlow", () => {
 
     expect(result).toEqual({ type: "completed", message: 'Added service "worker".', itemId: "svc_worker" });
     expect(store.savedConfig?.workspaces[0]?.items.at(-1)).toEqual({
-      kind: "service",
+      kind: "service", after: [],
       id: "svc_worker",
       name: "worker",
       command: "npm run worker",
@@ -44,7 +44,7 @@ describe("runAddWorkspaceItemFlow", () => {
 
     expect(result).toEqual({ type: "completed", message: 'Added command "migrate".', itemId: "cmd_migrate" });
     expect(store.savedConfig?.workspaces[0]?.items.filter((item) => item.kind === "command")).toEqual([
-      { kind: "command", id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: projectDirectory, env: {} },
+      { kind: "command", after: [], id: "cmd_migrate", name: "migrate", command: "npm run migrate", cwd: projectDirectory, env: {} },
     ]);
   });
 
@@ -55,9 +55,9 @@ describe("runAddWorkspaceItemFlow", () => {
 
     const options = form.mock.calls[0]![0];
 
-    expect(options.values).toEqual({ type: "service", name: "", command: "", cwd: ".", autoStart: true, env: [] });
-    expect(options.fields({ type: "service" }).map((field) => field.key)).toEqual(["type", "name", "command", "cwd", "autoStart", "env"]);
-    expect(options.fields({ type: "command" }).map((field) => field.key)).toEqual(["type", "name", "command", "cwd", "env"]);
+    expect(options.values).toEqual({ type: "service", name: "", command: "", cwd: ".", autoStart: true, after: [], env: [] });
+    expect(options.fields({ type: "service" }).map((field) => field.key)).toEqual(["type", "name", "command", "cwd", "autoStart", "after", "env"]);
+    expect(options.fields({ type: "command" }).map((field) => field.key)).toEqual(["type", "name", "command", "cwd", "after", "env"]);
   });
 
   it("does not save when the form is cancelled or Sable exits", async () => {
@@ -102,10 +102,10 @@ describe("runEditItemFlow, for a service", () => {
       store, workspace, keyInput: createKeyInput([]), itemId: "svc_api", form, directoryExists: () => true,
     });
 
-    expect(form.mock.calls[0]![0].values).toEqual({ name: "api", command: "npm run dev", cwd: ".", autoStart: true, env: [] });
+    expect(form.mock.calls[0]![0].values).toEqual({ name: "api", command: "npm run dev", cwd: ".", autoStart: true, after: [], env: [] });
     expect(result).toEqual({ type: "completed", message: 'Saved service "api-server".', itemId: "svc_api" });
     expect(store.savedConfig?.workspaces[0]?.items[0]).toEqual({
-      kind: "service", id: "svc_api", name: "api-server", command: "npm start", cwd: projectDirectory, autoStart: false, env: { PORT: "4000" },
+      kind: "service", after: [], id: "svc_api", name: "api-server", command: "npm start", cwd: projectDirectory, autoStart: false, env: { PORT: "4000" },
     });
   });
 
@@ -120,13 +120,13 @@ describe("runEditItemFlow, for a service", () => {
 
 describe("runEditItemFlow, for a command", () => {
   it("prefills and saves a command", async () => {
-    const withCommand = { ...workspace, items: [{ kind: "command", id: "cmd_build", name: "build", command: "npm run build", cwd: projectDirectory, env: { CI: "1" } }] };
+    const withCommand = { ...workspace, items: [{ kind: "command", after: [], id: "cmd_build", name: "build", command: "npm run build", cwd: projectDirectory, env: { CI: "1" } }] };
     const store = createStore({ version: 2, workspaces: [withCommand] });
     const form = fakeForm({ name: "build", command: "npm run build -- --prod", cwd: ".", env: ["CI=1"] });
 
     await runEditItemFlow({ store, workspace: withCommand, keyInput: createKeyInput([]), itemId: "cmd_build", form, directoryExists: () => true });
 
-    expect(form.mock.calls[0]![0].values).toEqual({ name: "build", command: "npm run build", cwd: ".", env: ["CI=1"] });
+    expect(form.mock.calls[0]![0].values).toEqual({ name: "build", command: "npm run build", cwd: ".", after: [], env: ["CI=1"] });
     expect(store.savedConfig?.workspaces[0]?.items[0]).toMatchObject({ command: "npm run build -- --prod", env: { CI: "1" } });
   });
 });
@@ -158,6 +158,72 @@ describe("validateItem", () => {
         "env.2": "PORT is set twice.",
         "env.3": "Use KEY=value, e.g. PORT=3000.",
       });
+  });
+});
+
+describe("dependencies in the form", () => {
+  const exists = () => true;
+  const dbWorkspace = {
+    ...workspace,
+    items: [
+      { kind: "service" as const, after: [], id: "svc_db", name: "db", command: "docker compose up db", cwd: projectDirectory, autoStart: true, env: {} },
+      { kind: "service" as const, after: ["svc_db"], id: "svc_api", name: "api", command: "npm run dev", cwd: projectDirectory, autoStart: true, env: {} },
+      { kind: "command" as const, after: [], id: "cmd_build", name: "build", command: "npm run build", cwd: projectDirectory, env: {} },
+    ],
+  };
+  const dbConfig: AppConfig = { version: 2, workspaces: [dbWorkspace] };
+  const base = { name: "worker", command: "x", cwd: "." };
+
+  it("accepts names of other items, in any case, and rejects the rest row by row", () => {
+    expect(validateItem("service", { ...base, after: ["DB", "build"] }, dbWorkspace, undefined, exists)).toEqual({});
+    expect(validateItem("service", { ...base, after: ["db", "ghost", "", "db"] }, dbWorkspace, undefined, exists)).toEqual({
+      "after.1": 'There is no service or command named "ghost".',
+      "after.2": "Type the name of an item.",
+      "after.3": '"db" is listed twice.',
+    });
+  });
+
+  it("says which name is ambiguous when a service and a command share it", () => {
+    const shared = { ...dbWorkspace, items: [...dbWorkspace.items, { ...dbWorkspace.items[2]!, id: "svc_build", kind: "service" as const, autoStart: false }] };
+
+    expect(validateItem("service", { ...base, after: ["build"] }, shared, undefined, exists))
+      .toEqual({ "after.0": 'Two items are named "build". Rename one of them first.' });
+  });
+
+  it("refuses an item that waits for itself or closes a loop", () => {
+    expect(validateItem("service", { name: "api", command: "x", cwd: ".", after: ["api"] }, dbWorkspace, "svc_api", exists))
+      .toEqual({ "after.0": "An item can't wait for itself." });
+    expect(validateItem("service", { name: "db", command: "x", cwd: ".", after: ["api"] }, dbWorkspace, "svc_db", exists))
+      .toEqual({ "after.0": "That would make items wait for each other: db → api → db." });
+  });
+
+  it("saves the ids of the chosen items and shows names when editing", async () => {
+    const store = createStore(dbConfig);
+    const form = fakeForm({ name: "api", command: "npm run dev", cwd: ".", autoStart: true, after: ["db", "build"], env: [] });
+
+    await runEditItemFlow({ store, workspace: dbWorkspace, keyInput: createKeyInput([]), itemId: "svc_api", form, directoryExists: exists });
+
+    expect(form.mock.calls[0]![0].values).toMatchObject({ after: ["db"] });
+    expect(store.savedConfig?.workspaces[0]?.items.find((item) => item.id === "svc_api")?.after).toEqual(["svc_db", "cmd_build"]);
+  });
+
+  it("saves the ids when adding an item", async () => {
+    const store = createStore(dbConfig);
+    const form = fakeForm({ type: "command", name: "seed", command: "npm run seed", cwd: ".", after: ["db"], env: [] });
+
+    await runAddWorkspaceItemFlow({ store, workspace: dbWorkspace, keyInput: createKeyInput([]), form, generateId: () => "cmd_seed", directoryExists: exists });
+
+    expect(store.savedConfig?.workspaces[0]?.items.at(-1)?.after).toEqual(["svc_db"]);
+  });
+
+  it("stops other items waiting for an item that is deleted", async () => {
+    const store = createStore(dbConfig);
+    const deleteDialog = vi.fn(async () => "confirmed" as const);
+
+    await runDeleteItemFlow({ store, workspace: dbWorkspace, keyInput: createKeyInput([]), itemId: "svc_db", deleteDialog });
+
+    expect(store.savedConfig?.workspaces[0]?.items.map((item) => item.id)).toEqual(["svc_api", "cmd_build"]);
+    expect(store.savedConfig?.workspaces[0]?.items[0]?.after).toEqual([]);
   });
 });
 
@@ -304,7 +370,7 @@ const workspace = {
   projectDirectory,
   items: [
     {
-      kind: "service",
+      kind: "service", after: [],
       id: "svc_api",
       name: "api",
       command: "npm run dev",
@@ -324,7 +390,7 @@ const workspaceWithTwoServices = {
   items: [
     ...workspace.items,
     {
-      kind: "service",
+      kind: "service", after: [],
       id: "svc_worker",
       name: "worker",
       command: "npm run worker",
@@ -343,8 +409,8 @@ const configWithTwoServices: AppConfig = {
 describe("knownCommands", () => {
   it("lists this workspace's commands first, then the others', each once", () => {
     const item = (command: string) => ({ id: command, name: command, command, cwd: projectDirectory, env: {} });
-    const mine = { ...workspace, items: [{ kind: "service", ...item("npm run dev"), autoStart: true }, { ...item("npm run lint"), kind: "command" }] };
-    const other = { ...workspace, id: "other", items: [{ kind: "service", ...item("npm run dev"), autoStart: true }, { kind: "service", ...item("docker compose up"), autoStart: true }, { ...item("  "), kind: "command" }] };
+    const mine = { ...workspace, items: [{ kind: "service", after: [], ...item("npm run dev"), autoStart: true }, { ...item("npm run lint"), kind: "command" }] };
+    const other = { ...workspace, id: "other", items: [{ kind: "service", after: [], ...item("npm run dev"), autoStart: true }, { kind: "service", after: [], ...item("docker compose up"), autoStart: true }, { ...item("  "), kind: "command" }] };
 
     expect(knownCommands({ ...config, workspaces: [other, mine] }, mine)).toEqual(["npm run dev", "npm run lint", "docker compose up"]);
   });
