@@ -1,10 +1,9 @@
 import os from "node:os";
 import path from "node:path";
 import type { ItemConfig, WorkspaceConfig } from "../config/config-types.js";
+import { looksSecret } from "../config/secret-names.js";
 import { parseProjectFile } from "./project-file.js";
 
-// Variables with names like these hold secrets: their values never go into the file.
-const secretName = /SECRET|TOKEN|PASS|KEY|CREDENTIAL|PRIVATE|AUTH|COOKIE|SESSION/i;
 
 export type ProjectExport = {
   // The text to write to sable.json.
@@ -82,7 +81,7 @@ export function buildProjectFile(workspace: WorkspaceConfig, homeDirectory: stri
 // reviewed, the ones whose names look like secrets. Marked ones are named even when they have no value yet.
 function secretsOf(item: ItemConfig, name: string, notes: string[]): string[] {
   if (item.secrets === undefined) {
-    const guessed = Object.keys(item.env).filter((key) => secretName.test(key));
+    const guessed = Object.keys(item.env).filter((key) => looksSecret(key));
 
     for (const key of guessed) {
       notes.push(`${name}: ${key} looks like a secret, so its value is not written; teammates are asked for it. Open the item with e to decide yourself.`);
@@ -96,7 +95,7 @@ function secretsOf(item: ItemConfig, name: string, notes: string[]): string[] {
   }
 
   for (const key of Object.keys(item.env)) {
-    if (!item.secrets.includes(key) && secretName.test(key)) {
+    if (!item.secrets.includes(key) && looksSecret(key)) {
       notes.push(`${name}: ${key} looks like a secret but is not marked as one, so its value IS written to the file. Mark it with e if it should stay private.`);
     }
   }

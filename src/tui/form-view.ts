@@ -11,7 +11,8 @@ export type FormField =
   // `pathBase` marks a folder field: typing shows a completion, and → accepts it.
   // Relative paths are read from that folder. `suggestions` are whole values (best first)
   // offered the same way while typing, e.g. commands entered before.
-  | { type: "text"; key: string; label: string; hint?: string; pathBase?: string; suggestions?: string[] }
+  // `secret` shows dots instead of what is typed, for passwords and tokens.
+  | { type: "text"; key: string; label: string; hint?: string; pathBase?: string; suggestions?: string[]; secret?: boolean }
   | { type: "toggle"; key: string; label: string }
   | { type: "choice"; key: string; label: string; choices: Array<{ value: string; label: string }> }
   | { type: "list"; key: string; label: string; hint?: string; addLabel: string }
@@ -315,7 +316,9 @@ function renderRowValue(row: FormRow, state: FormState, focused: boolean, style:
       .join(style.muted(" / "));
   }
 
-  const text = textOf(state.values, row) ?? "";
+  const typed = textOf(state.values, row) ?? "";
+  // A secret field shows one dot per character, so the cursor and the length still make sense.
+  const text = row.kind === "field" && row.field.type === "text" && row.field.secret === true ? "•".repeat(typed.length) : typed;
 
   if (!focused) {
     return truncateEnd(text, width);
