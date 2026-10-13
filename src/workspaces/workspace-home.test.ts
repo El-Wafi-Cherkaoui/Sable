@@ -341,11 +341,12 @@ describe("runWorkspaceHome", () => {
 
     expect(oldController.shutdown).toHaveBeenCalledOnce();
     expect(createController).toHaveBeenNthCalledWith(2, restartWorkspace);
-    expect(newController.startService).toHaveBeenCalledWith("svc_api");
-    expect(newController.startService).toHaveBeenCalledWith("svc_worker");
-    expect(newController.startService).not.toHaveBeenCalledWith("svc_web");
+    expect(newController.startItem).toHaveBeenCalledWith("svc_api");
+    expect(newController.startItem).toHaveBeenCalledWith("svc_worker");
+    expect(newController.startItem).not.toHaveBeenCalledWith("svc_web");
     // One-shot commands are not re-run on restart, even if they were running.
-    expect(newController.startCommand).not.toHaveBeenCalled();
+    expect(newController.startItem).not.toHaveBeenCalledWith("cmd_watch");
+    expect(newController.startItem).not.toHaveBeenCalledWith("cmd_build");
     expect(newController.shutdown).toHaveBeenCalledOnce();
     expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
       activeWorkspaceId: restartWorkspace.id,
@@ -372,8 +373,7 @@ describe("runWorkspaceHome", () => {
     });
 
     expect(controller.shutdown).toHaveBeenCalledOnce();
-    expect(controller.startService).not.toHaveBeenCalled();
-    expect(controller.startCommand).not.toHaveBeenCalled();
+    expect(controller.startItem).not.toHaveBeenCalled();
     expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
       activeWorkspaceId: workspace.id,
       selectedWorkspaceId: portfolioWorkspace.id,
@@ -991,13 +991,9 @@ function createQueuedKeyInput(keys: Array<Awaited<ReturnType<KeyInput["readKey"]
 function createFakeController(state?: RuntimeWorkspaceState): RunWorkspaceController {
   const defaultState: RuntimeWorkspaceState = {
     workspace: { id: workspace.id, name: workspace.name },
-    services: [],
-    commands: [],
-    selectedServiceIndex: undefined,
-    selectedCommandIndex: undefined,
-    serviceIndexById: {},
-    commandIndexById: {},
-    selectedItem: undefined,
+    items: [],
+    itemIndexById: {},
+    selectedItemIndex: undefined,
   };
 
   return {
@@ -1008,14 +1004,10 @@ function createFakeController(state?: RuntimeWorkspaceState): RunWorkspaceContro
     startSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
     stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
     restartSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
-    startService: vi.fn(async () => ({ status: "stopped" as const })),
-    startCommand: vi.fn(async () => ({ status: "stopped" as const })),
-    addService: vi.fn(),
-    addCommand: vi.fn(),
-    updateService: vi.fn(),
-    updateCommand: vi.fn(),
-    removeService: vi.fn(),
-    removeCommand: vi.fn(),
+    startItem: vi.fn(async () => ({ status: "stopped" as const })),
+    addItem: vi.fn(),
+    updateItem: vi.fn(),
+    removeItem: vi.fn(),
     moveService: vi.fn(),
     getSelectedServiceLogs: vi.fn(() => []),
     shutdown: vi.fn(async () => []),
@@ -1025,29 +1017,16 @@ function createFakeController(state?: RuntimeWorkspaceState): RunWorkspaceContro
 function createRuntimeStateForRestart(): RuntimeWorkspaceState {
   const runningState = { status: "running" as const };
   const stoppedState = { status: "stopped" as const };
-  const services = servicesOf(restartWorkspace).map((service) => ({
-    service,
-    process:
-      service.id === "svc_web" ? stoppedState : runningState,
-  }));
-  const commands = commandsOf(restartWorkspace).map((command) => ({
-    command,
-    process: command.id === "cmd_build" ? stoppedState : runningState,
+  const items = [...servicesOf(restartWorkspace), ...commandsOf(restartWorkspace)].map((item) => ({
+    item,
+    process: item.id === "svc_web" || item.id === "cmd_build" ? stoppedState : runningState,
   }));
 
   return {
     workspace: { id: restartWorkspace.id, name: restartWorkspace.name },
-    services,
-    commands,
-    serviceIndexById: Object.fromEntries(
-      services.map((serviceState, index) => [serviceState.service.id, index]),
-    ),
-    commandIndexById: Object.fromEntries(
-      commands.map((commandState, index) => [commandState.command.id, index]),
-    ),
-    selectedServiceIndex: 0,
-    selectedCommandIndex: undefined,
-    selectedItem: { type: "service", index: 0 },
+    items,
+    itemIndexById: Object.fromEntries(items.map((itemState, index) => [itemState.item.id, index])),
+    selectedItemIndex: 0,
   };
 }
 

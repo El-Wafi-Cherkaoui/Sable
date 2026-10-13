@@ -81,16 +81,12 @@ const workspaces: WorkspaceConfig[] = [
 
 const state: RuntimeWorkspaceState = {
   workspace: { id: "ws_long", name: "a-long-workspace-name", projectDirectory: "/srv/some/deeply/nested/project/folder" },
-  selectedServiceIndex: 0,
-  selectedCommandIndex: undefined,
-  selectedItem: { type: "service", index: 0 },
-  serviceIndexById: { svc_api: 0 },
-  commandIndexById: {},
-  services: [
+  selectedItemIndex: 0,
+  itemIndexById: { svc_api: 0 },
+  items: [
     {
-      service: { id: "svc_api", name: "backend-with-a-long-name", command: "npm run dev", cwd: ".", autoStart: true, env: {} },
+      item: { kind: "service", id: "svc_api", name: "backend-with-a-long-name", command: "npm run dev", cwd: ".", autoStart: true, env: {} },
       process: { status: "failed", error: new Error("spawn ENOENT while starting something long") },
     },
   ],
-  commands: [],
 };

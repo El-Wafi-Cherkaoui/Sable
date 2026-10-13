@@ -1,5 +1,5 @@
 import type { ServiceLogEntry } from "../process/process-manager.js";
-import { getSelectedCommand, getSelectedService, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
+import { getSelectedItem, type RuntimeWorkspaceState } from "../runtime/runtime-state.js";
 import { formatStatus } from "./format.js";
 import { formatKeyHints, type KeyHint } from "./key-hints.js";
 import { formatClockTime } from "./log-lines.js";
@@ -117,17 +117,14 @@ function resolveLayout(options: RenderLogsViewOptions): LogsLayout {
 }
 
 function formatHeader(options: RenderLogsViewOptions, offset: number, style: TuiStyle): string {
-  const command = getSelectedCommand(options.state);
-  const service = getSelectedService(options.state);
-  const name = command?.command.name ?? service?.service.name;
+  const selected = getSelectedItem(options.state);
 
-  if (name === undefined) {
+  if (selected === undefined) {
     return style.title("Logs");
   }
 
-  const status = command !== undefined
-    ? formatStatus(command.process, "command", style)
-    : formatStatus(service!.process, "service", style);
+  const name = selected.item.name;
+  const status = formatStatus(selected.process, selected.item.kind, style);
   const count = options.logs.length;
   const position = options.following !== false || count === 0 ? "following" : `from line ${(offset + 1).toLocaleString("en-US")}`;
 
@@ -146,7 +143,7 @@ function renderBody(
   style: TuiStyle,
   color: boolean,
 ): string[] {
-  if (getSelectedCommand(options.state) === undefined && getSelectedService(options.state) === undefined) {
+  if (getSelectedItem(options.state) === undefined) {
     return ["  No item selected."];
   }
 

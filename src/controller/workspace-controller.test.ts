@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import type { ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
+import type { CommandConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
 import type { ManagedProcessState } from "../process/process-manager.js";
 import {
   formatShutdownFailure,
@@ -20,7 +20,7 @@ describe("WorkspaceController", () => {
       name: "ecommerce",
       projectDirectory: process.cwd(),
     });
-    expect(controller.getState().services.map((state) => state.process)).toEqual([
+    expect(controller.getState().items.map((state) => state.process)).toEqual([
       { status: "stopped" },
       { status: "stopped" },
       { status: "stopped" },
@@ -37,7 +37,7 @@ describe("WorkspaceController", () => {
     await controller.startAutoStartServices();
 
     expect(processManager.startedServiceIds).toEqual(["svc_backend", "svc_frontend"]);
-    expect(controller.getState().services.map((state) => state.process.status)).toEqual([
+    expect(controller.getState().items.map((state) => state.process.status)).toEqual([
       "running",
       "running",
       "stopped",
@@ -90,7 +90,7 @@ describe("WorkspaceController", () => {
 
     await controller.startAutoStartServices();
 
-    expect(controller.getState().services.map((state) => state.process.status)).toEqual([
+    expect(controller.getState().items.map((state) => state.process.status)).toEqual([
       "failed",
       "running",
       "stopped",
@@ -123,9 +123,9 @@ describe("WorkspaceController", () => {
       processManager,
     });
 
-    await controller.startService("svc_rel");
-    await controller.restartService("svc_abs");
-    await controller.startCommand("cmd_dot");
+    await controller.startItem("svc_rel");
+    await controller.restartItem("svc_abs");
+    await controller.startItem("cmd_dot");
 
     expect(started).toEqual([
       { id: "svc_rel", cwd: path.join(projectDirectory, "api") },
@@ -141,17 +141,52 @@ describe("WorkspaceController", () => {
       processManager,
     });
 
-    await controller.startService("svc_worker");
+    await controller.startItem("svc_worker");
     expect(processManager.startedServiceIds).toEqual(["svc_worker"]);
     expect(serviceStatus(controller, "svc_worker")).toBe("running");
 
-    await controller.stopService("svc_worker");
+    await controller.stopItem("svc_worker");
     expect(processManager.stoppedServiceIds).toEqual(["svc_worker"]);
     expect(serviceStatus(controller, "svc_worker")).toBe("stopped");
 
-    await controller.restartService("svc_worker");
+    await controller.restartItem("svc_worker");
     expect(processManager.restartedServiceIds).toEqual(["svc_worker"]);
     expect(serviceStatus(controller, "svc_worker")).toBe("running");
+  });
+
+  it("runs a command again when it is restarted, instead of restarting a process", async () => {
+    const processManager = createFakeProcessManager();
+    const controller = new WorkspaceController({
+      workspace: { id: "ws_cmd", name: "cmd", projectDirectory: process.cwd(), items: [createCommand()] },
+      processManager,
+    });
+
+    await controller.restartItem("cmd_build");
+
+    expect(processManager.startedServiceIds).toEqual(["cmd_build"]);
+    expect(processManager.restartedServiceIds).toEqual([]);
+    expect(controller.getState().items[0]?.process.status).toBe("running");
+  });
+
+  it("only auto-starts services marked auto-start, never commands", async () => {
+    const processManager = createFakeProcessManager();
+    const controller = new WorkspaceController({
+      workspace: {
+        id: "ws_auto",
+        name: "auto",
+        projectDirectory: process.cwd(),
+        items: [
+          createCommand(),
+          createService({ id: "svc_on", name: "on" }),
+          createService({ id: "svc_off", name: "off", autoStart: false }),
+        ],
+      },
+      processManager,
+    });
+
+    await controller.startAutoStartServices();
+
+    expect(processManager.startedServiceIds).toEqual(["svc_on"]);
   });
 
   it("starts, stops, and restarts the selected service", async () => {
@@ -204,13 +239,13 @@ describe("WorkspaceController", () => {
       processManager,
     });
 
-    await expect(controller.startService("missing")).resolves.toEqual({
+    await expect(controller.startItem("missing")).resolves.toEqual({
       status: "stopped",
     });
-    await expect(controller.stopService("missing")).resolves.toEqual({
+    await expect(controller.stopItem("missing")).resolves.toEqual({
       status: "stopped",
     });
-    await expect(controller.restartService("missing")).resolves.toEqual({
+    await expect(controller.restartItem("missing")).resolves.toEqual({
       status: "stopped",
     });
     expect(processManager.startedServiceIds).toEqual([]);
@@ -224,11 +259,11 @@ describe("WorkspaceController", () => {
       processManager: createFakeProcessManager(),
     });
 
-    expect(controller.getState().selectedServiceIndex).toBe(0);
+    expect(controller.getState().selectedItemIndex).toBe(0);
     controller.selectPreviousService();
-    expect(controller.getState().selectedServiceIndex).toBe(2);
+    expect(controller.getState().selectedItemIndex).toBe(2);
     controller.selectNextService();
-    expect(controller.getState().selectedServiceIndex).toBe(0);
+    expect(controller.getState().selectedItemIndex).toBe(0);
   });
 
   it("adds a service to runtime state", () => {
@@ -237,10 +272,10 @@ describe("WorkspaceController", () => {
       processManager: createFakeProcessManager(),
     });
 
-    controller.addService(createService({ id: "svc_api", name: "api" }));
+    controller.addItem(createService({ id: "svc_api", name: "api" }));
 
-    expect(controller.getState().services.map((serviceState) => serviceState.service.id)).toEqual(["svc_api"]);
-    expect(controller.getState().selectedServiceIndex).toBe(0);
+    expect(controller.getState().items.map((serviceState) => serviceState.item.id)).toEqual(["svc_api"]);
+    expect(controller.getState().selectedItemIndex).toBe(0);
   });
 
   it("adds a command to runtime state", () => {
@@ -249,10 +284,10 @@ describe("WorkspaceController", () => {
       processManager: createFakeProcessManager(),
     });
 
-    controller.addCommand(createCommand());
+    controller.addItem(createCommand());
 
-    expect(controller.getState().commands.map((commandState) => commandState.command.id)).toEqual(["cmd_build"]);
-    expect(controller.getState().selectedCommandIndex).toBe(0);
+    expect(controller.getState().items.map((commandState) => commandState.item.id)).toEqual(["cmd_build"]);
+    expect(controller.getState().selectedItemIndex).toBe(0);
   });
 
   it("updates and removes services in runtime state", () => {
@@ -261,14 +296,14 @@ describe("WorkspaceController", () => {
       processManager: createFakeProcessManager(),
     });
 
-    controller.updateService({
-      ...controller.getState().services[0]!.service,
+    controller.updateItem({
+      ...controller.getState().items[0]!.item,
       command: "npm run changed",
     });
-    expect(controller.getState().services[0]?.service.command).toBe("npm run changed");
+    expect(controller.getState().items[0]?.item.command).toBe("npm run changed");
 
-    controller.removeService("svc_backend");
-    expect(controller.getState().services.map((serviceState) => serviceState.service.id)).toEqual([
+    controller.removeItem("svc_backend");
+    expect(controller.getState().items.map((serviceState) => serviceState.item.id)).toEqual([
       "svc_frontend",
       "svc_worker",
     ]);
@@ -289,13 +324,13 @@ describe("WorkspaceController", () => {
       processManager,
     });
 
-    expect(controller.getServiceLogs("svc_frontend").map((entry) => entry.line)).toEqual([
+    expect(controller.getItemLogs("svc_frontend").map((entry) => entry.line)).toEqual([
       "svc_frontend log",
     ]);
     expect(controller.getSelectedServiceLogs().map((entry) => entry.line)).toEqual([
       "svc_backend log",
     ]);
-    expect(controller.getServiceLogs("missing")).toEqual([]);
+    expect(controller.getItemLogs("missing")).toEqual([]);
   });
 
   it("runs selected commands and reads their output logs", async () => {
@@ -317,7 +352,7 @@ describe("WorkspaceController", () => {
     await controller.restartSelectedService();
 
     expect(processManager.startedServiceIds).toEqual(["cmd_build"]);
-    expect(controller.getState().commands[0]?.process.status).toBe("running");
+    expect(controller.getState().items[0]?.process.status).toBe("running");
     expect(controller.getSelectedServiceLogs().map((entry) => entry.line)).toEqual(["cmd_build output"]);
   });
 
@@ -331,12 +366,12 @@ describe("WorkspaceController", () => {
 
     controller.moveService("svc_frontend", "up");
 
-    expect(controller.getState().services.map((serviceState) => serviceState.service.id)).toEqual([
+    expect(controller.getState().items.map((serviceState) => serviceState.item.id)).toEqual([
       "svc_frontend",
       "svc_backend",
       "svc_worker",
     ]);
-    expect(controller.getState().selectedServiceIndex).toBe(0);
+    expect(controller.getState().selectedItemIndex).toBe(0);
   });
 
   it("shuts down all managed services", async () => {
@@ -429,11 +464,11 @@ function serviceStatus(
   controller: WorkspaceController,
   serviceId: string,
 ): ManagedProcessState["status"] | undefined {
-  const serviceIndex = controller.getState().serviceIndexById[serviceId];
+  const serviceIndex = controller.getState().itemIndexById[serviceId];
 
   return serviceIndex === undefined
     ? undefined
-    : controller.getState().services[serviceIndex]?.process.status;
+    : controller.getState().items[serviceIndex]?.process.status;
 }
 
 function createWorkspace(): WorkspaceConfig {
@@ -449,8 +484,9 @@ function createWorkspace(): WorkspaceConfig {
   };
 }
 
-function createCommand() {
+function createCommand(): CommandConfig {
   return {
+    kind: "command",
     id: "cmd_build",
     name: "build",
     command: "npm run build",
@@ -461,6 +497,7 @@ function createCommand() {
 
 function createService(overrides: Partial<ServiceConfig>): ServiceConfig {
   return {
+    kind: "service",
     id: "svc_service",
     name: "service",
     command: "npm run dev",

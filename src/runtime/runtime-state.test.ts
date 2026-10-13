@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceConfig } from "../config/config-types.js";
+import type { CommandConfig, ServiceConfig, WorkspaceConfig } from "../config/config-types.js";
 import {
+  addItemToRuntimeState,
   createRuntimeState,
+  getSelectedCommand,
+  getSelectedItem,
   getSelectedService,
-  selectNextService,
-  selectPreviousService,
-  updateServiceProcessState,
-  addServiceToRuntimeState,
-  addCommandToRuntimeState,
-  updateServiceConfigInRuntimeState,
-  removeServiceFromRuntimeState,
   moveServiceInRuntimeState,
+  removeItemFromRuntimeState,
+  runtimeCommands,
+  runtimeServices,
+  selectNextItem,
+  selectPreviousItem,
+  updateItemConfigInRuntimeState,
+  updateProcessState,
 } from "./runtime-state.js";
 
 describe("runtime state", () => {
@@ -18,182 +21,181 @@ describe("runtime state", () => {
     const state = createRuntimeState(createWorkspace());
 
     expect(state.workspace).toEqual({ id: "ws_ecommerce", name: "ecommerce", projectDirectory: process.cwd() });
-    expect(state.services).toHaveLength(2);
-    expect(state.services.map((serviceState) => serviceState.service.name)).toEqual([
-      "backend",
-      "frontend",
-    ]);
-    expect(state.serviceIndexById).toEqual({
-      svc_backend: 0,
-      svc_frontend: 1,
-    });
-    expect(state.commands.map((commandState) => commandState.command.name)).toEqual(["build"]);
-    expect(state.commandIndexById).toEqual({ cmd_build: 0 });
+    expect(state.items.map((itemState) => itemState.item.name)).toEqual(["backend", "frontend", "build"]);
+    expect(state.itemIndexById).toEqual({ svc_backend: 0, svc_frontend: 1, cmd_build: 2 });
+    expect(runtimeServices(state).map((serviceState) => serviceState.item.name)).toEqual(["backend", "frontend"]);
+    expect(runtimeCommands(state).map((commandState) => commandState.item.name)).toEqual(["build"]);
   });
 
-  it("initializes all services as stopped", () => {
-    const state = createRuntimeState(createWorkspace());
-
-    expect(state.services.map((serviceState) => serviceState.process)).toEqual([
-      { status: "stopped" },
-      { status: "stopped" },
-    ]);
-  });
-
-  it("selects the first service when services exist", () => {
-    const state = createRuntimeState(createWorkspace());
-
-    expect(state.selectedServiceIndex).toBe(0);
-    expect(getSelectedService(state)?.service.id).toBe("svc_backend");
-  });
-
-  it("has no selected service for empty workspaces", () => {
+  it("lists services before commands even when the saved list interleaves them", () => {
     const state = createRuntimeState({
-      id: "ws_empty",
-      name: "empty",
-      projectDirectory: process.cwd(),
-      items: [],
+      ...createWorkspace(),
+      items: [createCommand("cmd_a"), createService("svc_a"), createCommand("cmd_b"), createService("svc_b")],
     });
 
-    expect(state.selectedServiceIndex).toBeUndefined();
+    expect(state.items.map((itemState) => itemState.item.id)).toEqual(["svc_a", "svc_b", "cmd_a", "cmd_b"]);
+  });
+
+  it("initializes all items as stopped", () => {
+    const state = createRuntimeState(createWorkspace());
+
+    expect(state.items.map((itemState) => itemState.process)).toEqual([
+      { status: "stopped" },
+      { status: "stopped" },
+      { status: "stopped" },
+    ]);
+  });
+
+  it("selects the first item, a service when there is one", () => {
+    const state = createRuntimeState(createWorkspace());
+
+    expect(state.selectedItemIndex).toBe(0);
+    expect(getSelectedItem(state)?.item.id).toBe("svc_backend");
+    expect(getSelectedService(state)?.item.id).toBe("svc_backend");
+    expect(getSelectedCommand(state)).toBeUndefined();
+  });
+
+  it("has no selection for empty workspaces", () => {
+    const state = createRuntimeState({ ...createWorkspace(), items: [] });
+
+    expect(state.selectedItemIndex).toBeUndefined();
+    expect(getSelectedItem(state)).toBeUndefined();
+    expect(selectNextItem(state)).toBe(state);
+    expect(selectPreviousItem(state)).toBe(state);
+  });
+
+  it("walks from the last service into the commands, then wraps to the first service", () => {
+    const first = createRuntimeState(createWorkspace());
+    const second = selectNextItem(first);
+    const command = selectNextItem(second);
+    const wrapped = selectNextItem(command);
+
+    expect(getSelectedService(second)?.item.id).toBe("svc_frontend");
+    expect(getSelectedCommand(command)?.item.id).toBe("cmd_build");
+    expect(wrapped.selectedItemIndex).toBe(0);
+  });
+
+  it("wraps previous selection from the first service to the last command", () => {
+    const wrapped = selectPreviousItem(createRuntimeState(createWorkspace()));
+
+    expect(getSelectedCommand(wrapped)?.item.id).toBe("cmd_build");
+  });
+
+  it("selects a command when a workspace has no services", () => {
+    const state = createRuntimeState({ ...createWorkspace(), items: [createCommand("cmd_build")] });
+
     expect(getSelectedService(state)).toBeUndefined();
-    expect(selectNextService(state)).toBe(state);
-    expect(selectPreviousService(state)).toBe(state);
+    expect(getSelectedCommand(state)?.item.id).toBe("cmd_build");
   });
 
-  it("wraps next selection from the last service to the first", () => {
+  it("updates one item's process state by id without mutating the original state", () => {
     const initialState = createRuntimeState(createWorkspace());
-    const lastSelectedState = selectNextService(initialState);
-    const wrappedState = selectNextService(lastSelectedState);
-
-    expect(lastSelectedState.selectedServiceIndex).toBe(1);
-    expect(getSelectedService(lastSelectedState)?.service.id).toBe("svc_frontend");
-    expect(wrappedState.selectedCommandIndex).toBe(0);
-  });
-
-  it("wraps previous selection from the first service to the last", () => {
-    const initialState = createRuntimeState(createWorkspace());
-    const wrappedState = selectPreviousService(initialState);
-
-    expect(wrappedState.selectedCommandIndex).toBe(0);
-  });
-
-  it("selects commands when a workspace has no services", () => {
-    const state = createRuntimeState({
-      id: "ws_scripts",
-      name: "scripts",
-      projectDirectory: process.cwd(),
-      items: [{ ...createCommand(), kind: "command" }],
-    });
-
-    expect(state.selectedServiceIndex).toBeUndefined();
-    expect(state.selectedCommandIndex).toBe(0);
-  });
-
-  it("updates one service process state by id without mutating the original state", () => {
-    const initialState = createRuntimeState(createWorkspace());
-    const nextState = updateServiceProcessState(initialState, "svc_frontend", {
-      status: "running",
-      pid: 1234,
-    });
+    const nextState = updateProcessState(initialState, "svc_frontend", { status: "running", pid: 1234 });
 
     expect(nextState).not.toBe(initialState);
-    expect(nextState.services[0]?.process).toEqual({ status: "stopped" });
-    expect(nextState.services[1]?.process).toEqual({
-      status: "running",
-      pid: 1234,
-    });
-    expect(initialState.services[1]?.process).toEqual({ status: "stopped" });
+    expect(nextState.items[0]?.process).toEqual({ status: "stopped" });
+    expect(nextState.items[1]?.process).toEqual({ status: "running", pid: 1234 });
+    expect(initialState.items[1]?.process).toEqual({ status: "stopped" });
   });
 
-  it("adds a service and selects it", () => {
-    const initialState = createRuntimeState({
-      id: "ws_empty",
-      name: "empty",
-      projectDirectory: process.cwd(),
-      items: [],
-    });
-    const nextState = addServiceToRuntimeState(initialState, {
-      id: "svc_api",
-      name: "api",
-      command: "npm run dev",
-      cwd: ".",
-      autoStart: true,
-      env: {},
-    });
+  it("ignores unknown ids safely", () => {
+    const initialState = createRuntimeState(createWorkspace());
 
-    expect(nextState.services.map((serviceState) => serviceState.service.id)).toEqual(["svc_api"]);
-    expect(nextState.selectedServiceIndex).toBe(0);
-    expect(nextState.serviceIndexById).toEqual({ svc_api: 0 });
+    expect(updateProcessState(initialState, "missing", { status: "running", pid: 1234 })).toBe(initialState);
+    expect(removeItemFromRuntimeState(initialState, "missing")).toBe(initialState);
+    expect(updateItemConfigInRuntimeState(initialState, createService("missing"))).toBe(initialState);
   });
 
-  it("adds a command and selects it", () => {
-    const initialState = createRuntimeState({
-      id: "ws_empty",
-      name: "empty",
-      projectDirectory: process.cwd(),
-      items: [],
-    });
-    const nextState = addCommandToRuntimeState(initialState, createCommand());
+  it("adds a service after the last service and selects it", () => {
+    const initialState = createRuntimeState(createWorkspace());
+    const nextState = addItemToRuntimeState(initialState, createService("svc_api"));
 
-    expect(nextState.commands.map((commandState) => commandState.command.id)).toEqual(["cmd_build"]);
-    expect(nextState.selectedServiceIndex).toBeUndefined();
-    expect(nextState.selectedCommandIndex).toBe(0);
-    expect(nextState.commandIndexById).toEqual({ cmd_build: 0 });
+    expect(nextState.items.map((itemState) => itemState.item.id)).toEqual(["svc_backend", "svc_frontend", "svc_api", "cmd_build"]);
+    expect(nextState.selectedItemIndex).toBe(2);
+    expect(nextState.itemIndexById).toEqual({ svc_backend: 0, svc_frontend: 1, svc_api: 2, cmd_build: 3 });
   });
 
-  it("updates service config without changing process state", () => {
-    const initialState = updateServiceProcessState(createRuntimeState(createWorkspace()), "svc_backend", {
+  it("adds a command at the end and selects it", () => {
+    const initialState = createRuntimeState(createWorkspace());
+    const nextState = addItemToRuntimeState(initialState, createCommand("cmd_lint"));
+
+    expect(nextState.items.map((itemState) => itemState.item.id)).toEqual(["svc_backend", "svc_frontend", "cmd_build", "cmd_lint"]);
+    expect(getSelectedCommand(nextState)?.item.id).toBe("cmd_lint");
+  });
+
+  it("adds the first item to an empty workspace", () => {
+    const nextState = addItemToRuntimeState(createRuntimeState({ ...createWorkspace(), items: [] }), createCommand("cmd_build"));
+
+    expect(nextState.itemIndexById).toEqual({ cmd_build: 0 });
+    expect(nextState.selectedItemIndex).toBe(0);
+  });
+
+  it("does not add an item twice", () => {
+    const initialState = createRuntimeState(createWorkspace());
+
+    expect(addItemToRuntimeState(initialState, createService("svc_backend"))).toBe(initialState);
+  });
+
+  it("updates an item's config without changing its process state", () => {
+    const initialState = updateProcessState(createRuntimeState(createWorkspace()), "svc_backend", {
       status: "failed",
       error: new Error("boom"),
     });
-    const nextState = updateServiceConfigInRuntimeState(initialState, {
-      ...initialState.services[0]!.service,
+    const nextState = updateItemConfigInRuntimeState(initialState, {
+      ...initialState.items[0]!.item,
       command: "npm run dev:new",
     });
 
-    expect(nextState.services[0]?.service.command).toBe("npm run dev:new");
-    expect(nextState.services[0]?.process.status).toBe("failed");
+    expect(nextState.items[0]?.item.command).toBe("npm run dev:new");
+    expect(nextState.items[0]?.process.status).toBe("failed");
   });
 
-  it("removes a service and keeps selection in range", () => {
-    const initialState = selectPreviousService(createRuntimeState(createWorkspace()));
-    const nextState = removeServiceFromRuntimeState(initialState, "svc_frontend");
+  it("removes a service and keeps the selection in range", () => {
+    const initialState = selectNextItem(createRuntimeState(createWorkspace()));
+    const nextState = removeItemFromRuntimeState(initialState, "svc_frontend");
 
-    expect(nextState.services.map((serviceState) => serviceState.service.id)).toEqual(["svc_backend"]);
-    expect(nextState.selectedServiceIndex).toBe(0);
-    expect(nextState.serviceIndexById).toEqual({ svc_backend: 0 });
+    expect(nextState.items.map((itemState) => itemState.item.id)).toEqual(["svc_backend", "cmd_build"]);
+    expect(getSelectedService(nextState)?.item.id).toBe("svc_backend");
+    expect(nextState.itemIndexById).toEqual({ svc_backend: 0, cmd_build: 1 });
+  });
+
+  it("selects the first command after the last service is removed", () => {
+    const state = createRuntimeState({ ...createWorkspace(), items: [createService("svc_a"), createCommand("cmd_a"), createCommand("cmd_b")] });
+    const nextState = removeItemFromRuntimeState(state, "svc_a");
+
+    expect(getSelectedCommand(nextState)?.item.id).toBe("cmd_a");
+  });
+
+  it("goes back to the first service after a command is removed", () => {
+    const state = selectPreviousItem(createRuntimeState(createWorkspace()));
+    const nextState = removeItemFromRuntimeState(state, "cmd_build");
+
+    expect(getSelectedService(nextState)?.item.id).toBe("svc_backend");
+  });
+
+  it("leaves no selection when the last item is removed", () => {
+    const state = createRuntimeState({ ...createWorkspace(), items: [createCommand("cmd_build")] });
+    const nextState = removeItemFromRuntimeState(state, "cmd_build");
+
+    expect(nextState.items).toEqual([]);
+    expect(nextState.selectedItemIndex).toBeUndefined();
   });
 
   it("moves a service and keeps it selected", () => {
     const initialState = createRuntimeState(createWorkspace());
     const nextState = moveServiceInRuntimeState(initialState, "svc_frontend", "up");
 
-    expect(nextState.services.map((serviceState) => serviceState.service.id)).toEqual([
-      "svc_frontend",
-      "svc_backend",
-    ]);
-    expect(nextState.selectedServiceIndex).toBe(0);
-    expect(nextState.serviceIndexById).toEqual({
-      svc_frontend: 0,
-      svc_backend: 1,
-    });
+    expect(nextState.items.map((itemState) => itemState.item.id)).toEqual(["svc_frontend", "svc_backend", "cmd_build"]);
+    expect(nextState.selectedItemIndex).toBe(0);
+    expect(nextState.itemIndexById).toEqual({ svc_frontend: 0, svc_backend: 1, cmd_build: 2 });
   });
 
-  it("does not move a service beyond the list boundary", () => {
+  it("does not move a service beyond the services, into the commands, or move a command", () => {
     const initialState = createRuntimeState(createWorkspace());
 
     expect(moveServiceInRuntimeState(initialState, "svc_backend", "up")).toBe(initialState);
-  });
-
-  it("ignores unknown service ids safely", () => {
-    const initialState = createRuntimeState(createWorkspace());
-    const nextState = updateServiceProcessState(initialState, "missing", {
-      status: "running",
-      pid: 1234,
-    });
-
-    expect(nextState).toBe(initialState);
+    expect(moveServiceInRuntimeState(initialState, "svc_frontend", "down")).toBe(initialState);
+    expect(moveServiceInRuntimeState(initialState, "cmd_build", "up")).toBe(initialState);
   });
 });
 
@@ -203,34 +205,17 @@ function createWorkspace(): WorkspaceConfig {
     name: "ecommerce",
     projectDirectory: process.cwd(),
     items: [
-      {
-        kind: "service",
-        id: "svc_backend",
-        name: "backend",
-        command: "npm run dev",
-        cwd: "./backend",
-        autoStart: true,
-        env: {},
-      },
-      {
-        kind: "service",
-        id: "svc_frontend",
-        name: "frontend",
-        command: "npm run dev",
-        cwd: "./frontend",
-        autoStart: true,
-        env: {},
-      }, { ...createCommand(), kind: "command" },
+      { ...createService("svc_backend"), name: "backend", cwd: "./backend" },
+      { ...createService("svc_frontend"), name: "frontend", cwd: "./frontend" },
+      { ...createCommand("cmd_build"), name: "build" },
     ],
   };
 }
 
-function createCommand() {
-  return {
-    id: "cmd_build",
-    name: "build",
-    command: "npm run build",
-    cwd: process.cwd(),
-    env: {},
-  };
+function createService(id: string): ServiceConfig {
+  return { kind: "service", id, name: id, command: "npm run dev", cwd: ".", autoStart: true, env: {} };
+}
+
+function createCommand(id: string): CommandConfig {
+  return { kind: "command", id, name: id, command: "npm run build", cwd: process.cwd(), env: {} };
 }

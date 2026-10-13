@@ -96,7 +96,7 @@ describe("MVP integration flows", () => {
     await waitUntil(() =>
       controller.getSelectedServiceLogs().some((entry) => entry.line === "ready"),
     );
-    expect(controller.getState().services[0]?.process.status).toBe("running");
+    expect(controller.getState().items[0]?.process.status).toBe("running");
     expect(controller.getSelectedServiceLogs()).toEqual(
       expect.arrayContaining([
         { stream: "system", line: "service started", timestamp: expect.any(Date) },
@@ -106,7 +106,7 @@ describe("MVP integration flows", () => {
 
     await controller.stopSelectedService();
 
-    expect(controller.getState().services[0]?.process.status).toBe("stopped");
+    expect(controller.getState().items[0]?.process.status).toBe("stopped");
     expect(controller.getSelectedServiceLogs().map((entry) => entry.line)).toContain(
       "service stopped",
     );

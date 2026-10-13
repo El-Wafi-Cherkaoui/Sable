@@ -193,7 +193,7 @@ describe("runWorkspaceSession", () => {
       },
     });
 
-    expect(controller.addCommand).toHaveBeenCalledWith(expect.objectContaining({
+    expect(controller.addItem).toHaveBeenCalledWith(expect.objectContaining({
       name: "build",
       command: "npm run build",
     }));
@@ -224,7 +224,7 @@ describe("runWorkspaceSession", () => {
       },
     });
 
-    expect(controller.removeService).toHaveBeenCalledWith("svc_api");
+    expect(controller.removeItem).toHaveBeenCalledWith("svc_api");
     expect(store.savedConfig?.workspaces[0]?.items).toEqual([]);
   });
 
@@ -366,7 +366,7 @@ describe("runWorkspaceSession", () => {
     const state = createRuntimeState(workspaceWithService);
     controller.getState.mockReturnValue({
       ...state,
-      services: state.services.map((serviceState) => ({
+      items: state.items.map((serviceState) => ({
         ...serviceState,
         process: { status: "running" as const, pid: 1234 },
       })),
@@ -389,7 +389,7 @@ describe("runWorkspaceSession", () => {
       },
     });
 
-    expect(controller.removeService).not.toHaveBeenCalled();
+    expect(controller.removeItem).not.toHaveBeenCalled();
     expect(store.savedConfig).toBeUndefined();
   });
 
@@ -398,7 +398,7 @@ describe("runWorkspaceSession", () => {
     const state = createRuntimeState(workspaceWithService);
     controller.getState.mockReturnValue({
       ...state,
-      services: state.services.map((serviceState) => ({
+      items: state.items.map((serviceState) => ({
         ...serviceState,
         process: { status: "running" as const, pid: 1234 },
       })),
@@ -422,7 +422,7 @@ describe("runWorkspaceSession", () => {
     });
 
     expect(store.savedConfig?.workspaces[0]?.items[0]?.command).toBe("npm run dev --watch");
-    expect(controller.updateService).toHaveBeenCalledWith(expect.objectContaining({ command: "npm run dev --watch" }));
+    expect(controller.updateItem).toHaveBeenCalledWith(expect.objectContaining({ command: "npm run dev --watch" }));
   });
 });
 
@@ -447,14 +447,10 @@ function createFakeController(workspaceConfig: WorkspaceConfig) {
     startSelectedService: vi.fn(async () => ({ status: "running" as const })),
     stopSelectedService: vi.fn(async () => ({ status: "stopped" as const })),
     restartSelectedService: vi.fn(async () => ({ status: "running" as const })),
-    startService: vi.fn(async () => ({ status: "running" as const })),
-    startCommand: vi.fn(async () => ({ status: "running" as const })),
-    addService: vi.fn(() => createRuntimeState(workspaceConfig)),
-    addCommand: vi.fn(() => createRuntimeState(workspaceConfig)),
-    updateService: vi.fn(() => createRuntimeState(workspaceConfig)),
-    updateCommand: vi.fn(() => createRuntimeState(workspaceConfig)),
-    removeService: vi.fn(() => createRuntimeState(workspaceConfig)),
-    removeCommand: vi.fn(() => createRuntimeState(workspaceConfig)),
+    startItem: vi.fn(async () => ({ status: "running" as const })),
+    addItem: vi.fn(() => createRuntimeState(workspaceConfig)),
+    updateItem: vi.fn(() => createRuntimeState(workspaceConfig)),
+    removeItem: vi.fn(() => createRuntimeState(workspaceConfig)),
     moveService: vi.fn(() => createRuntimeState(workspaceConfig)),
     getSelectedServiceLogs: vi.fn(() => []),
     shutdown: vi.fn(async () => []),
