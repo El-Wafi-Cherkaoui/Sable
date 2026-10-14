@@ -25,8 +25,8 @@ const dashboardHelp: HelpSection[] = [
   {
     heading: "Run",
     rows: [
-      "s           start or stop selected item",
-      "r           restart service, or run command",
+      "s           start (or run) / stop selected item",
+      "r           restart selected item",
       "S           start every service, in order of 'After'",
     ],
   },

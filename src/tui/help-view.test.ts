@@ -7,7 +7,7 @@ describe("renderHelpView", () => {
     const rendered = renderHelpView("dashboard");
 
     expect(rendered).toContain("╭─ Help · workspace ─");
-    expect(rendered).toContain("│  s           start or stop selected item");
+    expect(rendered).toContain("│  s           start (or run) / stop selected item");
     expect(rendered).toContain("a           add a service or command");
     expect(rendered).toContain("m           move selected service (↑ ↓, then Enter)");
     expect(rendered).toContain("Esc, q      back");

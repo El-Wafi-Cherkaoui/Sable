@@ -160,8 +160,8 @@ In `sable run`, or after opening a workspace from the picker:
 ```text
 ↑ / ↓       select service or command
 Enter       show logs or output
-s           start or stop selected item
-r           restart service, or run command
+s           start (or run) / stop selected item
+r           restart selected item
 S           start every service, in the order set by "After" (see below)
 L           saved logs: delete what was saved for an item, or for all
 a           add a service or command
