@@ -52,7 +52,7 @@ export function resolveProjectItems(
     command: fill(item.command),
     cwd: path.resolve(projectDirectory, item.cwd.replaceAll("\\", "/")),
     env: Object.fromEntries(Object.entries(item.env).map(([key, value]) => [key, fill(value)])),
-    ...(item.type === "service" ? { autoStart: item.autoStart ?? true } : {}),
+    ...(item.type === "service" ? { autoStart: item.autoStart ?? true } : item.autoStart === true ? { autoStart: true } : {}),
     after: item.after,
     secrets: item.secrets,
   }));
@@ -218,7 +218,9 @@ function newItem(wanted: ResolvedProjectItem, id: string): ItemConfig {
     secrets: wanted.secrets,
   };
 
-  return wanted.kind === "service" ? { kind: "service", ...common, autoStart: wanted.autoStart ?? true } : { kind: "command", ...common };
+  return wanted.kind === "service"
+    ? { kind: "service", ...common, autoStart: wanted.autoStart ?? true }
+    : { kind: "command", ...common, ...(wanted.autoStart === true ? { autoStart: true } : {}) };
 }
 
 function mergeItem(existing: ItemConfig, wanted: ResolvedProjectItem, base: ProjectBaseItem | undefined): ItemConfig {
@@ -240,7 +242,9 @@ function mergeItem(existing: ItemConfig, wanted: ResolvedProjectItem, base: Proj
 
   return merged.kind === "service" && existing.kind === "service"
     ? { ...merged, kind: "service", autoStart: take(existing.autoStart, base?.autoStart, wanted.autoStart ?? true) }
-    : merged;
+    : merged.kind === "command" && existing.kind === "command"
+      ? { ...merged, kind: "command", autoStart: take(existing.autoStart === true, base?.autoStart === true, wanted.autoStart === true) || undefined }
+      : merged;
 }
 
 // Second pass, once every item exists: points "after" at the right local ids.

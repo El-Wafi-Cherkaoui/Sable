@@ -199,7 +199,7 @@ export function itemFields(kind: ItemKind, workspace: WorkspaceConfig, includeTy
       hint: kind === "service" ? "Keeps running until stopped, e.g. npm run dev" : "Runs once, e.g. npm run migrate",
     },
     { type: "text", key: "cwd", label: "Directory", pathBase: workspace.projectDirectory, hint: `Relative to ${displayPath(workspace.projectDirectory)}` },
-    ...(kind === "service" ? [{ type: "toggle" as const, key: "autoStart", label: "Auto-start" }] : []),
+    { type: "toggle" as const, key: "autoStart", label: "Auto-start" },
     {
       type: "multi",
       key: "after",
@@ -312,7 +312,9 @@ function itemFromValues(kind: ItemKind, id: string, values: FormValues, workspac
     secrets: [...new Set(list(values.secrets))],
   };
 
-  return kind === "service" ? { kind, ...item, autoStart: values.autoStart === true } : { kind, ...item };
+  return kind === "service"
+    ? { kind, ...item, autoStart: values.autoStart === true }
+    : { kind, ...item, ...(values.autoStart === true ? { autoStart: true } : {}) };
 }
 
 // Shows folders inside the project as relative paths, and anything else as-is.

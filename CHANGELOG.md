@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Commands can auto-start: turn on **Auto-start** in a command's form (or `"autoStart": true` in `sable.json`) and it runs when the workspace opens or on `S`, once what it waits for is up or done. Commands without it still run only with `r`.
+
 ## 0.4.0 - Sharing
 
 ### Added

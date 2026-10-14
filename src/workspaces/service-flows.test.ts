@@ -50,7 +50,7 @@ describe("runAddWorkspaceItemFlow", () => {
     ]);
   });
 
-  it("opens a form with the type choice, defaults, and only service fields for services", async () => {
+  it("opens a form with the type choice, defaults, and the same fields for both kinds", async () => {
     const form = fakeForm({ type: "service", name: "x", command: "y", cwd: ".", autoStart: true, env: [] });
 
     await runAddWorkspaceItemFlow({ store: createStore(config), workspace, keyInput: createKeyInput([]), form, directoryExists: () => true });
@@ -59,7 +59,7 @@ describe("runAddWorkspaceItemFlow", () => {
 
     expect(options.values).toEqual({ type: "service", name: "", command: "", cwd: ".", autoStart: true, after: [], env: [], secrets: [] });
     expect(options.fields({ type: "service" }).map((field) => field.key)).toEqual(["type", "name", "command", "cwd", "autoStart", "after", "env", "secrets"]);
-    expect(options.fields({ type: "command" }).map((field) => field.key)).toEqual(["type", "name", "command", "cwd", "after", "env", "secrets"]);
+    expect(options.fields({ type: "command" }).map((field) => field.key)).toEqual(["type", "name", "command", "cwd", "autoStart", "after", "env", "secrets"]);
   });
 
   it("does not save when the form is cancelled or Sable exits", async () => {

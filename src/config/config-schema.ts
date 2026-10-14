@@ -27,6 +27,8 @@ export const serviceConfigSchema = z.object({
 export const commandConfigSchema = z.object({
   kind: z.literal("command"),
   ...itemFields,
+  // A command only runs by itself (when the workspace opens or on S) if this is true, after what it waits for.
+  autoStart: z.boolean().optional(),
 });
 
 export const itemConfigSchema = z.discriminatedUnion("kind", [serviceConfigSchema, commandConfigSchema]);

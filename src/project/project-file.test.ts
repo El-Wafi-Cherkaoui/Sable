@@ -70,11 +70,13 @@ describe("parseProjectFile", () => {
     expect(problems({ version: 1, items: [{ type: "service", name: "a" }] })).toContain("items.0.command");
   });
 
-  it("rejects two items with the same name, and a command that auto-starts", () => {
+  it("rejects two items with the same name", () => {
     expect(problems({ version: 1, items: [{ ...minimal.items[0] }, { ...minimal.items[0], type: "command" }] }))
       .toContain('items.1.name: Two items are named "api".');
-    expect(problems({ version: 1, items: [{ type: "command", name: "build", command: "x", autoStart: true }] }))
-      .toContain("items.0.autoStart: Only services can auto-start.");
+  });
+
+  it("lets a command auto-start", () => {
+    expect(parseProjectFile(JSON.stringify({ version: 1, items: [{ type: "command", name: "seed", command: "x", autoStart: true }] })).type).toBe("ok");
   });
 
   it("only allows folders inside the project, written relative to it", () => {

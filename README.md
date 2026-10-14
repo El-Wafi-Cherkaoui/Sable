@@ -199,7 +199,7 @@ An item can wait for others. In the add or edit form, the **After** field lists 
 - A command counts as ready when it exits with code 0, so `npm run build` can finish before `npm start` begins.
 - Items that wait for nothing start together.
 
-Sable follows this order when it opens a workspace (services marked auto-start) and when you press `S` (every service, plus the commands they wait for). Items still held back show `◌ waiting for db`. If something they wait for stops early or fails, they show `✕ skipped: db stopped early` and are not started. Press `s` on a waiting item to cancel its start. Starting one item with `s` or `r` always starts just that item.
+Sable follows this order when it opens a workspace (services and commands marked auto-start) and when you press `S` (every service, every auto-start command, and the commands they wait for). A command with **Auto-start** on runs by itself once what it waits for is up or done, for example a migration after `db`; without it, a command only runs when you press `r` (or when a service waits for it). Items still held back show `◌ waiting for db`. If something they wait for stops early or fails, they show `✕ skipped: db stopped early` and are not started. Press `s` on a waiting item to cancel its start. Starting one item with `s` or `r` always starts just that item.
 
 Conditions belong in the command itself: `test -f dist/main.js || npm run build` only builds when the file is missing.
 
@@ -223,7 +223,7 @@ Put a `sable.json` in your project and commit it. A teammate who starts Sable in
 }
 ```
 
-- `type` is `service` or `command`. `cwd` is a folder inside the project (default `.`), `autoStart: false` keeps a service from starting with the workspace, and `after` lists items by name (see Start order).
+- `type` is `service` or `command`. `cwd` is a folder inside the project (default `.`), `autoStart: false` keeps a service from starting with the workspace (`autoStart: true` on a command makes it run with the workspace, after what it waits for), and `after` lists items by name (see Start order).
 - `{{NAME}}` is a placeholder. Declare it under `placeholders` with an optional `description` and `default`. Each person gives their own value when they import the file, and it stays on their machine.
 - `secrets` names environment variables whose values must never be in the file. Each person gives their own value the first time the item runs (see below), and it stays on their machine. A name listed under `secrets` can't also have a value in `env`.
 

@@ -510,6 +510,31 @@ describe("WorkspaceController start order", () => {
     expect(controller.startAll()).toBe("started");
   });
 
+  it("runs an auto-start command once the service it waits for has been up for a while, and not a plain command", async () => {
+    const seed: CommandConfig = { ...createCommand(), id: "cmd_seed", name: "seed", after: ["svc_db"], autoStart: true };
+    const { controller, clock, processManager } = createController(workspaceWith(db, seed, build));
+
+    await controller.startAutoStartServices();
+
+    expect(processManager.startedServiceIds).toEqual(["svc_db"]);
+    expect(queueOf(controller, "cmd_seed")).toEqual({ status: "waiting", for: ["db"] });
+
+    await clock.advance(1000);
+    await controller.whenStarted();
+
+    expect(processManager.startedServiceIds).toEqual(["svc_db", "cmd_seed"]);
+  });
+
+  it("start all also runs auto-start commands", async () => {
+    const seed: CommandConfig = { ...createCommand(), id: "cmd_seed", name: "seed", autoStart: true };
+    const { controller, processManager } = createController(workspaceWith(db, seed, build));
+
+    expect(controller.startAll()).toBe("started");
+    await controller.whenStarted();
+
+    expect(processManager.startedServiceIds.sort()).toEqual(["cmd_seed", "svc_db"]);
+  });
+
   it("has nothing to start when the workspace has no services", () => {
     const { controller } = createController(workspaceWith(build));
 

@@ -66,10 +66,6 @@ const projectFileSchema = z
 
       names.add(item.name);
 
-      if (item.type === "command" && item.autoStart !== undefined) {
-        context.addIssue({ code: "custom", message: "Only services can auto-start.", path: at("autoStart") });
-      }
-
       if (path.posix.isAbsolute(item.cwd) || path.win32.isAbsolute(item.cwd)) {
         context.addIssue({
           code: "custom",
