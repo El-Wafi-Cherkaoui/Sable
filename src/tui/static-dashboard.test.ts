@@ -90,7 +90,7 @@ describe("renderStaticDashboard", () => {
     const rendered = renderStaticDashboard(state);
 
     expect(rendered).toContain("> migrate         ✓ done");
-    expect(rendered.split("\n").at(-1)).toBe("[r] run  [Enter] output  [e] edit  [a] add  [?] help  [S] start all  [q] quit");
+    expect(rendered.split("\n").at(-1)).toBe("[s] run  [Enter] output  [e] edit  [a] add  [?] help  [S] start all  [q] quit");
   });
 
   it("shows waiting and skipped items with what they are waiting for or why they were skipped", () => {

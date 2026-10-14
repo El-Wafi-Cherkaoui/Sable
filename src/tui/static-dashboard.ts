@@ -267,8 +267,8 @@ function baseDashboardKeyHints(
 
   if (command !== undefined) {
     return command.process.status === "running"
-      ? [["s", "stop"], ["Enter", "output"], ["e", "edit"], ["?", "help"], ...startAll, back]
-      : [["r", "run"], ["Enter", "output"], ["e", "edit"], ["a", "add"], ["?", "help"], ...startAll, back];
+      ? [["s", "stop"], ["r", "restart"], ["Enter", "output"], ["e", "edit"], ["?", "help"], ...startAll, back]
+      : [["s", "run"], ["Enter", "output"], ["e", "edit"], ["a", "add"], ["?", "help"], ...startAll, back];
   }
 
   const service = getSelectedService(state);
