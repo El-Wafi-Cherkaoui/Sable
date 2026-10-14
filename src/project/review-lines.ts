@@ -13,7 +13,7 @@ function facts(base: ProjectBaseItem, projectDirectory: string, includeDefaults 
     ["env", env],
     ["secret", base.secrets.length === 0 ? "" : `${base.secrets.join(", ")}  (you are asked for ${base.secrets.length === 1 ? "it" : "them"} when it first runs)`],
     ["after", base.after.join(", ")],
-    ["starts", base.kind === "service" ? (base.autoStart === false ? "only when you start it" : "when the workspace opens") : ""],
+    ["starts", base.kind === "service" ? (base.autoStart === false ? "only when you start it" : "when the workspace opens") : base.autoStart === true ? "when the workspace opens, after what it waits for" : ""],
   ];
 
   return all.filter(([label, value]) => includeDefaults || (value !== "" && !(label === "in" && value === ".")));

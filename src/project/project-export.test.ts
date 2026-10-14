@@ -21,7 +21,7 @@ describe("buildProjectFile", () => {
   it("writes the workspace as a valid file with folders relative to the project and waits by name", () => {
     const db = item({ id: "svc_db", name: "db", command: "docker compose up db", autoStart: false });
     const api = item({ id: "svc_api", name: "api", cwd: path.join(projectDirectory, "api"), after: ["svc_db"], env: { PORT: "3000" } });
-    const build = item({ kind: "command", id: "cmd_build", name: "build", command: "npm run build" });
+    const build = item({ kind: "command", id: "cmd_build", name: "build", command: "npm run build", autoStart: undefined });
     const { text, notes } = buildProjectFile(workspaceOf(db, api, build), home);
     const file = parsed(text);
 
@@ -34,6 +34,14 @@ describe("buildProjectFile", () => {
     expect(notes).toEqual([]);
     expect(parseProjectFile(text).type).toBe("ok");
     expect(text.endsWith("\n")).toBe(true);
+  });
+
+  it("writes autoStart for a command only when it runs by itself", () => {
+    const seed = item({ kind: "command", id: "cmd_seed", name: "seed", command: "npm run seed", autoStart: true });
+    const { text } = buildProjectFile(workspaceOf(seed), home);
+
+    expect(parsed(text).items).toEqual([{ type: "command", name: "seed", command: "npm run seed", autoStart: true }]);
+    expect(parseProjectFile(text).type).toBe("ok");
   });
 
   it("keeps a list of names on one line", () => {

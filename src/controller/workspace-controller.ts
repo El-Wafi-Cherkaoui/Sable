@@ -93,7 +93,7 @@ export class WorkspaceController {
     await this.startPlan(
       this.state.items
         .map((itemState) => itemState.item)
-        .filter((item) => item.kind === "service" && item.autoStart)
+        .filter((item) => item.autoStart === true)
         .map((item) => item.id),
     );
   }
@@ -116,13 +116,15 @@ export class WorkspaceController {
       return "busy";
     }
 
-    const services = this.state.items.filter((itemState) => itemState.item.kind === "service");
+    const targets = this.state.items.filter(
+      ({ item }) => item.kind === "service" || item.autoStart === true,
+    );
 
-    if (services.length === 0) {
+    if (targets.length === 0) {
       return "nothing";
     }
 
-    this.beginPlan(services.map((itemState) => itemState.item.id));
+    this.beginPlan(targets.map(({ item }) => item.id));
 
     return "started";
   }

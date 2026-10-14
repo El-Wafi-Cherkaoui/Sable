@@ -55,6 +55,7 @@ export function buildProjectFile(workspace: WorkspaceConfig, homeDirectory: stri
       command: item.command,
       ...(folder === "." ? {} : { cwd: folder }),
       ...(item.kind === "service" && !item.autoStart ? { autoStart: false } : {}),
+      ...(item.kind === "command" && item.autoStart === true ? { autoStart: true } : {}),
       ...(waits.length > 0 ? { after: waits } : {}),
       ...(Object.keys(env).length > 0 ? { env } : {}),
       ...(secrets.length > 0 ? { secrets } : {}),
