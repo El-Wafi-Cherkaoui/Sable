@@ -140,7 +140,7 @@ e           rename selected workspace
 d           delete selected workspace
 m           move selected workspace (↑ ↓, then Enter; Esc cancels)
 v           view services in selected workspace
-s           stop the running workspace
+s           stop the running workspace; on any other workspace, start it without opening it (this stops the running one)
 r           restart the running workspace's services
 ?           help
 ,           settings (sound, welcome screen, saved logs, tips)

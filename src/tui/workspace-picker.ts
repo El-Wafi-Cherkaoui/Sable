@@ -813,6 +813,7 @@ function baseKeyHints(state: WorkspacePickerState): KeyHint[] {
   return [
     ["↑↓", "select"],
     ["Enter", "open"],
+    ["s", "start"],
     ["a", "add"],
     ...(state.projectFileHere === true ? [["i", "import sable.json"] as KeyHint] : []),
     ["e", "rename"],
@@ -868,7 +869,7 @@ export function renderWorkspacePickerHelp(options: HelpViewOptions = {}): string
     },
     {
       heading: "Running workspace",
-      rows: ["s           stop it", "r           restart its services"],
+      rows: ["s           stop it (on another workspace: start that one instead)", "r           restart its services"],
     },
     {
       rows: [",           settings (sound, welcome screen, saved logs, tips)", "q           quit Sable (from this screen)", "Ctrl+C      quit Sable from anywhere"],

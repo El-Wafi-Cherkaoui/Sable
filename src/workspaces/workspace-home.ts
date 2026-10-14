@@ -138,6 +138,35 @@ export async function runWorkspaceHome(
 
   const projectFlowOptions = { store: options.store, keyInput, screen: options.screen };
 
+  // A workspace set up from a sable.json is checked against the file every time it is started or opened,
+  // unless it is already running (its settings are not swapped underneath it).
+  const checkProjectFile = async (
+    workspace: WorkspaceConfig,
+    isRunning: boolean,
+  ): Promise<{ type: "exit" } | { type: "ready"; workspace: WorkspaceConfig; message?: string }> => {
+    if (workspace.project === undefined || isRunning) {
+      return { type: "ready", workspace };
+    }
+
+    let flowResult: ProjectFlowResult;
+
+    try {
+      flowResult = await updateProject({ ...projectFlowOptions, workspace });
+    } catch (error) {
+      flowResult = { type: "back", message: configUpdateFailedMessage(error) };
+    }
+
+    if (flowResult.type === "exit") {
+      return { type: "exit" };
+    }
+
+    const updated = flowResult.type === "completed"
+      ? (await options.store.load()).workspaces.find((candidate) => candidate.id === workspace.id) ?? workspace
+      : workspace;
+
+    return { type: "ready", workspace: updated, message: flowResult.type === "unchanged" ? undefined : flowResult.message };
+  };
+
   // Ids of the workspaces whose sable.json is different from the one the user agreed to, so the list can say so.
   async function workspacesWithChangedProjectFile(workspaces: WorkspaceConfig[]): Promise<string[] | undefined> {
     const ids: string[] = [];
@@ -473,10 +502,22 @@ export async function runWorkspaceHome(
       }
 
       if (pickerResult.type === "stopActiveWorkspace") {
-        if (activeSession === undefined) {
-          statusMessage = "No workspace is running.";
-        } else if (activeSession.workspaceId !== pickerResult.workspace.id) {
-          statusMessage = "Select the running workspace to stop it.";
+        if (activeSession === undefined || activeSession.workspaceId !== pickerResult.workspace.id) {
+          // `s` on a workspace that is not the active one starts it here, without opening it.
+          const checked = await checkProjectFile(pickerResult.workspace, false);
+
+          if (checked.type === "exit") {
+            return { type: "quit" };
+          }
+
+          if (activeSession !== undefined) {
+            shutdownFailures.push(...await activeSession.controller.shutdown());
+            activeSession = undefined;
+          }
+
+          activeSession = { workspaceId: checked.workspace.id, controller: createController(checked.workspace) };
+          await activeSession.controller.startAutoStartServices();
+          statusMessage = checked.message ?? `Started workspace "${checked.workspace.name}".`;
         } else {
           const failures = await activeSession.controller.shutdown();
 
@@ -513,29 +554,14 @@ export async function runWorkspaceHome(
       let openedWorkspace = pickerResult.workspace;
       let sessionMessage = openingMessage;
 
-      // A workspace set up from a sable.json is checked against the file every time it is opened,
-      // unless it is already running (its settings are not swapped underneath it).
-      if (openedWorkspace.project !== undefined && activeSession?.workspaceId !== openedWorkspace.id) {
-        let flowResult: ProjectFlowResult;
+      const checked = await checkProjectFile(openedWorkspace, activeSession?.workspaceId === openedWorkspace.id);
 
-        try {
-          flowResult = await updateProject({ ...projectFlowOptions, workspace: openedWorkspace });
-        } catch (error) {
-          flowResult = { type: "back", message: configUpdateFailedMessage(error) };
-        }
-
-        if (flowResult.type === "exit") {
-          return { type: "quit" };
-        }
-
-        if (flowResult.type === "completed") {
-          openedWorkspace = (await options.store.load()).workspaces.find((workspace) => workspace.id === openedWorkspace.id) ?? openedWorkspace;
-        }
-
-        if (flowResult.type !== "unchanged") {
-          sessionMessage = flowResult.message;
-        }
+      if (checked.type === "exit") {
+        return { type: "quit" };
       }
+
+      openedWorkspace = checked.workspace;
+      sessionMessage = checked.message ?? sessionMessage;
 
       let shouldStartAutoStartServices = false;
 
