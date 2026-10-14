@@ -1,0 +1,118 @@
+{
+  "version": 2,
+  "workspaces": [
+    {
+      "id": "shop",
+      "name": "shop",
+      "projectDirectory": "/demo/shop",
+      "items": [
+        {
+          "kind": "service",
+          "id": "db",
+          "name": "db",
+          "command": "node scripts/fake.js db",
+          "cwd": ".",
+          "env": {},
+          "after": [],
+          "secrets": [],
+          "autoStart": true
+        },
+        {
+          "kind": "service",
+          "id": "api",
+          "name": "api",
+          "command": "node scripts/fake.js api",
+          "cwd": ".",
+          "env": {},
+          "after": [
+            "migrate"
+          ],
+          "secrets": [],
+          "autoStart": true
+        },
+        {
+          "kind": "service",
+          "id": "web",
+          "name": "web",
+          "command": "node scripts/fake.js web",
+          "cwd": ".",
+          "env": {},
+          "after": [],
+          "secrets": [],
+          "autoStart": true
+        },
+        {
+          "kind": "command",
+          "id": "migrate",
+          "name": "migrate",
+          "command": "node scripts/fake.js migrate",
+          "cwd": ".",
+          "env": {},
+          "after": [
+            "db"
+          ],
+          "secrets": [],
+          "autoStart": true
+        },
+        {
+          "kind": "command",
+          "id": "test",
+          "name": "test",
+          "command": "node scripts/fake.js test",
+          "cwd": ".",
+          "env": {},
+          "after": [],
+          "secrets": [],
+          "autoStart": false
+        }
+      ]
+    },
+    {
+      "id": "blog",
+      "name": "blog",
+      "projectDirectory": "/demo/blog",
+      "items": [
+        {
+          "kind": "service",
+          "id": "dev",
+          "name": "dev",
+          "command": "npm run dev",
+          "cwd": ".",
+          "env": {},
+          "after": [],
+          "secrets": [],
+          "autoStart": true
+        }
+      ]
+    },
+    {
+      "id": "infra",
+      "name": "infra",
+      "projectDirectory": "/demo/infra",
+      "items": [
+        {
+          "kind": "service",
+          "id": "compose",
+          "name": "compose",
+          "command": "docker compose up",
+          "cwd": ".",
+          "env": {},
+          "after": [],
+          "secrets": [],
+          "autoStart": true
+        },
+        {
+          "kind": "command",
+          "id": "plan",
+          "name": "plan",
+          "command": "terraform plan",
+          "cwd": ".",
+          "env": {},
+          "after": [],
+          "secrets": [],
+          "autoStart": false
+        }
+      ]
+    }
+  ]
+}
