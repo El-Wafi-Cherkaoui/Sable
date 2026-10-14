@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.4.2 - Docs and website
+
+### Added
+
+- A website at https://el-wafi-cherkaoui.github.io/Sable/, with a live copy of the dashboard to try in the browser.
+- A demo GIF at the top of the README.
+
+### Changed
+
+- The README is now a short introduction. The full reference moved to [docs/guide.md](docs/guide.md) (keys, start order, logs, settings, updates) and [docs/sharing.md](docs/sharing.md) (`sable.json`), and building from source to [CONTRIBUTING.md](CONTRIBUTING.md). The guide also fixes details the old README had wrong, such as the `◌ after db` status and how sound is played.
+- The npm package has keywords, so it shows up in npm searches.
+
 ## 0.4.1 - Auto-start commands, picker status and Windows sound support
 
 ### Added
