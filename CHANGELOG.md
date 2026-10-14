@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Sounds now come from [bellbird](https://www.npmjs.com/package/bellbird). On Windows one hidden PowerShell stays open instead of one being started for every sound, so cues are on time and no longer pile up or cut each other off. Linux and macOS play as before. `BELLBIRD=0` silences Sable, and sound is off in CI unless `BELLBIRD=1`.
+
 ### Added
 
 - Commands can auto-start: turn on **Auto-start** in a command's form (or `"autoStart": true` in `sable.json`) and it runs when the workspace opens or on `S`, once what it waits for is up or done. Commands without it still run only with `r`.
