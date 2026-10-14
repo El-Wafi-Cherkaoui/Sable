@@ -1,6 +1,6 @@
 {
   "name": "sable-workspaces",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "A keyboard-first terminal workspace manager for developers.",
   "keywords": [
     "tui",
