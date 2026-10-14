@@ -354,8 +354,13 @@ describe("runInteractiveDashboard", () => {
       isStarting: vi.fn(() => starting),
     };
     const frames: Array<string | undefined> = [];
+    let redrawn: (() => void) | undefined;
     const render = vi.fn((_state: RuntimeWorkspaceState, renderOptions?: { statusMessage?: string }) => {
       frames.push(renderOptions?.statusMessage);
+
+      if (frames.length > 3) {
+        redrawn?.();
+      }
 
       return "dashboard";
     });
@@ -363,7 +368,8 @@ describe("runInteractiveDashboard", () => {
 
     await runInteractiveDashboard({
       controller,
-      // The refresh timer fires before the next key because the dashboard keeps redrawing while starting.
+      // The next key waits for a redraw the dashboard makes on its own while starting, not for a fixed delay:
+      // Windows timers are coarse enough that a delay can fire alongside the refresh timer and win the race.
       keyInput: {
         async readKey() {
           keysRead += 1;
@@ -372,7 +378,12 @@ describe("runInteractiveDashboard", () => {
             return { sequence: "S" };
           }
 
-          await new Promise((resolve) => setTimeout(resolve, 20));
+          if (frames.length <= 3) {
+            await new Promise<void>((resolve) => {
+              redrawn = resolve;
+            });
+          }
+
           starting = false;
 
           return { sequence: "q" };
