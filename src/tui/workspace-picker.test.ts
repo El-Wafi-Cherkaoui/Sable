@@ -165,6 +165,32 @@ describe("renderWorkspacePicker", () => {
 
     expect(renderWorkspacePicker(state)).toContain("> ecommerce  ○ stopped  0/2 services  /srv/ecommerce");
   });
+  it("counts commands beside services, and how many finished once the workspace is active", () => {
+    const withCommands = [
+      { ...workspaces[0]!, items: [...workspaces[0]!.items, { kind: "command" as const, after: [], id: "cmd_a", name: "a", command: "x", cwd: ".", env: {} }, { kind: "command" as const, after: [], id: "cmd_b", name: "b", command: "x", cwd: ".", env: {} }] },
+      workspaces[1]!,
+    ];
+
+    expect(renderWorkspacePicker(createWorkspacePickerState(withCommands))).toContain("> ecommerce  ○ stopped  2 services, 2 commands  /srv/ecommerce");
+    expect(renderWorkspacePicker({ ...createWorkspacePickerState(withCommands, undefined, undefined, "ws_ecommerce"), activeRunningServiceCount: 1, activeDoneCommandCount: 1 }))
+      .toContain("> ecommerce  ● running  1/2 services, 1/2 commands");
+  });
+  it("paints the running count green only when it is above zero", () => {
+    const base = createWorkspacePickerState(workspaces, undefined, undefined, "ws_ecommerce");
+
+    expect(renderWorkspacePicker({ ...base, activeRunningServiceCount: 1 }, { color: true })).toContain("\x1b[32m1\x1b[39m");
+    expect(renderWorkspacePicker({ ...base, activeRunningServiceCount: 0 }, { color: true })).not.toContain("\x1b[32m0\x1b[39m");
+  });
+  it("shows how many items of the active workspace failed, beside running or stopped", () => {
+    const base = createWorkspacePickerState(workspaces, undefined, undefined, "ws_ecommerce");
+
+    expect(renderWorkspacePicker({ ...base, activeRunningServiceCount: 1, activeProblemCount: 2 }))
+      .toContain("> ecommerce  ● running · 2 failed  1/2 services  /srv/ecommerce");
+    expect(renderWorkspacePicker({ ...base, activeRunningServiceCount: 0, activeProblemCount: 1 }))
+      .toContain("> ecommerce  ✕ 1 failed  0/2 services  /srv/ecommerce");
+    expect(renderWorkspacePicker({ ...base, activeRunningServiceCount: 1, activeProblemCount: 0 }))
+      .toContain("> ecommerce  ● running  1/2 services  /srv/ecommerce");
+  });
   it("keeps picker frame height stable when status messages appear", () => {
     const withoutMessage = renderWorkspacePicker(createWorkspacePickerState(workspaces));
     const withMessage = renderWorkspacePicker(
@@ -356,6 +382,33 @@ describe("runWorkspacePicker", () => {
 
     expect(result).toEqual({ type: "run", workspace: workspaces[1] });
     expect(write).toHaveBeenCalledTimes(2);
+  });
+
+  it("redraws the active workspace's failures while waiting for a key", async () => {
+    const readings = [{ runningServiceCount: 1, problemCount: 0 }, { runningServiceCount: 0, problemCount: 1 }];
+    const frames: string[] = [];
+    let release: (key: { name: string }) => void = () => {};
+    const keyInput: KeyInput = {
+      readKey: vi.fn(() => new Promise<{ name: string }>((resolve) => { release = resolve; })) as KeyInput["readKey"],
+      close: vi.fn(),
+    };
+
+    const running = runWorkspacePicker({
+      workspaces,
+      keyInput,
+      screen: { clear: vi.fn(), write: (text: string) => frames.push(text) },
+      activeWorkspaceId: "ws_ecommerce",
+      activeRunningServiceCount: 1,
+      activeProblemCount: 0,
+      readActivity: () => readings.shift() ?? { runningServiceCount: 0, problemCount: 1 },
+      render: (state) => `${state.activeRunningServiceCount}/${state.activeProblemCount}`,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    release({ name: "return" });
+    await running;
+
+    expect(frames.map((frame) => frame.trim())).toContain("0/1");
   });
 
   it("plays soft cues when moving and opening", async () => {

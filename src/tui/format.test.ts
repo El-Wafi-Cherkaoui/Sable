@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { displayPath, formatStatus } from "./format.js";
+import { displayPath, formatStatus, isProblemItem } from "./format.js";
 import { plainStyle } from "./style.js";
 
 describe("formatStatus", () => {
@@ -28,5 +28,17 @@ describe("displayPath", () => {
     expect(displayPath(path.join(path.sep, "srv", "app"), home)).toBe(path.join(path.sep, "srv", "app"));
     expect(displayPath(path.join(path.sep, "home", "devops"), home)).toBe(path.join(path.sep, "home", "devops"));
     expect(displayPath("relative/dir", home)).toBe("relative/dir");
+  });
+});
+
+describe("isProblemItem", () => {
+  it("counts failed, killed, non-zero and skipped items, not running, idle or clean exits", () => {
+    expect(isProblemItem({ process: { status: "failed", error: new Error("x") } })).toBe(true);
+    expect(isProblemItem({ process: { status: "exited", exitCode: 1, signal: null } })).toBe(true);
+    expect(isProblemItem({ process: { status: "exited", exitCode: null, signal: "SIGKILL" } })).toBe(true);
+    expect(isProblemItem({ process: { status: "stopped" }, queue: { status: "skipped", reason: "db failed" } })).toBe(true);
+    expect(isProblemItem({ process: { status: "exited", exitCode: 0, signal: null } })).toBe(false);
+    expect(isProblemItem({ process: { status: "running" } })).toBe(false);
+    expect(isProblemItem({ process: { status: "stopped" }, queue: { status: "waiting", for: ["db"] } })).toBe(false);
   });
 });
