@@ -2,6 +2,18 @@
   "name": "sable-workspaces",
   "version": "0.4.1",
   "description": "A keyboard-first terminal workspace manager for developers.",
+  "keywords": [
+    "tui",
+    "terminal",
+    "cli",
+    "dev-server",
+    "process-manager",
+    "workspace",
+    "logs",
+    "developer-tools",
+    "monorepo",
+    "services"
+  ],
   "type": "module",
   "license": "MIT",
   "author": "Cherkaoui-El-Wafi <elwafi.cherkaoui@gmail.com>",
