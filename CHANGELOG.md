@@ -2,15 +2,17 @@
 
 ## Unreleased
 
-### Changed
-
-- Sounds now come from [bellbird](https://www.npmjs.com/package/bellbird). On Windows one hidden PowerShell stays open instead of one being started for every sound, so cues are on time and no longer pile up or cut each other off. Linux and macOS play as before. `BELLBIRD=0` silences Sable, and sound is off in CI unless `BELLBIRD=1`.
+## 0.4.1 - Auto-start commands, picker status and Windows sound support
 
 ### Added
 
 - Commands can auto-start: turn on **Auto-start** in a command's form (or `"autoStart": true` in `sable.json`) and it runs when the workspace opens or on `S`, once what it waits for is up or done. Commands without it still run only with `r`.
 - The picker row shows how the running workspace is doing: `· N failed` (or `✕ N failed`) when items failed, were killed or were skipped, and `x/y commands` beside the services. It refreshes by itself, so an item that dies right after starting shows without a key press.
 - Start a workspace from the picker: `s` on a workspace that is not running starts it (its auto-start items, in order) and stays on the picker. Only one workspace runs at a time, so the running one is stopped first.
+
+### Changed
+
+- Sounds now come from [bellbird](https://www.npmjs.com/package/bellbird). On Windows one hidden PowerShell stays open instead of one being started for every sound, so cues are on time and no longer pile up or cut each other off. Linux and macOS play as before. `BELLBIRD=0` silences Sable, and sound is off in CI unless `BELLBIRD=1`.
 
 ## 0.4.0 - Sharing
 
