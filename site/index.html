@@ -111,6 +111,8 @@ section { padding-block: 64px; border-top: 1px solid var(--line); }
 .sec-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: end; margin-bottom: 36px; }
 h2 { font: 600 clamp(24px, 3.2vw, 38px)/1.12 var(--display); font-stretch: 75%; letter-spacing: -.015em; margin: 0; text-wrap: balance; }
 .sec-head p, .split p { color: var(--fg-2); margin: 0; max-width: 58ch; }
+.sec-head .try-keys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.try-keys .k { margin: 0; }
 .split { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 48px; align-items: center; }
 .split.flip { grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); }
 .split.flip > :first-child { order: 2; }
@@ -259,7 +261,10 @@ footer a:hover { color: var(--fg); text-decoration: underline; }
     <section id="try">
       <div class="sec-head">
         <h2>Try it before you install it.</h2>
-        <p>A live copy of the dashboard with sample services. Click it, then try <span class="k" style="margin:0">&uarr;</span> <span class="k" style="margin:0">&darr;</span> <span class="k" style="margin:0">s</span> <span class="k" style="margin:0">r</span> <span class="k" style="margin:0">S</span> <span class="k" style="margin:0">Enter</span> <span class="k" style="margin:0">?</span></p>
+        <div>
+          <p>A live copy of the dashboard with sample services. Click it, then try:</p>
+          <p class="try-keys"><span class="k">&uarr;</span><span class="k">&darr;</span><span class="k">s</span><span class="k">r</span><span class="k">S</span><span class="k">Enter</span><span class="k">?</span></p>
+        </div>
       </div>
       <div class="term demo" id="demo" tabindex="0" role="application" aria-label="Sable dashboard demo. Arrow keys select, s starts or stops, r restarts, S starts all, Enter opens logs, question mark opens help, Escape goes back.">
         <div class="term-bar"><i></i><i></i><i></i><span>sable &middot; shop</span><span class="note" id="focusnote">click to use keys</span></div>
