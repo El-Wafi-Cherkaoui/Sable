@@ -22,6 +22,10 @@ export type WorkspacePickerState = {
   statusMessage?: string;
   moving?: boolean;
   activeRunningServiceCount?: number;
+  // Items of the active workspace that failed, were killed or were skipped.
+  activeProblemCount?: number;
+  // Commands of the active workspace that finished with exit code 0.
+  activeDoneCommandCount?: number;
   // Shows the settings key in the footer.
   settingsAvailable?: boolean;
   // The folder Sable was started in has a sable.json, so the import key is worth showing.
@@ -85,6 +89,12 @@ export type RunWorkspacePickerOptions = {
   selectedWorkspaceId?: string;
   activeWorkspaceId?: string;
   activeRunningServiceCount?: number;
+  // Items of the active workspace that failed, were killed or were skipped.
+  activeProblemCount?: number;
+  // Commands of the active workspace that finished with exit code 0.
+  activeDoneCommandCount?: number;
+  // Read again while the picker waits for a key, so a service that dies right after starting shows up without a key press.
+  readActivity?: () => { runningServiceCount: number; problemCount: number; doneCommandCount: number } | undefined;
   startupMomentMs?: number;
   // Runs once at launch, after the startup logo if there is one and before the list appears (e.g. the update popup).
   sound?: SoundControl;
@@ -96,6 +106,8 @@ export type RunWorkspacePickerOptions = {
   runSettings?: typeof runSettingsDialog;
   afterStartup?: () => Promise<"continue" | "update" | "exit">;
 };
+
+const activityRefreshMs = 500;
 
 type PickerMode = "picker" | "help" | "details" | "move";
 type PickerEvent =
@@ -128,6 +140,8 @@ export async function runWorkspacePicker(
       options.activeWorkspaceId,
     ),
     activeRunningServiceCount: options.activeRunningServiceCount,
+    activeProblemCount: options.activeProblemCount,
+    activeDoneCommandCount: options.activeDoneCommandCount,
     settingsAvailable: options.settings !== undefined,
     projectFileHere: options.projectFileHere,
     shareTipIds: options.shareTipIds,
@@ -159,7 +173,22 @@ export async function runWorkspacePicker(
   renderFrame(screen, render(state));
 
   while (true) {
-    const event = queuedEvent ?? await readKeyOrAbort();
+    let event: PickerEvent;
+
+    if (queuedEvent !== undefined) {
+      event = queuedEvent;
+    } else if (mode === "picker" && options.readActivity !== undefined) {
+      const waited = await readKeyAbortOrTimeout(activityRefreshMs);
+
+      if (waited.type === "timeout") {
+        refreshActivity();
+        continue;
+      }
+
+      event = waited;
+    } else {
+      event = await readKeyOrAbort();
+    }
 
     queuedEvent = undefined;
 
@@ -339,6 +368,20 @@ export async function runWorkspacePicker(
   }
 
   // Draws the current screen again at the terminal's new size.
+  function refreshActivity(): void {
+    const activity = options.readActivity?.();
+
+    if (activity === undefined
+      || (activity.runningServiceCount === state.activeRunningServiceCount
+        && activity.problemCount === state.activeProblemCount
+        && activity.doneCommandCount === state.activeDoneCommandCount)) {
+      return;
+    }
+
+    state = { ...state, activeRunningServiceCount: activity.runningServiceCount, activeProblemCount: activity.problemCount, activeDoneCommandCount: activity.doneCommandCount };
+    renderFrame(screen, render(state));
+  }
+
   function redraw(): void {
     const workspace = getSelectedWorkspace(state);
 
@@ -575,14 +618,37 @@ function renderPickerLines(
 
   const maxWidth = Math.max(20, (options.columns ?? 80) - 1);
   const nameWidth = Math.max(...state.workspaces.map((workspace) => visibleLength(workspace.name)));
-  const statusWidth = "● running".length;
-  const servicesText = (workspace: WorkspaceConfig) => {
-    const total = servicesOf(workspace).length;
+  const statusText = (workspace: WorkspaceConfig) => {
+    const problems = workspace.id === state.activeWorkspaceId ? (state.activeProblemCount ?? 0) : 0;
+    const running = workspace.id === state.activeWorkspaceId && state.activeRunningServiceCount !== 0;
 
-    return workspace.id === state.activeWorkspaceId && state.activeRunningServiceCount !== undefined
-      ? `${state.activeRunningServiceCount}/${total} services`
-      : `${total} ${total === 1 ? "service" : "services"}`;
+    if (problems === 0) {
+      return running ? "● running" : "○ stopped";
+    }
+
+    return running ? `● running · ${problems} failed` : `✕ ${problems} failed`;
   };
+  const statusWidth = Math.max(...state.workspaces.map((workspace) => statusText(workspace).length));
+  // The count of what is up (or done) is green once it is above zero, the rest muted; both are identity when measuring.
+  const countsText = (workspace: WorkspaceConfig, paint: (count: number) => string, rest: (text: string) => string) => {
+    const total = servicesOf(workspace).length;
+    const commandTotal = commandsOf(workspace).length;
+    const isActive = workspace.id === state.activeWorkspaceId;
+    const services = isActive && state.activeRunningServiceCount !== undefined
+      ? `${paint(state.activeRunningServiceCount)}${rest(`/${total} services`)}`
+      : rest(`${total} ${total === 1 ? "service" : "services"}`);
+
+    if (commandTotal === 0) {
+      return services;
+    }
+
+    return `${services}${rest(", ")}${isActive && state.activeDoneCommandCount !== undefined
+      ? `${paint(state.activeDoneCommandCount)}${rest(`/${commandTotal} ${commandTotal === 1 ? "command" : "commands"}`)}`
+      : rest(`${commandTotal} ${commandTotal === 1 ? "command" : "commands"}`)}`;
+  };
+  const servicesText = (workspace: WorkspaceConfig) => countsText(workspace, String, (text) => text);
+  const paintedCounts = (workspace: WorkspaceConfig) =>
+    countsText(workspace, (count) => (count > 0 ? style.running(String(count)) : style.muted(String(count))), style.muted);
   const servicesWidth = Math.max(...state.workspaces.map((workspace) => servicesText(workspace).length));
   // A mark beside any workspace whose sable.json changed, so it is seen without opening anything.
   const changedMark = "⟳ changed";
@@ -592,11 +658,16 @@ function renderPickerLines(
   const rows = state.workspaces.map((workspace, index) => {
     const selected = index === state.selectedWorkspaceIndex;
     const isRunning = workspace.id === state.activeWorkspaceId && state.activeRunningServiceCount !== 0;
-    const status = isRunning ? style.running("● running") : style.muted("○ stopped");
+    const problems = workspace.id === state.activeWorkspaceId ? (state.activeProblemCount ?? 0) : 0;
+    const status = problems > 0
+      ? isRunning
+        ? `${style.running("● running")} ${style.failed(`· ${problems} failed`)}`
+        : style.failed(statusText(workspace))
+      : isRunning ? style.running("● running") : style.muted("○ stopped");
     const moving = state.moving === true && selected ? `  ${style.muted("↕ moving")}` : "";
     const folder = truncateVisible(displayPath(workspace.projectDirectory), Math.max(8, maxWidth - pathStart - visibleLength(moving)));
 
-    return `${selected ? "> " : "  "}${padVisibleEnd(workspace.name, nameWidth)}  ${padVisibleEnd(status, statusWidth)}  ${style.muted(padVisibleEnd(servicesText(workspace), servicesWidth))}  ${changedWidth > 0 ? `${padVisibleEnd(state.projectChangedIds?.includes(workspace.id) === true ? style.statusLabel(changedMark) : "", changedWidth)}  ` : ""}${style.muted(folder)}${moving}`;
+    return `${selected ? "> " : "  "}${padVisibleEnd(workspace.name, nameWidth)}  ${padVisibleEnd(status, statusWidth)}  ${padVisibleEnd(paintedCounts(workspace), servicesWidth)}  ${changedWidth > 0 ? `${padVisibleEnd(state.projectChangedIds?.includes(workspace.id) === true ? style.statusLabel(changedMark) : "", changedWidth)}  ` : ""}${style.muted(folder)}${moving}`;
   });
   const rowWidth = Math.min(maxWidth, Math.max(...rows.map((row) => visibleLength(row))));
 

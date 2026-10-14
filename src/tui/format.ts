@@ -28,6 +28,17 @@ export function formatStatus(process: ManagedProcessState, kind: ItemKind, style
   }
 }
 
+// Whether an item ended badly: it failed to start, was killed, exited with an error, or was skipped by a start plan.
+export function isProblemItem(itemState: { process: ManagedProcessState; queue?: RuntimeQueueState }): boolean {
+  if (itemState.queue?.status === "skipped") {
+    return true;
+  }
+
+  const { process } = itemState;
+
+  return process.status === "failed" || (process.status === "exited" && (process.signal !== null || process.exitCode !== 0));
+}
+
 // Like formatStatus, but says so while a start-all plan holds the item back or has skipped it.
 // The list uses the short form (`detail` off) so it fits the narrow column; the logs header gives the reason.
 export function formatItemStatus(

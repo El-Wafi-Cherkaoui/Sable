@@ -38,7 +38,7 @@ import type { LogFiles } from "../logs/log-files.js";
 import { runNoticeDialog } from "../tui/notice-dialog.js";
 import type { runSavedLogsDialog } from "../tui/saved-logs-dialog.js";
 import { runAllSavedLogs } from "./saved-logs-flow.js";
-import { displayPath } from "../tui/format.js";
+import { displayPath, isProblemItem } from "../tui/format.js";
 import type { SettingsControl } from "../settings/settings-control.js";
 import type { SoundControl } from "../sound/sound-control.js";
 import { runUpdateDialog } from "../tui/update-dialog.js";
@@ -46,7 +46,7 @@ import { runSuggestServicesFlow, type SuggestServicesFlowOptions, type SuggestSe
 import { servicesOf } from "../config/workspace-items.js";
 import { readProjectFile } from "../project/project-file.js";
 import { runExportProjectFlow, runImportProjectFlow, runUpdateProjectFlow, type ProjectFlowOptions, type ProjectFlowResult } from "./project-flows.js";
-import { runtimeServices } from "../runtime/runtime-state.js";
+import { runtimeCommands, runtimeServices } from "../runtime/runtime-state.js";
 
 export type WorkspaceHomeConfigStore = {
   load(): Promise<AppConfig>;
@@ -258,6 +258,9 @@ export async function runWorkspaceHome(
         activeWorkspaceId: activeSession?.workspaceId,
         activeRunningServiceCount: activeSession === undefined ? undefined : runtimeServices(activeSession.controller.getState())
           .filter((serviceState) => serviceState.process.status === "running").length,
+        activeProblemCount: activeSession === undefined ? undefined : activeSession.controller.getState().items.filter(isProblemItem).length,
+        activeDoneCommandCount: activeSession === undefined ? undefined : countDoneCommands(activeSession.controller.getState()),
+        readActivity: activeSession === undefined ? undefined : readActivityOf(activeSession.controller),
         startupMomentMs: shouldShowStartupMoment && options.welcomeScreen !== false ? welcomeScreenMs : 0,
         afterStartup: shouldShowStartupMoment ? () => showStartupPopups(options, keyInput) : undefined,
         screen: options.screen,
@@ -732,4 +735,20 @@ async function reorderWorkspace(options: ReorderWorkspaceOptions): Promise<{ mes
   });
 
   return { message: `Moved workspace "${workspace!.name}".` };
+}
+
+function readActivityOf(controller: RunWorkspaceController): () => { runningServiceCount: number; problemCount: number; doneCommandCount: number } {
+  return () => {
+    const state = controller.getState();
+
+    return {
+      runningServiceCount: runtimeServices(state).filter((serviceState) => serviceState.process.status === "running").length,
+      problemCount: state.items.filter(isProblemItem).length,
+      doneCommandCount: countDoneCommands(state),
+    };
+  };
+}
+
+function countDoneCommands(state: ReturnType<RunWorkspaceController["getState"]>): number {
+  return runtimeCommands(state).filter(({ process }) => process.status === "exited" && process.exitCode === 0 && process.signal === null).length;
 }

@@ -5,6 +5,7 @@
 ### Added
 
 - Commands can auto-start: turn on **Auto-start** in a command's form (or `"autoStart": true` in `sable.json`) and it runs when the workspace opens or on `S`, once what it waits for is up or done. Commands without it still run only with `r`.
+- The picker row shows how the running workspace is doing: `· N failed` (or `✕ N failed`) when items failed, were killed or were skipped, and `x/y commands` beside the services. It refreshes by itself, so an item that dies right after starting shows without a key press.
 
 ## 0.4.0 - Sharing
 
