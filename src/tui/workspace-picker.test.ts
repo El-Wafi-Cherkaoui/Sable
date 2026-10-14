@@ -69,14 +69,14 @@ describe("renderWorkspacePicker", () => {
         "  portfolio  ○ stopped  1 service   /srv/portfolio",
         "",
         "",
-        "[↑↓] select  [Enter] open  [a] add  [e] rename  [?] help  [q] quit",
+        "[↑↓] select  [Enter] open  [s] start  [a] add  [e] rename  [?] help  [q] quit",
       ].join("\n"),
     );
   });
   it("shows the saved logs key in the footer before settings, only when saving logs is on", () => {
     const footer = (extra: Partial<ReturnType<typeof createWorkspacePickerState>>) => renderWorkspacePicker({ ...createWorkspacePickerState(workspaces), ...extra }).split("\n").at(-1);
 
-    expect(footer({ savedLogsAvailable: true, settingsAvailable: true })).toBe("[↑↓] select  [Enter] open  [a] add  [e] rename  [?] help  [L] saved logs  [,] settings  [q] quit");
+    expect(footer({ savedLogsAvailable: true, settingsAvailable: true })).toBe("[↑↓] select  [Enter] open  [s] start  [a] add  [e] rename  [?] help  [L] saved logs  [,] settings  [q] quit");
     expect(footer({ settingsAvailable: true })).not.toContain("saved logs");
     expect(footer({ savedLogsAvailable: true, moving: true })).not.toContain("saved logs");
   });
@@ -144,7 +144,7 @@ describe("renderWorkspacePicker", () => {
     const withFile = renderWorkspacePicker({ ...createWorkspacePickerState(workspaces), projectFileHere: true }).split("\n").at(-1);
 
     expect(without).not.toContain("import");
-    expect(withFile).toBe("[↑↓] select  [Enter] open  [a] add  [i] import sable.json  [e] rename  [?] help  [q] quit");
+    expect(withFile).toBe("[↑↓] select  [Enter] open  [s] start  [a] add  [i] import sable.json  [e] rename  [?] help  [q] quit");
   });
 
   it("renders status messages in a reserved footer slot", () => {
@@ -205,7 +205,7 @@ describe("renderWorkspacePicker", () => {
     const lines = rendered.split("\n");
 
     expect(lines).toHaveLength(17);
-    expect(lines.at(-1)).toBe("[↑↓] select  [Enter] open  [a] add  [e] rename  [?] help  [q] quit");
+    expect(lines.at(-1)).toBe("[↑↓] select  [Enter] open  [s] start  [a] add  [e] rename  [?] help  [q] quit");
     expect(lines.at(-2)).toBe("");
   });
 

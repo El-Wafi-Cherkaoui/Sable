@@ -296,8 +296,9 @@ describe("runWorkspaceHome", () => {
     expect(warn).toHaveBeenCalledExactlyOnceWith('warning: "api" may still be running: tree kill failed');
   });
 
-  it("does not stop a non-selected active workspace", async () => {
+  it("starts a workspace that is not active from the picker, after stopping the active one", async () => {
     const controller = createFakeController();
+    const portfolioController = createFakeController();
     const runPicker = vi
       .fn()
       .mockResolvedValueOnce({ type: "run" as const, workspace })
@@ -310,14 +311,15 @@ describe("runWorkspaceHome", () => {
       keyInput: createKeyInput(),
       runPicker,
       runSession,
-      createController: () => controller,
+      createController: vi.fn().mockReturnValueOnce(controller).mockReturnValueOnce(portfolioController),
     });
 
     expect(controller.shutdown).toHaveBeenCalledOnce();
+    expect(portfolioController.startAutoStartServices).toHaveBeenCalledOnce();
     expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
-      activeWorkspaceId: workspace.id,
+      activeWorkspaceId: portfolioWorkspace.id,
       selectedWorkspaceId: portfolioWorkspace.id,
-      statusMessage: "Select the running workspace to stop it.",
+      statusMessage: `Started workspace "${portfolioWorkspace.name}".`,
     }));
   });
 
@@ -383,27 +385,32 @@ describe("runWorkspaceHome", () => {
     }));
   });
 
-  it("reports when stop or restart is requested without an active workspace", async () => {
+  it("starts the selected workspace on s when nothing is active, and reports restart without an active workspace", async () => {
+    const controller = createFakeController();
     const runPicker = vi
       .fn()
-      .mockResolvedValueOnce({ type: "stopActiveWorkspace" as const, workspace })
       .mockResolvedValueOnce({ type: "restartActiveWorkspace" as const, workspace })
+      .mockResolvedValueOnce({ type: "stopActiveWorkspace" as const, workspace })
       .mockResolvedValueOnce({ type: "exit" as const });
+    const runSession = vi.fn();
 
     await runWorkspaceHome({
       store: createStore(config),
       keyInput: createKeyInput(),
       runPicker,
-      runSession: vi.fn(),
+      runSession,
+      createController: () => controller,
     });
 
     expect(runPicker).toHaveBeenNthCalledWith(2, expect.objectContaining({
       activeWorkspaceId: undefined,
       statusMessage: "No workspace is running.",
     }));
+    expect(controller.startAutoStartServices).toHaveBeenCalledOnce();
+    expect(runSession).not.toHaveBeenCalled();
     expect(runPicker).toHaveBeenNthCalledWith(3, expect.objectContaining({
-      activeWorkspaceId: undefined,
-      statusMessage: "No workspace is running.",
+      activeWorkspaceId: workspace.id,
+      statusMessage: `Started workspace "${workspace.name}".`,
     }));
   });
 
