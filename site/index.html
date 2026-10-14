@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sable · Keyboard-first terminal workspace manager</title>
+<meta name="description" content="Sable is a keyboard-first terminal workspace manager. Your dev server, database and scripts in one dashboard: start them in your order and keep an eye on every log.">
+<link rel="canonical" href="https://el-wafi-cherkaoui.github.io/Sable/">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0b0913" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f1f5" media="(prefers-color-scheme: light)">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Sable: run your whole stack from one terminal">
+<meta property="og:description" content="Sable is a keyboard-first terminal workspace manager. Your dev server, database and scripts in one dashboard: start them in your order and keep an eye on every log.">
+<meta property="og:url" content="https://el-wafi-cherkaoui.github.io/Sable/">
+<meta property="og:image" content="https://el-wafi-cherkaoui.github.io/Sable/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112,300..700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: the page is the terminal. One live dashboard at the center, the rest are the real screens of the tool set between short paragraphs. */
+:root {
+  --bg: #f4f1f5;
+  --bg-2: #e9e4ee;
+  --fg: #17122a;
+  --fg-2: #4f4663;
+  --line: rgba(23, 18, 42, .16);
+  --accent: #5a4262;
+  --bad: #c4304d;
+  --glow: rgba(90, 66, 98, .16);
+
+  /* the terminal never changes theme, like a real one */
+  --t-bg: #110e1d;
+  --t-bar: #1a1527;
+  --t-fg: #f1e3d5;
+  --t-dim: rgba(241, 227, 213, .52);
+  --t-line: rgba(241, 227, 213, .16);
+  --t-sel: #2c2338;
+  --t-green: #8be0a8;
+  --t-red: #ff8a9c;
+  --t-amber: #f0c36d;
+  --t-cyan: #86d8ea;
+  --t-chip: #e7d9cb;
+  --t-chip-fg: #1b1624;
+
+  --display: "Martian Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0913; --bg-2: #130f20; --fg: #f3e5d7; --fg-2: rgba(243, 229, 215, .68);
+    --line: rgba(243, 229, 215, .15); --accent: #ecd3ba; --bad: #ff8a9c; --glow: rgba(236, 211, 186, .09);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b0913; --bg-2: #130f20; --fg: #f3e5d7; --fg-2: rgba(243, 229, 215, .68);
+  --line: rgba(243, 229, 215, .15); --accent: #ecd3ba; --bad: #ff8a9c; --glow: rgba(236, 211, 186, .09);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+img { max-width: 100%; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 17px/1.6 var(--sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+code { font-family: var(--mono); font-size: .92em; }
+.wrap { max-width: 1120px; margin-inline: auto; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+/* top bar */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 18px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font: 600 15px var(--display); font-stretch: 75%; letter-spacing: .02em; }
+.brand img { width: 30px; height: 30px; border-radius: 8px; display: block; }
+.top nav { display: flex; gap: 22px; font: 500 13px var(--mono); }
+.top nav a { text-decoration: none; color: var(--fg-2); }
+.top nav a:hover { color: var(--fg); }
+
+/* hero */
+.hero { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, .7fr); gap: 40px; align-items: center; padding-block: 36px 56px; }
+.eyebrow { font: 500 12.5px var(--mono); color: var(--fg-2); display: flex; gap: 10px; align-items: center; margin: 0 0 22px; flex-wrap: wrap; }
+.eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: #3fbf72; box-shadow: 0 0 0 4px rgba(63, 191, 114, .18); }
+h1 { font: 600 clamp(28px, 4.1vw, 50px)/1.1 var(--display); font-stretch: 75%; letter-spacing: -.02em; margin: 0 0 22px; text-wrap: balance; }
+.lede { font-size: clamp(17px, 1.6vw, 20px); color: var(--fg-2); max-width: 56ch; margin: 0 0 30px; }
+.install { display: flex; align-items: stretch; max-width: 520px; border: 1px solid var(--line); border-radius: 10px; background: var(--t-bg); color: var(--t-fg); overflow: hidden; }
+.install code { flex: 1; min-width: 0; padding: 14px 16px; font-size: 14px; white-space: nowrap; overflow-x: auto; }
+.install code b { color: var(--t-green); font-weight: 500; margin-right: 10px; }
+.install button { border: 0; border-left: 1px solid var(--t-line); background: var(--t-bar); color: var(--t-fg); font: 500 13px var(--mono); padding: 0 18px; cursor: pointer; }
+.install button:hover { background: var(--t-sel); }
+.fine { font: 400 13px/1.6 var(--mono); color: var(--fg-2); margin: 14px 0 0; }
+
+.logo-stage { position: relative; aspect-ratio: 1; width: 100%; max-width: 440px; justify-self: center; }
+.logo-stage::before { content: ""; position: absolute; inset: 0; background: radial-gradient(closest-side, var(--glow), transparent 72%); }
+.logo-stage canvas { position: relative; width: 100%; height: 100%; display: block; }
+.logo-cap { position: absolute; left: 0; right: 0; bottom: -6px; text-align: center; font: 400 12.5px/1.5 var(--mono); color: var(--fg-2); }
+.logo-cap b { display: block; color: var(--fg); font-weight: 700; font-size: 13.5px; }
+
+/* section scaffolding */
+section { padding-block: 64px; border-top: 1px solid var(--line); }
+.sec-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: end; margin-bottom: 36px; }
+h2 { font: 600 clamp(24px, 3.2vw, 38px)/1.12 var(--display); font-stretch: 75%; letter-spacing: -.015em; margin: 0; text-wrap: balance; }
+.sec-head p, .split p { color: var(--fg-2); margin: 0; max-width: 58ch; }
+.split { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 48px; align-items: center; }
+.split.flip { grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); }
+.split.flip > :first-child { order: 2; }
+.split h2 { margin-bottom: 18px; }
+.split p + p { margin-top: 14px; }
+.tag { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 14px !important; }
+
+/* terminal window */
+.term { background: var(--t-bg); color: var(--t-fg); border: 1px solid var(--t-line); border-radius: 12px; overflow: hidden; box-shadow: 0 24px 60px -28px rgba(10, 6, 24, .55); font: 400 13.5px/1.55 var(--mono); position: relative; min-width: 0; }
+.term-bar { display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: var(--t-bar); border-bottom: 1px solid var(--t-line); font-size: 12px; color: var(--t-dim); }
+.term-bar i { width: 10px; height: 10px; border-radius: 50%; background: rgba(241, 227, 213, .18); }
+.term-bar span { margin-left: 8px; }
+.term-bar .note { margin-left: auto; }
+.screen-static { margin: 0; padding: 16px 18px 18px; overflow-x: auto; white-space: pre; font: inherit; }
+.g { color: var(--t-green); } .r { color: var(--t-red); } .a { color: var(--t-amber); } .c { color: var(--t-cyan); }
+.d { color: var(--t-dim); } .b { font-weight: 700; }
+.sel { background: var(--t-sel); }
+.k { display: inline-block; background: var(--t-chip); color: var(--t-chip-fg); font-weight: 700; padding: 0 .5ch; border-radius: 3px; margin-right: .6ch; line-height: 1.5; }
+button.k { border: 0; font: inherit; font-weight: 700; cursor: pointer; }
+button.k:hover { filter: brightness(1.12); }
+.hints { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 10px 18px 14px; color: var(--t-dim); border-top: 1px solid var(--t-line); font-size: 12.5px; }
+.hints > * { white-space: nowrap; }
+
+/* the live demo */
+.demo { outline: none; }
+.demo:focus-within { border-color: color-mix(in srgb, var(--t-fg) 38%, transparent); }
+.screen { padding: 14px 18px 8px; min-height: 300px; container-type: inline-size; position: relative; }
+.hdr { font-weight: 700; margin-bottom: 16px; }
+.hdr span { font-weight: 400; color: var(--t-dim); }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 28px; }
+@container (min-width: 640px) { .cols { grid-template-columns: minmax(0, 330px) minmax(0, 1fr); } }
+.label { color: var(--t-dim); font-size: 12px; letter-spacing: .08em; margin: 14px 0 4px; }
+.label:first-child { margin-top: 0; }
+.row { display: grid; grid-template-columns: 2ch 10ch minmax(0, 1fr); padding: 1px 8px 1px 0; cursor: pointer; border-radius: 3px; }
+.row:hover { background: rgba(241, 227, 213, .05); }
+.row.on { background: var(--t-sel); }
+.row .mk { color: var(--t-fg); }
+.st.running, .st.done { color: var(--t-green); }
+.st.failed, .st.skipped { color: var(--t-red); }
+.st.idle, .st.stopped, .st.waiting { color: var(--t-dim); }
+.prev { display: none; min-width: 0; padding-top: 0; }
+@container (min-width: 640px) { .prev { display: block; border-left: 1px solid var(--t-line); padding-left: 24px; } }
+.prev .ln { display: block; color: var(--t-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.logs { max-height: 270px; overflow-y: auto; padding-bottom: 6px; scrollbar-width: thin; scrollbar-color: var(--t-line) transparent; }
+.logs .ln { display: grid; grid-template-columns: 9ch minmax(0, 1fr); gap: 0 12px; padding-right: 8px; }
+.logs .ts { color: var(--t-dim); }
+.logs .err { color: var(--t-red); background: rgba(255, 138, 156, .08); }
+.logs .err.hit { outline: 1px solid var(--t-red); outline-offset: -1px; }
+.logs .sys { color: var(--t-cyan); display: block; white-space: nowrap; overflow: hidden; }
+.msg { word-break: break-word; }
+.statusline { padding: 2px 18px 12px; color: var(--t-dim); min-height: 2.1em; font-size: 12.5px; }
+.statusline b { color: var(--t-fg); font-weight: 500; }
+.dialog { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(17, 14, 29, .78); padding: 12px; }
+.box { width: min(100%, 440px); border: 1px solid var(--t-fg); border-radius: 10px; background: var(--t-bg); padding: 14px 18px 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
+.box h3 { margin: 0 0 10px; font: 700 13.5px var(--mono); }
+.box dl { display: grid; grid-template-columns: 8ch 1fr; gap: 2px 10px; margin: 0; font-size: 13px; }
+.box dt { color: var(--t-fg); } .box dd { margin: 0; color: var(--t-dim); }
+.box p { margin: 12px 0 0; color: var(--t-dim); font-size: 12.5px; }
+
+/* three frames for start order */
+.frames { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.frame { background: var(--t-bg); color: var(--t-fg); border: 1px solid var(--t-line); border-radius: 10px; padding: 14px 16px 16px; font: 400 12.5px/1.6 var(--mono); min-width: 0; overflow-x: auto; }
+.frame .when { display: flex; justify-content: space-between; color: var(--t-dim); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--t-line); }
+.frame pre { margin: 0; font: inherit; white-space: pre; }
+.rule-list { list-style: none; padding: 0; margin: 28px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.rule-list li { color: var(--fg-2); font-size: 15px; border-top: 1px solid var(--line); padding-top: 12px; }
+.rule-list b { display: block; color: var(--fg); font: 600 13px var(--mono); margin-bottom: 4px; }
+
+/* feature pairs */
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.pair h3 { font: 600 20px/1.25 var(--display); font-stretch: 75%; margin: 0 0 10px; letter-spacing: -.01em; }
+.pair p { color: var(--fg-2); margin: 0 0 20px; font-size: 16px; }
+
+/* keys */
+.keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0 28px; margin: 0; padding: 0; list-style: none; }
+.keys li { display: flex; align-items: baseline; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 15.5px; }
+.keys .k { min-width: 3.4ch; text-align: center; font-size: 13.5px; margin: 0; background: var(--t-bg); color: var(--t-fg); border: 1px solid var(--t-line); font-family: var(--mono); padding: 2px 8px; border-radius: 5px; }
+.keys span { color: var(--fg-2); }
+.keys b { color: var(--fg); font-weight: 600; }
+.keys-note { margin: 22px 0 0; color: var(--fg-2); max-width: 70ch; font-size: 15.5px; }
+
+/* install */
+.not { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.not li { font: 400 12.5px var(--mono); color: var(--fg-2); border: 1px dashed var(--line); border-radius: 999px; padding: 4px 12px; }
+.isnt-list { list-style: none; margin: 0; padding: 0; }
+.isnt-list li { display: grid; grid-template-columns: 2ch 16ch minmax(0, 1fr); gap: 0 14px; padding: 15px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+.isnt-list li:first-child { border-top: 1px solid var(--line); }
+.isnt-list .x { color: var(--bad); font: 500 14px var(--mono); }
+.isnt-list b { font: 600 14px var(--mono); }
+.isnt-list span:last-child { color: var(--fg-2); font-size: 16px; }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+.steps li { display: grid; grid-template-columns: 3ch minmax(0, 1fr); gap: 10px; align-items: baseline; color: var(--fg-2); font-size: 15.5px; }
+.steps li > span:first-child { font-family: var(--mono); color: var(--accent); }
+footer { border-top: 1px solid var(--line); padding-block: 32px 48px; display: flex; flex-wrap: wrap; gap: 14px 28px; justify-content: space-between; color: var(--fg-2); font: 400 13px var(--mono); }
+footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
+footer a { text-decoration: none; }
+footer a:hover { color: var(--fg); text-decoration: underline; }
+
+@media (max-width: 920px) {
+  .hero, .sec-head, .split, .split.flip, .pair { grid-template-columns: minmax(0, 1fr); }
+  .split.flip > :first-child { order: 0; }
+  .hero { padding-top: 12px; }
+  .logo-stage { max-width: 360px; margin-bottom: 18px; }
+  .frames, .rule-list { grid-template-columns: minmax(0, 1fr); }
+  section { padding-block: 48px; }
+  .top nav { display: none; }
+  .isnt-list li { grid-template-columns: 2ch minmax(0, 1fr); }
+  .isnt-list li span:last-child { grid-column: 2; }
+}
+@media (max-width: 520px) {
+  .term, .frame { font-size: 12px; }
+  .screen { padding-inline: 12px; }
+  .row { grid-template-columns: 2ch 8ch minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#top"><img alt="" src="logo.webp" width="30" height="30">sable</a>
+    <nav aria-label="Sections">
+      <a href="#try">Try it</a><a href="#order">Start order</a><a href="#share">Sharing</a><a href="#more">Logs</a><a href="#keys">Keys</a><a href="#isnt">Scope</a><a href="#install">Install</a>
+    </nav>
+    <a class="fine" style="margin:0" href="https://github.com/El-Wafi-Cherkaoui/Sable">GitHub &rarr;</a>
+  </header>
+
+  <main id="top">
+    <div class="hero">
+      <div>
+        <p class="eyebrow"><i></i> Keyboard-first workspace manager &middot; {{VERSION}}</p>
+        <h1>Run your whole stack from one terminal.</h1>
+        <p class="lede">Your dev server, database and scripts in one dashboard. Start them in your order and keep an eye on every log.</p>
+        <div class="install">
+          <code id="cmd"><b>$</b>npm install -g sable-workspaces</code>
+          <button type="button" id="copy">Copy</button>
+        </div>
+        <p class="fine">Needs Node.js 20 or newer. Works on Windows, macOS and Linux.</p>
+      </div>
+      <div class="logo-stage" aria-label="The Sable logo, drawn in dots as it is on the welcome screen">
+        <canvas id="logo" role="img" aria-label="Sable logo"></canvas>
+      </div>
+    </div>
+
+    <section id="try">
+      <div class="sec-head">
+        <h2>Try it before you install it.</h2>
+        <p>A live copy of the dashboard with sample services. Click it, then try <span class="k" style="margin:0">&uarr;</span> <span class="k" style="margin:0">&darr;</span> <span class="k" style="margin:0">s</span> <span class="k" style="margin:0">r</span> <span class="k" style="margin:0">S</span> <span class="k" style="margin:0">Enter</span> <span class="k" style="margin:0">?</span></p>
+      </div>
+      <div class="term demo" id="demo" tabindex="0" role="application" aria-label="Sable dashboard demo. Arrow keys select, s starts or stops, r restarts, S starts all, Enter opens logs, question mark opens help, Escape goes back.">
+        <div class="term-bar"><i></i><i></i><i></i><span>sable &middot; shop</span><span class="note" id="focusnote">click to use keys</span></div>
+        <div class="screen" id="screen"></div>
+        <div class="statusline" id="status" aria-live="polite"></div>
+        <div class="hints" id="hints"></div>
+      </div>
+    </section>
+
+    <section id="order">
+      <div class="sec-head">
+        <h2>You set the order. Sable keeps it.</h2>
+        <p>Tell each item what to wait for. A service counts as ready after five seconds up, a command when it exits cleanly.</p>
+      </div>
+      <div class="frames">
+        <div class="frame"><div class="when"><span>You press S</span><span>0s</span></div><pre>shop &middot; 0 of 2 running
+
+<span class="d">SERVICES</span>
+<span class="sel">&gt; db     </span><span class="sel g">● running  </span>
+  api    <span class="d">◌ after db</span>
+
+<span class="d">COMMANDS</span>
+  build  <span class="g">● running</span></pre></div>
+        <div class="frame"><div class="when"><span>build finishes</span><span>2s</span></div><pre>shop &middot; 1 of 2 running
+
+<span class="d">SERVICES</span>
+<span class="sel">&gt; db     </span><span class="sel g">● running  </span>
+  api    <span class="d">◌ after db</span>
+
+<span class="d">COMMANDS</span>
+  build  <span class="g">✓ done</span></pre></div>
+        <div class="frame"><div class="when"><span>db is ready</span><span>5s</span></div><pre>shop &middot; 2 of 2 running
+
+<span class="d">SERVICES</span>
+<span class="sel">&gt; db     </span><span class="sel g">● running  </span>
+  api    <span class="g">● running</span>
+
+<span class="d">COMMANDS</span>
+  build  <span class="g">✓ done</span></pre></div>
+      </div>
+    </section>
+
+    <section id="share">
+      <div class="split">
+        <div>
+          <p class="tag">Sharing</p>
+          <h2>Read it before it runs.</h2>
+          <p>Commit a <code>sable.json</code> and your whole team gets the same setup. When you open someone else's, Sable shows you every command before anything runs.</p>
+          <p>If the file changes later, you see exactly what changed first. Secrets stay on your machine, never in the file.</p>
+        </div>
+        <div class="term">
+          <div class="term-bar"><i></i><i></i><i></i><span>Review sable.json</span></div>
+<pre class="screen-static">This file will run these commands on your machine.
+<span class="d">Nothing starts until you press Enter.</span>
+
+<span class="d">SERVICES</span>
+  <span class="b">db</span>     docker compose up db
+  <span class="b">api</span>    npm run dev
+         <span class="d">in api, after db</span>
+         <span class="d">PORT = {{API_PORT}}</span>
+         <span class="a">needs STRIPE_KEY on this machine</span>
+<span class="d">COMMANDS</span>
+  <span class="b">build</span>  npm run build
+
+<span class="d">--- since you agreed ---</span>
+<span class="r">- api  npm run dev</span>
+<span class="g">+ api  npm run dev -- --inspect</span></pre>
+          <div class="hints"><span><span class="k">Enter</span>create workspace</span><span><span class="k">↑↓</span>scroll</span><span><span class="k">Esc</span>cancel</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="more">
+      <div class="pair">
+        <div>
+          <h3>Logs you can search.</h3>
+          <p>Every line timestamped. Search, jump straight to the next error, or save logs to disk to read later.</p>
+          <div class="term">
+<pre class="screen-static"><span class="b">api</span> &middot; shop &middot; <span class="g">● running</span> &middot; 214 lines &middot; following
+
+<span class="d">── service started · 09:41:07 ────────────────</span>
+<span class="d">09:41:07</span>  listening on :3000
+<span class="d">09:41:09</span>  GET /products 200 11ms
+<span class="d">09:41:12</span>  POST /checkout 201 84ms
+<span class="r">09:41:15  Error: payment provider timeout</span>
+<span class="d">09:41:15</span>  retrying (1/3)
+<span class="d">09:41:18</span>  GET /cart 200 6ms</pre>
+            <div class="hints"><span><span class="k">/</span>search</span><span><span class="k">e</span>next error</span><span><span class="k">w</span>wrap</span><span><span class="k">Esc</span>back</span></div>
+          </div>
+        </div>
+        <div>
+          <h3>It suggests what to run.</h3>
+          <p>Point it at a project and it reads your package.json scripts, Makefile, Docker Compose, Cargo, Go and more. Tick what you want and you're set up.</p>
+          <div class="term">
+<pre class="screen-static"><span class="b">Found in ~/code/shop</span>
+
+<span class="sel">&gt; [x] dev           npm run dev          </span>
+  [ ] build         npm run build
+  [ ] test          npm test
+  [x] compose up    docker compose up
+  [ ] make migrate  make migrate
+  [ ] cargo test    cargo test</pre>
+            <div class="hints"><span><span class="k">↑↓</span>move</span><span><span class="k">Space</span>tick</span><span><span class="k">Enter</span>add</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="keys">
+      <div class="sec-head">
+        <h2>One key, one meaning, on every screen.</h2>
+        <p>No cheat sheet needed. The footer shows the keys that work right now, and <code>?</code> shows the rest.</p>
+      </div>
+      <ul class="keys">
+        <li><span class="k">a</span><b>add</b><span>a workspace or item</span></li>
+        <li><span class="k">e</span><b>edit</b><span>everything in one form</span></li>
+        <li><span class="k">d</span><b>delete</b><span>always asks first</span></li>
+        <li><span class="k">m</span><b>move</b><span>reorder the list</span></li>
+        <li><span class="k">s</span><b>start / stop</b><span>or run a command</span></li>
+        <li><span class="k">r</span><b>restart</b><span>or run again</span></li>
+        <li><span class="k">S</span><b>start all</b><span>in your order</span></li>
+        <li><span class="k">Enter</span><b>open</b><span>logs or workspace</span></li>
+        <li><span class="k">Esc</span><b>back</b><span>one level, or q</span></li>
+        <li><span class="k">?</span><b>help</b><span>on every screen</span></li>
+        <li><span class="k">,</span><b>settings</b><span>sound, tips, saved logs</span></li>
+        <li><span class="k">Ctrl+C</span><b>quit</b><span>and stop everything</span></li>
+      </ul>
+    </section>
+
+    <section id="isnt">
+      <div class="split">
+        <div>
+          <p class="tag">Scope</p>
+          <h2>What Sable isn't.</h2>
+          <p>Sable stays small on purpose. It runs your project's services and scripts on your machine, and that's it.</p>
+        </div>
+        <ul class="isnt-list">
+          <li><span class="x">✕</span><b>a task runner</b><span>It runs what you already have. It doesn't define tasks or pipelines.</span></li>
+          <li><span class="x">✕</span><b>tmux</b><span>No panes or splits. One dashboard per project.</span></li>
+          <li><span class="x">✕</span><b>an IDE</b><span>Keep your editor. Sable sits next to it.</span></li>
+          <li><span class="x">✕</span><b>a Docker manager</b><span>It can run <code>docker compose up</code> like any other command.</span></li>
+          <li><span class="x">✕</span><b>an AI tool</b><span>No models, no prompts, no account.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="install">
+      <div class="split">
+        <div>
+          <p class="tag">Get it</p>
+          <h2>Install and run.</h2>
+          <p>Nothing to configure. Install once and use it in every project, on Windows, macOS or Linux.</p>
+        </div>
+        <div class="term">
+          <div class="term-bar"><i></i><i></i><i></i><span>~</span></div>
+<pre class="screen-static"><span class="g">$</span> npm install -g sable-workspaces
+<span class="d">added 1 package</span>
+<span class="g">$</span> sable
+
+  <span class="b">Sable {{VERSION}}</span>
+  Keyboard-first Workspace Manager
+  <span class="d">────────────────────────────────</span></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Built by <a href="https://github.com/El-Wafi-Cherkaoui">Cherkaoui El Wafi</a></span>
+    <nav><span>sable-workspaces {{VERSION}} &middot; MIT</span><a href="https://github.com/El-Wafi-Cherkaoui/Sable">GitHub</a><a href="https://www.npmjs.com/package/sable-workspaces">npm</a><a href="https://github.com/El-Wafi-Cherkaoui/Sable/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/El-Wafi-Cherkaoui/Sable/issues">Issues</a></nav>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var LOGO = "logo.webp";
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- copy button ---------- */
+  var copyBtn = document.getElementById("copy");
+  copyBtn.addEventListener("click", function () {
+    var text = "npm install -g sable-workspaces";
+    function done(ok) { copyBtn.textContent = ok ? "Copied" : "Select + copy"; setTimeout(function () { copyBtn.textContent = "Copy"; }, 1600); }
+    try {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+    } catch (e) { fallback(); }
+    function fallback() {
+      var r = document.createRange(); r.selectNodeContents(document.getElementById("cmd"));
+      var s = getSelection(); s.removeAllRanges(); s.addRange(r); done(false);
+    }
+  });
+
+  /* ---------- the welcome-screen logo, drawn in dots ---------- */
+  var canvas = document.getElementById("logo");
+  var dots = [];
+  var CREAM = [251, 235, 219], PLUM = [112, 88, 112];
+  function buildDots(img) {
+    var N = 92, off = document.createElement("canvas"); off.width = off.height = N;
+    var c = off.getContext("2d", { willReadFrequently: true });
+    c.drawImage(img, 0, 0, N, N);
+    var d = c.getImageData(0, 0, N, N).data, list = [];
+    for (var y = 0; y < N; y++) for (var x = 0; x < N; x++) {
+      var i = (y * N + x) * 4, lum = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+      if (lum < 0.19) continue;
+      var cream = lum > 0.62, t = cream ? 1 : Math.min(1, (lum - 0.19) / 0.3);
+      var col = cream ? CREAM : [PLUM[0] * (0.55 + 0.45 * t), PLUM[1] * (0.55 + 0.45 * t), PLUM[2] * (0.55 + 0.45 * t)];
+      var dx = x / N - 0.5, dy = y / N - 0.5;
+      list.push({ x: x / N, y: y / N, col: col, r: cream ? 0.46 : 0.36, at: Math.random() * 900 + (Math.sqrt(dx * dx + dy * dy)) * 1500 });
+    }
+    return list;
+  }
+  function paint(now, start) {
+    var size = canvas.clientWidth, dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (canvas.width !== Math.round(size * dpr)) { canvas.width = canvas.height = Math.round(size * dpr); }
+    var ctx = canvas.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, size, size);
+    var cell = size / 92, el = now - start, alive = false;
+    for (var i = 0; i < dots.length; i++) {
+      var p = dots[i], k = reduce ? 1 : Math.max(0, Math.min(1, (el - p.at) / 380));
+      if (k < 1) alive = true;
+      if (k <= 0) continue;
+      var e = 1 - Math.pow(1 - k, 3);
+      ctx.fillStyle = "rgb(" + (p.col[0] | 0) + "," + (p.col[1] | 0) + "," + (p.col[2] | 0) + ")";
+      ctx.beginPath(); ctx.arc(p.x * size + cell / 2, p.y * size + cell / 2, cell * p.r * e, 0, 6.2832); ctx.fill();
+    }
+    return alive;
+  }
+  var img = new Image();
+  img.onload = function () {
+    try { dots = buildDots(img); } catch (e) { canvas.replaceWith(img); img.style.cssText = "position:relative;width:100%;border-radius:24px"; return; }
+    var start = performance.now();
+    (function frame(now) { if (paint(now, start)) requestAnimationFrame(frame); })(start);
+    window.addEventListener("resize", function () { paint(performance.now(), -1e6); });
+  };
+  img.src = LOGO;
+
+  /* ---------- the dashboard demo ---------- */
+  var READY_MS = 1800;   // real Sable waits 5s; shortened so the demo stays quick
+  function clock() { var d = new Date(); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(function (n) { return (n < 10 ? "0" : "") + n; }).join(":"); }
+  function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+
+  var pools = {
+    db: [["out", "checkpoint starting: time"], ["out", "checkpoint complete: wrote 12 buffers (0.1%)"], ["out", "autovacuum launcher started"], ["out", "connection received: host=127.0.0.1"], ["out", "connection authorized: user=shop"]],
+    api: [["out", "GET /products 200 11ms"], ["out", "GET /cart 200 6ms"], ["out", "POST /checkout 201 84ms"], ["out", "GET /products/42 200 9ms"], ["out", "GET /health 200 1ms"], ["err", "Error: payment provider timeout, retrying (1/3)"], ["out", "GET /orders 200 23ms"]],
+    build: []
+  };
+  var items = [
+    { name: "db", kind: "service", after: [], cmd: "docker compose up db", status: "running", since: Date.now() - 20000, logs: [["sys", "service started"], ["out", "database system is ready to accept connections"], ["out", "autovacuum launcher started"], ["out", "checkpoint starting: time"]] },
+    { name: "api", kind: "service", after: ["db"], cmd: "npm run dev", status: "running", since: Date.now() - 14000, logs: [["sys", "service started"], ["out", "listening on http://localhost:3000"], ["out", "GET /products 200 11ms"], ["err", "Error: payment provider timeout, retrying (1/3)"], ["out", "POST /checkout 201 84ms"]] },
+    { name: "build", kind: "command", after: [], cmd: "npm run build", status: "stopped", since: 0, logs: [] }
+  ];
+  items.forEach(function (it) { it.logs = it.logs.map(function (l) { return { s: l[0], m: l[1], t: clock() }; }); });
+
+  var st = { sel: 0, mode: "dash", follow: true, help: false, msg: "", errHit: -1 };
+  var screen = document.getElementById("screen"), hints = document.getElementById("hints"), statusEl = document.getElementById("status");
+  var demo = document.getElementById("demo"), note = document.getElementById("focusnote");
+
+  function by(name) { return items.filter(function (i) { return i.name === name; })[0]; }
+  function log(it, s, m) { it.logs.push({ s: s, m: m, t: clock() }); if (it.logs.length > 2000) it.logs.shift(); }
+  function ready(it) { return it.status === "running" && Date.now() - it.since >= READY_MS; }
+  function running() { return items.filter(function (i) { return i.status === "running"; }).length; }
+  function say(m) { st.msg = m; }
+
+  function begin(it) { launch(it); }   // s and r always start just that item
+  function launch(it) {
+    it.since = Date.now();
+    log(it, "sys", it.kind === "command" ? "command started" : "service started");
+    if (it.kind === "command") {
+      it.status = "running";
+      log(it, "out", "> npm run build");
+      setTimeout(function () { if (it.status === "running") { log(it, "out", "built in 1.9s, 0 errors"); it.status = "done"; render(); } }, 1900);
+    } else { it.status = "running"; }
+  }
+  function halt(it) { if (it.status === "running" || it.status === "waiting") { log(it, "sys", "stopped"); it.status = "stopped"; } }
+
+  function stepWaiting() {
+    var changed = false;
+    items.forEach(function (it) {
+      if (it.status !== "waiting") return;
+      var deps = it.after.map(by);
+      if (deps.some(function (d) { return d.status === "stopped" || d.status === "failed"; })) { it.status = "skipped"; it.reason = "skipped: " + it.after[0] + " stopped early"; changed = true; }
+      else if (deps.every(ready)) { launch(it); say("<b>" + it.name + "</b> started after " + it.after.join(", ")); changed = true; }
+    });
+    return changed;
+  }
+  function tick() {
+    if (document.hidden) return;
+    var changed = stepWaiting();
+    items.forEach(function (it) {
+      if (it.status === "running" && it.kind === "service" && pools[it.name].length && Math.random() < 0.7) {
+        var p = pools[it.name][Math.floor(Math.random() * pools[it.name].length)];
+        log(it, p[0] === "err" ? "err" : "out", p[1]); changed = true;
+      }
+    });
+    if (changed) render();
+  }
+  setInterval(tick, 1100);
+
+  function statusText(it) {
+    switch (it.status) {
+      case "running": return ["running", "● running"];
+      case "stopped": return ["stopped", it.kind === "command" ? "○ idle" : "○ stopped"];
+      case "done": return ["done", "✓ done"];
+      case "waiting": return ["waiting", "◌ after " + it.after.join(", ")];
+      case "skipped": return ["skipped", "✕ skipped"];
+    }
+    return ["idle", "○ idle"];
+  }
+
+  function chip(k, label, key) { return '<button type="button" class="k" data-key="' + esc(key || k) + '" aria-label="' + esc(label) + '">' + esc(k) + '</button>' + esc(label); }
+
+  function render() {
+    var it = items[st.sel], h = "";
+    var logsEl = document.getElementById("logs"), keep = logsEl ? logsEl.scrollTop : 0;
+    if (st.mode === "dash") {
+      var svc = items.filter(function (i) { return i.kind === "service"; }), cmd = items.filter(function (i) { return i.kind === "command"; });
+      var row = function (i) {
+        var x = items.indexOf(i), s = statusText(i);
+        return '<div class="row' + (x === st.sel ? " on" : "") + '" data-i="' + x + '" role="button" aria-label="' + i.name + ' ' + s[1] + '"><span class="mk">' + (x === st.sel ? "&gt;" : "") + '</span><span>' + i.name + '</span><span class="st ' + s[0] + '">' + esc(s[1]) + '</span></div>';
+      };
+      h += '<div class="hdr">shop <span>&middot; ~/code/shop &middot; ' + running() + ' of 2 running</span></div><div class="cols"><div>';
+      h += '<div class="label">SERVICES</div>' + svc.map(row).join("") + '<div class="label">COMMANDS</div>' + cmd.map(row).join("") + "</div>";
+      var last = it.logs.slice(-5);
+      h += '<aside class="prev"><div class="label">' + it.name + " &middot; last " + last.length + " lines</div>" + (last.length ? last.map(function (l) { return '<span class="ln' + (l.s === "err" ? " r" : "") + '">' + esc(l.m) + "</span>"; }).join("") : '<span class="ln">Nothing yet. Press s to run it.</span>') + "</aside></div>";
+      var k = [];
+      if (it.status === "running" || it.status === "waiting") k.push(chip("s", "stop"));
+      else k.push(chip("s", it.kind === "command" ? "run" : "start"));
+      if (it.status !== "waiting") k.push(chip("r", "restart"));
+      k.push(chip("Enter", "logs")); k.push(chip("S", "start all")); k.push(chip("?", "help"));
+      hints.innerHTML = k.map(function (x) { return "<span>" + x + "</span>"; }).join("");
+    } else {
+      var s = statusText(it);
+      h += '<div class="hdr">' + it.name + ' <span>&middot; shop &middot; ' + s[1] + " &middot; " + it.logs.length + " lines &middot; " + (st.follow ? "following" : "paused") + '</span></div>';
+      h += '<div class="logs" id="logs">' + it.logs.map(function (l, n) {
+        if (l.s === "sys") return '<span class="sys">── ' + esc(l.m) + " · " + l.t + " " + new Array(60).join("─") + "</span>";
+        return '<div class="ln' + (l.s === "err" ? " err" : "") + (n === st.errHit ? " hit" : "") + '"><span class="ts">' + l.t + '</span><span class="msg">' + esc(l.m) + "</span></div>";
+      }).join("") + "</div>";
+      hints.innerHTML = [chip("e", "next error"), chip("G", "follow"), chip("↑↓", "scroll", "ArrowDown"), chip("Esc", "back", "Escape")].map(function (x) { return "<span>" + x + "</span>"; }).join("");
+    }
+    if (st.help) {
+      h += '<div class="dialog"><div class="box" role="dialog" aria-label="Help"><h3>Help &middot; dashboard</h3><dl>' +
+        "<dt>↑ ↓</dt><dd>select an item</dd><dt>s</dt><dd>start or stop it</dd><dt>r</dt><dd>restart it</dd><dt>S</dt><dd>start all, in order</dd><dt>Enter</dt><dd>show its logs</dd><dt>e</dt><dd>next error (in logs)</dd><dt>Esc</dt><dd>back, or close this</dd></dl><p>This demo has no add, edit or delete. The real one does.</p></div></div>";
+    }
+    screen.innerHTML = h;
+    statusEl.innerHTML = st.msg ? "&rsaquo; " + st.msg : "&rsaquo; ready";
+    var le = document.getElementById("logs");
+    if (le) { if (st.follow) le.scrollTop = le.scrollHeight; else le.scrollTop = keep; if (st.errHit >= 0) { var hit = le.querySelector(".hit"); if (hit) hit.scrollIntoView({ block: "nearest" }); } }
+  }
+
+  function press(key) {
+    var it = items[st.sel];
+    if (st.help) { if (key === "Escape" || key === "?" || key === "q" || key === "Enter") { st.help = false; render(); return true; } return true; }
+    if (key === "?") { st.help = true; render(); return true; }
+    if (st.mode === "dash") {
+      if (key === "ArrowDown") { st.sel = Math.min(items.length - 1, st.sel + 1); say(""); }
+      else if (key === "ArrowUp") { st.sel = Math.max(0, st.sel - 1); say(""); }
+      else if (key === "s") {
+        if (it.status === "running" || it.status === "waiting") { halt(it); say("Stopped <b>" + it.name + "</b>"); } else { begin(it); say((it.kind === "command" ? "Running <b>" : "Started <b>") + it.name + "</b>"); }
+      }
+      else if (key === "r") { if (it.status === "waiting") return true; halt(it); it.status = "stopped"; begin(it); say("Restarted <b>" + it.name + "</b>"); }
+      else if (key === "S") {
+        items.forEach(function (i) { if (i.kind === "service" && i.status !== "running") { i.status = "stopped"; } });
+        items.forEach(function (i) { if (i.kind === "service" && i.status !== "running" && i.after.length === 0) { launch(i); } });
+        items.forEach(function (i) { if (i.kind === "service" && i.status !== "running" && i.after.length) { i.status = "waiting"; } });
+        say("Starting every service in order");
+      }
+      else if (key === "Enter") { st.mode = "logs"; st.follow = true; st.errHit = -1; say(""); }
+      else if (key === "Escape" || key === "q") { say("In Sable, <b>Esc</b> here returns to the workspace picker."); }
+      else return false;
+    } else {
+      var logsEl = document.getElementById("logs");
+      if (key === "Escape" || key === "q") { st.mode = "dash"; st.errHit = -1; say(""); }
+      else if (key === "ArrowUp") { st.follow = false; if (logsEl) logsEl.scrollTop -= 40; }
+      else if (key === "ArrowDown") { if (logsEl) { logsEl.scrollTop += 40; st.follow = logsEl.scrollTop + logsEl.clientHeight >= logsEl.scrollHeight - 4; } }
+      else if (key === "G" || key === "End") { st.follow = true; st.errHit = -1; }
+      else if (key === "e") {
+        var from = st.errHit < 0 ? 0 : st.errHit + 1, found = -1;
+        for (var n = from; n < it.logs.length; n++) if (it.logs[n].s === "err") { found = n; break; }
+        if (found < 0) for (var m = 0; m < from; m++) if (it.logs[m].s === "err") { found = m; break; }
+        if (found < 0) { say("No error lines in <b>" + it.name + "</b>"); } else { st.errHit = found; st.follow = false; say("Error line " + (found + 1)); }
+      }
+      else return false;
+    }
+    render(); return true;
+  }
+
+  demo.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (press(e.key)) e.preventDefault();
+  });
+  demo.addEventListener("focus", function () { note.textContent = "keys active"; });
+  demo.addEventListener("blur", function () { note.textContent = "click to use keys"; });
+  demo.addEventListener("click", function (e) {
+    var chipEl = e.target.closest && e.target.closest("[data-key]");
+    if (chipEl) { press(chipEl.getAttribute("data-key")); return; }
+    var rowEl = e.target.closest && e.target.closest(".row");
+    if (rowEl && st.mode === "dash" && !st.help) {
+      var i = +rowEl.getAttribute("data-i");
+      if (i === st.sel) press("Enter"); else { st.sel = i; say(""); render(); }
+    }
+    demo.focus({ preventScroll: true });
+  });
+  render();
+})();
+</script>
+</body>
+</html>

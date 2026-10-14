@@ -1,0 +1,44 @@
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "package.json", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp the current version into the page
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          sed -i "s/{{VERSION}}/${version}/g" site/index.html
+          if grep -q "{{VERSION}}" site/index.html; then
+            echo "Version placeholder left in site/index.html." >&2
+            exit 1
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
